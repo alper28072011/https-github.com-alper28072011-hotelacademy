@@ -131,6 +131,7 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true, error: false });
           try {
               const user = await loginWithEmail(email, password);
+              
               if (user.role === 'manager' || user.role === 'admin') {
                   set({ 
                       isAuthenticated: true, 
@@ -139,10 +140,11 @@ export const useAuthStore = create<AuthState>()(
                   });
                   return true;
               } else {
-                  throw new Error("Unauthorized access");
+                  console.error("Role mismatch. User is:", user.role);
+                  throw new Error("Unauthorized access: User is not an admin/manager.");
               }
-          } catch (e) {
-              console.error(e);
+          } catch (e: any) {
+              console.error("Login Failed in Store:", e.message);
               set({ error: true, isLoading: false });
               return false;
           }

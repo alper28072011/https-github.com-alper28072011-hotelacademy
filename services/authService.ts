@@ -1,12 +1,10 @@
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { User } from '../types';
 
 /**
  * Authenticates user via Firebase Auth and fetches their profile from Firestore.
- * NOTE: In a production app, the Firestore ID usually matches the Auth UID.
- * Here, we query by email to link them for the demo seeding to work easily.
  */
 export const loginWithEmail = async (email: string, password: string): Promise<User> => {
   try {
@@ -20,8 +18,29 @@ export const loginWithEmail = async (email: string, password: string): Promise<U
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
-      // User authenticated but no profile found in Firestore
-      throw new Error("No user profile found for this account.");
+      // FALLBACK: If Auth succeeded but Firestore profile is missing for the specific admin email,
+      // create it automatically. This fixes the "Manual Console User" sync issue.
+      if (email === 'admin@hotelacademy.com') {
+          console.warn("⚠️ Admin profile missing in Firestore. Auto-creating...");
+          
+          const newAdmin: Omit<User, 'id'> = {
+              name: 'System Admin',
+              email: email,
+              avatar: 'AD',
+              department: 'management',
+              role: 'admin',
+              pin: '9999',
+              xp: 9999,
+              completedCourses: [],
+              completedTasks: []
+          };
+          
+          const docRef = await addDoc(usersRef, newAdmin);
+          return { ...newAdmin, id: docRef.id };
+      }
+
+      // User authenticated but no profile found in Firestore (and not the main admin)
+      throw new Error("AUTH_SUCCESS_BUT_NO_PROFILE");
     }
 
     const userDoc = querySnapshot.docs[0];
@@ -30,7 +49,7 @@ export const loginWithEmail = async (email: string, password: string): Promise<U
     return { ...userData, id: userDoc.id };
 
   } catch (error: any) {
-    console.error("Login Error:", error);
+    console.error("Login Service Error:", error.code || error.message);
     throw error;
   }
 };
