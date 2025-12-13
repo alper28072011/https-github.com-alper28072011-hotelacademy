@@ -1,15 +1,22 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Film, Image as ImageIcon, CheckCircle2, Loader2, Play } from 'lucide-react';
+import { Upload, Film, Image as ImageIcon, CheckCircle2, Loader2, Sparkles, Globe, FileText, Wand2 } from 'lucide-react';
 import { DepartmentType, Course } from '../../types';
 import { uploadFile } from '../../services/storage';
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../../services/firebase';
+import { generateCourseDraft, generateCourseImage } from '../../services/geminiService';
+import { notifyDepartment } from '../../services/notificationService';
 
 export const ContentStudio: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   
+  // AI State
+  const [magicPrompt, setMagicPrompt] = useState('');
+  const [magicLang, setMagicLang] = useState('Turkish');
+  const [isGenerating, setIsGenerating] = useState(false);
+
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -21,6 +28,44 @@ export const ContentStudio: React.FC = () => {
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // --- AI HANDLERS ---
+
+  const handleMagicGenerate = async () => {
+      if (!magicPrompt) return;
+      setIsGenerating(true);
+
+      // 1. Generate Text Content
+      const draft = await generateCourseDraft(magicPrompt, magicLang);
+      
+      if (draft) {
+          setTitle(draft.title);
+          setDescription(draft.description);
+          // Auto-select departments based on title keywords (Simple logic)
+          if (draft.title.toLowerCase().includes('kitchen') || draft.title.toLowerCase().includes('mutfak')) {
+              setTargetDepts(['kitchen']);
+          } else if (draft.title.toLowerCase().includes('room') || draft.title.toLowerCase().includes('oda')) {
+              setTargetDepts(['housekeeping']);
+          }
+
+          // 2. Generate Image
+          const aiImageBase64 = await generateCourseImage(draft.imagePrompt);
+          if (aiImageBase64) {
+              setCoverPreview(aiImageBase64);
+              // Convert base64 to blob for uploading logic later if needed, 
+              // or handle base64 storage directly. For this demo, we assume uploadFile handles it or we skip file upload if string is dataURL.
+              // Note: uploadFile expects File object. We'll convert base64 to File.
+              const res = await fetch(aiImageBase64);
+              const blob = await res.blob();
+              const file = new File([blob], "ai_cover.png", { type: "image/png" });
+              setCoverFile(file);
+          }
+      }
+
+      setIsGenerating(false);
+  };
+
+  // --- STANDARD HANDLERS ---
 
   const toggleDept = (dept: DepartmentType) => {
       setTargetDepts(prev => 
@@ -43,7 +88,7 @@ export const ContentStudio: React.FC = () => {
   };
 
   const handlePublish = async () => {
-    if (!title || !coverFile) return; // Video optional for demo
+    if (!title || !coverFile) return;
     setLoading(true);
     setUploadProgress(0);
 
@@ -66,8 +111,8 @@ export const ContentStudio: React.FC = () => {
             description,
             thumbnailUrl: coverUrl,
             videoUrl,
-            duration: 15, // Mock default
-            xpReward: 100, // Mock default
+            duration: 15,
+            xpReward: 100,
             isFeatured: false,
             targetDepartments: targetDepts.length > 0 ? targetDepts : undefined,
             steps: [
@@ -82,12 +127,26 @@ export const ContentStudio: React.FC = () => {
             ]
         };
 
-        await addDoc(collection(db, 'courses'), newCourse);
+        const docRef = await addDoc(collection(db, 'courses'), newCourse);
+
+        // 4. Notify Departments
+        if (targetDepts.length > 0) {
+            for (const dept of targetDepts) {
+                await notifyDepartment(dept, "Yeni Eğitim Atandı", `"${title}" eğitimi kütüphanene eklendi.`, `/course/${docRef.id}`);
+            }
+        } else {
+             // Notify All
+             await notifyDepartment('all', "Yeni Eğitim Yayında", `"${title}" eğitimi şimdi yayında.`, `/course/${docRef.id}`);
+        }
         
         setSuccess(true);
         setTimeout(() => {
             setSuccess(false);
-            // Reset form could go here
+            setMagicPrompt('');
+            setTitle('');
+            setDescription('');
+            setCoverPreview(null);
+            setCoverFile(null);
         }, 3000);
 
     } catch (error) {
@@ -124,7 +183,59 @@ export const ContentStudio: React.FC = () => {
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-800">İçerik Stüdyosu</h1>
-        <p className="text-gray-500">Yeni bir eğitim içeriği oluşturun.</p>
+        <p className="text-gray-500">Yapay zeka destekli eğitim oluşturma aracı.</p>
+      </div>
+
+      {/* --- MAGIC MODE SECTION --- */}
+      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-3xl p-1 shadow-xl mb-8">
+          <div className="bg-white/10 backdrop-blur-md rounded-[22px] p-6 text-white">
+              <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-white/20 rounded-lg">
+                      <Sparkles className="w-6 h-6 text-yellow-300" />
+                  </div>
+                  <h2 className="text-xl font-bold">Magic Mode</h2>
+                  <span className="bg-white/20 text-xs font-bold px-2 py-0.5 rounded ml-auto">AI POWERED</span>
+              </div>
+              
+              <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                      <textarea 
+                          value={magicPrompt}
+                          onChange={(e) => setMagicPrompt(e.target.value)}
+                          placeholder="Ne hakkında bir eğitim hazırlamak istiyorsun? (Örn: Housekeeping için havlu katlama teknikleri, detaylı ve motive edici olsun)"
+                          className="w-full h-24 bg-black/20 border border-white/10 rounded-xl p-4 text-white placeholder-white/50 focus:outline-none focus:bg-black/30 resize-none"
+                      />
+                  </div>
+                  <div className="flex flex-col gap-3 min-w-[200px]">
+                      <select 
+                        value={magicLang}
+                        onChange={(e) => setMagicLang(e.target.value)}
+                        className="bg-black/20 border border-white/10 text-white rounded-xl p-3 focus:outline-none"
+                      >
+                          <option value="Turkish">Türkçe</option>
+                          <option value="English">English</option>
+                          <option value="Russian">Russian</option>
+                          <option value="Arabic">Arabic</option>
+                      </select>
+                      
+                      <button 
+                          onClick={handleMagicGenerate}
+                          disabled={isGenerating || !magicPrompt}
+                          className="flex-1 bg-white text-purple-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                      >
+                          {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
+                          {isGenerating ? 'Yaratılıyor...' : 'Sihir Yap'}
+                      </button>
+                  </div>
+              </div>
+              
+              {/* File Upload Trigger (Visual Only for Demo) */}
+              <div className="flex items-center gap-4 mt-4 text-xs text-white/60">
+                  <button className="flex items-center gap-1 hover:text-white transition-colors">
+                      <FileText className="w-4 h-4" /> Kaynak Dosya Ekle (PDF/Doc)
+                  </button>
+              </div>
+          </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -135,7 +246,7 @@ export const ContentStudio: React.FC = () => {
               {/* Cover Upload */}
               <div>
                   <label className="block text-sm font-bold text-gray-700 mb-2">Kapak Görseli (Dikey)</label>
-                  <label className="relative aspect-[2/3] bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors overflow-hidden group">
+                  <label className="relative aspect-[3/4] bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors overflow-hidden group">
                       {coverPreview ? (
                           <>
                             <img src={coverPreview} className="w-full h-full object-cover" alt="Cover" />

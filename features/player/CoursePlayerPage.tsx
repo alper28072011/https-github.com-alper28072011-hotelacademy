@@ -2,23 +2,30 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Volume2, VolumeX, CheckCircle, ArrowRight, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
+import { X, Volume2, VolumeX, CheckCircle, ArrowRight, RotateCcw, AlertTriangle, Loader2, Globe, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getCourse, updateUserProgress } from '../../services/db';
 import { Course } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { useAppStore } from '../../stores/useAppStore';
+import { translateContent } from '../../services/geminiService';
 
 export const CoursePlayerPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { courseId } = useParams<{ courseId: string }>();
   const { currentUser } = useAuthStore();
+  const { currentLanguage } = useAppStore();
   
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isMuted, setIsMuted] = useState(true);
   const [quizError, setQuizError] = useState(false);
+
+  // Translation State
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translatedData, setTranslatedData] = useState<{ title: string; description: string } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -31,7 +38,6 @@ export const CoursePlayerPage: React.FC = () => {
       if (data) {
         setCourse(data);
       } else {
-        // Handle error or redirect
         console.error("Course not found");
         setTimeout(() => navigate('/'), 2000);
       }
@@ -49,6 +55,9 @@ export const CoursePlayerPage: React.FC = () => {
     if (currentStep?.type === 'video' && videoRef.current) {
         videoRef.current.currentTime = 0;
         videoRef.current.play().catch(e => console.log("Autoplay blocked:", e));
+        
+        // Reset translation on step change
+        setTranslatedData(null);
     }
   }, [currentStepIndex, currentStep?.type]);
 
@@ -64,13 +73,36 @@ export const CoursePlayerPage: React.FC = () => {
         colors: ['#D4AF37', '#0B1E3B', '#ffffff']
       });
 
-      // Save Progress to DB
       if (currentUser && courseId) {
-        await updateUserProgress(currentUser.id, courseId, 150); // Give 150 XP
+        await updateUserProgress(currentUser.id, courseId, 150); 
       }
 
       setTimeout(() => navigate('/'), 2000);
     }
+  };
+
+  const handleTranslate = async () => {
+      if (!currentStep || isTranslating) return;
+      
+      // If already translated, toggle off
+      if (translatedData) {
+          setTranslatedData(null);
+          return;
+      }
+
+      setIsTranslating(true);
+      
+      // Determine target language name
+      const langMap: Record<string, string> = {
+          'en': 'English', 'tr': 'Turkish', 'ru': 'Russian', 'ar': 'Arabic', 'de': 'German'
+      };
+      const targetLangName = langMap[currentLanguage] || 'English';
+
+      const tTitle = await translateContent(currentStep.title, targetLangName);
+      const tDesc = currentStep.description ? await translateContent(currentStep.description, targetLangName) : '';
+
+      setTranslatedData({ title: tTitle, description: tDesc });
+      setIsTranslating(false);
   };
 
   const handleQuizAnswer = (isCorrect: boolean) => {
@@ -80,7 +112,6 @@ export const CoursePlayerPage: React.FC = () => {
       setQuizError(true);
       setTimeout(() => {
         setQuizError(false);
-        // Rewind Logic
         if (course) {
             let prevVideoIndex = currentStepIndex - 1;
             while(prevVideoIndex >= 0 && course.steps[prevVideoIndex].type !== 'video') {
@@ -114,7 +145,6 @@ export const CoursePlayerPage: React.FC = () => {
       
       {/* Top Bar (Overlay) */}
       <div className="absolute top-0 left-0 right-0 z-30 p-6 flex justify-between items-start bg-gradient-to-b from-black/60 to-transparent h-32">
-        {/* Progress Indicator */}
         <div className="absolute top-0 left-0 h-1 bg-accent transition-all duration-500" style={{ width: `${progress}%` }} />
         
         <button 
@@ -124,14 +154,28 @@ export const CoursePlayerPage: React.FC = () => {
           <X className="w-6 h-6" />
         </button>
 
-        {currentStep.type === 'video' && (
-          <button 
-            onClick={toggleMute}
-            className="bg-white/10 backdrop-blur-md rounded-full p-2 text-white hover:bg-white/20 active:scale-95 transition-all"
-          >
-            {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
-          </button>
-        )}
+        <div className="flex gap-2">
+            {currentStep.type === 'video' && (
+                <button 
+                    onClick={handleTranslate}
+                    className={`backdrop-blur-md rounded-full px-3 py-2 text-white transition-all flex items-center gap-2 ${translatedData ? 'bg-accent text-primary font-bold' : 'bg-white/10 hover:bg-white/20'}`}
+                >
+                    {isTranslating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Globe className="w-5 h-5" />}
+                    <span className="text-xs font-bold hidden md:block">
+                        {translatedData ? 'Original' : 'Translate'}
+                    </span>
+                </button>
+            )}
+
+            {currentStep.type === 'video' && (
+            <button 
+                onClick={toggleMute}
+                className="bg-white/10 backdrop-blur-md rounded-full p-2 text-white hover:bg-white/20 active:scale-95 transition-all"
+            >
+                {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
+            </button>
+            )}
+        </div>
       </div>
 
       {/* Main Content Area with Transitions */}
@@ -168,12 +212,27 @@ export const CoursePlayerPage: React.FC = () => {
                        {t('player_step')} {currentStepIndex + 1}/{totalSteps}
                      </span>
                   </div>
-                  <h2 className="text-3xl font-bold mb-2 leading-tight drop-shadow-md">
-                    {currentStep.title}
-                  </h2>
-                  <p className="text-gray-200 text-lg leading-relaxed opacity-90 drop-shadow-sm">
-                    {currentStep.description}
-                  </p>
+                  
+                  {/* Dynamic Translated Content */}
+                  <motion.div
+                    key={translatedData ? 'trans' : 'orig'}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="relative"
+                  >
+                     {translatedData && (
+                         <div className="absolute -top-6 left-0 text-accent text-[10px] font-bold flex items-center gap-1">
+                             <Sparkles className="w-3 h-3" /> AI Translated
+                         </div>
+                     )}
+                     <h2 className="text-3xl font-bold mb-2 leading-tight drop-shadow-md">
+                        {translatedData ? translatedData.title : currentStep.title}
+                     </h2>
+                     <p className="text-gray-200 text-lg leading-relaxed opacity-90 drop-shadow-sm">
+                        {translatedData ? translatedData.description : currentStep.description}
+                     </p>
+                  </motion.div>
+
                 </div>
               </div>
             )}
@@ -181,7 +240,6 @@ export const CoursePlayerPage: React.FC = () => {
             {/* RENDER QUIZ STEP */}
             {currentStep.type === 'quiz' && (
               <div className="relative w-full h-full bg-primary flex flex-col items-center justify-center p-6">
-                {/* Background Pattern */}
                 <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                 
                 <div className="relative z-10 w-full max-w-md">
@@ -207,7 +265,6 @@ export const CoursePlayerPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Error Feedback Overlay */}
                 {quizError && (
                     <motion.div 
                         initial={{ opacity: 0, scale: 0.8 }}
@@ -224,7 +281,6 @@ export const CoursePlayerPage: React.FC = () => {
               </div>
             )}
 
-            {/* ACTION BUTTON (Sticky Bottom) */}
             {currentStep.type !== 'quiz' && (
                 <div className="absolute bottom-8 left-6 right-6 z-30">
                   <button
@@ -246,23 +302,6 @@ export const CoursePlayerPage: React.FC = () => {
           </motion.div>
         </AnimatePresence>
       </div>
-
-      <style>{`
-        @keyframes spin-slow {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(-360deg); }
-        }
-        .animate-spin-slow {
-            animation: spin-slow 2s linear infinite;
-        }
-        @keyframes pulse-slow {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.9; transform: scale(0.99); }
-        }
-        .animate-pulse-slow {
-            animation: pulse-slow 3s infinite ease-in-out;
-        }
-      `}</style>
     </div>
   );
 };
