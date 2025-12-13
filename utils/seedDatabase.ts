@@ -1,8 +1,8 @@
 import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { User, Course } from '../types';
+import { User, Course, DepartmentType } from '../types';
 
-// Mock Users Data
+// Explicitly type the mock users to ensure 'department' matches DepartmentType
 const MOCK_USERS: Omit<User, 'id'>[] = [
   { name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', pin: '1234', xp: 120, completedCourses: [] },
   { name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', pin: '1234', xp: 50, completedCourses: [] },
@@ -46,25 +46,40 @@ const COURSE_101: Course = {
 }
 
 export const seedDatabase = async () => {
-  console.log("Seeding database...");
+  console.group("🌱 Seeding Database");
   const batch = writeBatch(db);
 
   // Seed Users
+  console.log(`Preparing ${MOCK_USERS.length} users...`);
   MOCK_USERS.forEach((user, index) => {
+    // Check if dept is valid lowercase string just in case
+    if(user.department !== user.department.toLowerCase()) {
+        console.warn(`Correcting case for ${user.name}: ${user.department}`);
+        user.department = user.department.toLowerCase() as DepartmentType;
+    }
+    
     const userRef = doc(collection(db, 'users')); // Auto-ID
     batch.set(userRef, user);
   });
 
   // Seed Course
+  console.log(`Preparing course 101...`);
   const courseRef = doc(db, 'courses', '101');
   batch.set(courseRef, COURSE_101);
 
   try {
     await batch.commit();
-    console.log("Database seeded successfully!");
-    alert("Database seeded! Please refresh.");
-  } catch (error) {
-    console.error("Error seeding database:", error);
-    alert("Error seeding database check console.");
+    console.log("✅ Database seeded successfully!");
+    console.groupEnd();
+    alert("Database seeded! Please refresh the page.");
+  } catch (error: any) {
+    console.error("❌ Error seeding database:", error);
+    console.groupEnd();
+    
+    if (error.code === 'permission-denied') {
+        alert("Permission Denied! Check Console for Rules.");
+    } else {
+        alert("Error seeding database. Check console.");
+    }
   }
 };

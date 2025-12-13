@@ -23,12 +23,36 @@ const coursesRef = collection(db, 'courses');
  * Fetches all users belonging to a specific department.
  */
 export const getUsersByDepartment = async (dept: DepartmentType): Promise<User[]> => {
+  console.group(`🔥 DB: getUsersByDepartment -> '${dept}'`);
   try {
     const q = query(usersRef, where('department', '==', dept));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-  } catch (error) {
-    console.error("Error fetching users:", error);
+    
+    console.log(`✅ Success: Found ${snapshot.size} documents.`);
+    
+    if (snapshot.empty) {
+      console.warn("⚠️ Warning: No users found. Check if 'users' collection exists and 'department' fields match exactly.");
+    }
+
+    const users = snapshot.docs.map(doc => {
+      const data = doc.data();
+      // Log individual user data mapping for debugging
+      // console.log(`   - User: ${data.name} (${doc.id})`);
+      return { id: doc.id, ...data } as User;
+    });
+
+    console.groupEnd();
+    return users;
+
+  } catch (error: any) {
+    console.error("❌ FIREBASE ERROR:", error);
+    
+    if (error.code === 'permission-denied') {
+      console.error("🚨 PERMISSION DENIED: Please check your Firestore Security Rules in Firebase Console.");
+      console.error("Fix: Set rules to 'allow read, write: if true;' for development.");
+    }
+    
+    console.groupEnd();
     return [];
   }
 };

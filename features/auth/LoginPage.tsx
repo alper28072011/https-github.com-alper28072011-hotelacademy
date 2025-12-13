@@ -4,7 +4,7 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { AccessCard } from './components/AccessCard';
 import { DepartmentGrid } from './components/DepartmentGrid';
 import { Keypad } from './components/Keypad';
-import { CheckCircle2, User as UserIcon, Loader2, Database } from 'lucide-react';
+import { CheckCircle2, User as UserIcon, Loader2, Database, AlertTriangle } from 'lucide-react';
 import { seedDatabase } from '../../utils/seedDatabase';
 
 export const LoginPage: React.FC = () => {
@@ -47,8 +47,13 @@ export const LoginPage: React.FC = () => {
         {stage === 'USER_SELECT' && (
           <div className="grid grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar animate-in slide-in-from-right-8 fade-in duration-500">
             {departmentUsers.length === 0 && !isLoading && (
-                 <div className="col-span-2 text-center text-white/50 py-10">
-                    No staff found in this department.
+                 <div className="col-span-2 flex flex-col items-center justify-center text-center text-white/50 py-10 gap-3 border border-dashed border-white/10 rounded-xl p-4">
+                    <AlertTriangle className="w-8 h-8 text-yellow-500/50" />
+                    <span className="text-sm">No staff found.</span>
+                    <div className="text-[10px] font-mono text-red-300 bg-black/40 px-2 py-1 rounded">
+                      Debug: Department="{selectedDepartment}"<br/>
+                      Check Firestore Console.
+                    </div>
                  </div>
             )}
             {departmentUsers.map((user) => (
