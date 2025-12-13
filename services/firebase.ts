@@ -1,5 +1,4 @@
-// Fix: Use namespace import to avoid "no exported member" error with some firebase versions/configs
-import * as firebaseApp from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
@@ -14,8 +13,7 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase only if config is valid (prevent crash in demo)
-// Fix: Access initializeApp from the namespace object
-const app = firebaseApp.initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
 
 // Export services
 export const auth = getAuth(app);

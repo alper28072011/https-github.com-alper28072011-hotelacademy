@@ -13,11 +13,12 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course } from '../types';
+import { User, DepartmentType, Course, Task } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
 const coursesRef = collection(db, 'courses');
+const tasksRef = collection(db, 'tasks');
 
 /**
  * Fetches all users belonging to a specific department.
@@ -36,8 +37,6 @@ export const getUsersByDepartment = async (dept: DepartmentType): Promise<User[]
 
     const users = snapshot.docs.map(doc => {
       const data = doc.data();
-      // Log individual user data mapping for debugging
-      // console.log(`   - User: ${data.name} (${doc.id})`);
       return { id: doc.id, ...data } as User;
     });
 
@@ -46,14 +45,41 @@ export const getUsersByDepartment = async (dept: DepartmentType): Promise<User[]
 
   } catch (error: any) {
     console.error("❌ FIREBASE ERROR:", error);
-    
     if (error.code === 'permission-denied') {
       console.error("🚨 PERMISSION DENIED: Please check your Firestore Security Rules in Firebase Console.");
-      console.error("Fix: Set rules to 'allow read, write: if true;' for development.");
     }
-    
     console.groupEnd();
     return [];
+  }
+};
+
+/**
+ * Fetches daily tasks for a specific department.
+ */
+export const getDailyTasks = async (dept: DepartmentType): Promise<Task[]> => {
+  try {
+    const q = query(tasksRef, where('department', '==', dept));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
+  } catch (error) {
+    console.error("Error fetching tasks:", error);
+    return [];
+  }
+};
+
+/**
+ * Marks a daily task as complete for a user and awards XP.
+ */
+export const completeTask = async (userId: string, taskId: string, xpReward: number) => {
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, {
+      xp: increment(xpReward),
+      completedTasks: arrayUnion(taskId)
+    });
+    console.log(`Task ${taskId} completed by ${userId}. +${xpReward} XP`);
+  } catch (error) {
+    console.error("Error completing task:", error);
   }
 };
 
@@ -112,7 +138,6 @@ export const updateUserProgress = async (userId: string, courseId: string, earne
 
 /**
  * Subscribes to real-time updates for a specific user.
- * Returns an unsubscribe function.
  */
 export const subscribeToUser = (userId: string, callback: (user: User) => void) => {
   const userDocRef = doc(db, 'users', userId);
@@ -125,7 +150,6 @@ export const subscribeToUser = (userId: string, callback: (user: User) => void) 
 
 /**
  * Subscribes to the leaderboard for a specific department.
- * Returns top 5 users sorted by XP.
  */
 export const subscribeToLeaderboard = (dept: DepartmentType, callback: (users: User[]) => void) => {
   const q = query(

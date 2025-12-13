@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { StoryCircle } from './components/StoryCircle';
 import { PriorityTaskCard } from './components/PriorityTaskCard';
@@ -8,6 +9,7 @@ import { motion } from 'framer-motion';
 
 export const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { currentUser, logout } = useAuthStore();
 
   const stories = [
@@ -17,9 +19,9 @@ export const DashboardPage: React.FC = () => {
   ];
 
   const quickActions = [
-    { id: 'report', icon: Wrench, label: t('quick_report'), color: 'bg-orange-100 text-orange-600' },
-    { id: 'schedule', icon: Calendar, label: t('quick_schedule'), color: 'bg-blue-100 text-blue-600' },
-    { id: 'leave', icon: LogOut, label: t('quick_leave'), color: 'bg-purple-100 text-purple-600' },
+    { id: 'report', icon: Wrench, label: t('quick_report'), color: 'bg-orange-100 text-orange-600', path: '/operations' },
+    { id: 'schedule', icon: Calendar, label: t('quick_schedule'), color: 'bg-blue-100 text-blue-600', path: '/operations' }, // Linked to operations
+    { id: 'leave', icon: LogOut, label: t('quick_leave'), color: 'bg-purple-100 text-purple-600', path: '/profile' },
   ];
 
   return (
@@ -57,6 +59,7 @@ export const DashboardPage: React.FC = () => {
             {quickActions.map(action => (
                 <motion.button 
                     key={action.id}
+                    onClick={() => navigate(action.path)}
                     whileTap={{ scale: 0.95 }}
                     className="flex flex-col items-center justify-center min-w-[100px] h-[100px] bg-white rounded-2xl shadow-sm border border-gray-100"
                 >

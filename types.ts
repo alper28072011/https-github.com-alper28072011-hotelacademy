@@ -1,3 +1,4 @@
+
 export type LanguageCode = 'en' | 'tr' | 'ru' | 'de' | 'id' | 'ar';
 
 export interface Language {
@@ -18,6 +19,7 @@ export interface User {
   pin: string; 
   xp: number;
   completedCourses: string[];
+  completedTasks?: string[]; // IDs of daily operational tasks completed
 }
 
 export type StepType = 'video' | 'quiz';
@@ -39,4 +41,15 @@ export interface Course {
   id: string;
   title: string;
   steps: CourseStep[];
+}
+
+export type TaskType = 'checklist' | 'photo';
+
+export interface Task {
+  id: string;
+  department: DepartmentType;
+  title: string;
+  xpReward: number;
+  type: TaskType;
+  icon?: string; // Icon name reference
 }
