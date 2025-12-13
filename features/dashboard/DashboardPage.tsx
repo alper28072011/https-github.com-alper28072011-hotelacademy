@@ -1,24 +1,68 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { StoryCircle } from './components/StoryCircle';
+import { useContentStore } from '../../stores/useContentStore';
+import { getCareerPath } from '../../services/db';
+import { StoryCircle, StoryStatus } from './components/StoryCircle';
 import { PriorityTaskCard } from './components/PriorityTaskCard';
-import { Wrench, Calendar, LogOut, Map } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Wrench, Calendar, LogOut, Map, X, Quote } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Course } from '../../types';
 
 export const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuthStore();
+  const { courses, fetchContent } = useContentStore();
+  
+  const [storyCourses, setStoryCourses] = useState<Course[]>([]);
+  const [showGmModal, setShowGmModal] = useState(false);
 
-  const stories = [
-    { id: 1, label: t('stories_gm'), image: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=100', unread: true },
-    { id: 2, label: t('stories_menu'), image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=100', unread: true },
-    { id: 3, label: t('stories_tips'), unread: false },
-  ];
+  // 1. Fetch Content & Calculate Stories
+  useEffect(() => {
+    fetchContent();
+  }, [fetchContent]);
 
+  useEffect(() => {
+    const loadStories = async () => {
+        if (!currentUser || courses.length === 0) return;
+
+        let relevantCourses: Course[] = [];
+
+        // Strategy: 
+        // 1. If user has a career path, show incomplete courses from there.
+        // 2. If not (or few), fill with featured/recommended courses.
+        
+        if (currentUser.assignedPathId) {
+            const path = await getCareerPath(currentUser.assignedPathId);
+            if (path) {
+                // Get IDs from path that are NOT in completedCourses
+                const pendingIds = path.courseIds.filter(id => !currentUser.completedCourses.includes(id));
+                const pathCourses = courses.filter(c => pendingIds.includes(c.id));
+                relevantCourses = [...relevantCourses, ...pathCourses];
+            }
+        }
+
+        // Fill up with featured courses if we have space (up to 5 stories)
+        if (relevantCourses.length < 5) {
+            const otherPending = courses.filter(c => 
+                !currentUser.completedCourses.includes(c.id) && 
+                !relevantCourses.find(rc => rc.id === c.id) &&
+                c.isFeatured
+            );
+            relevantCourses = [...relevantCourses, ...otherPending];
+        }
+
+        setStoryCourses(relevantCourses.slice(0, 6)); // Limit to 6 bubbles
+    };
+
+    loadStories();
+  }, [currentUser, courses]);
+
+
+  // Quick Actions Configuration
   const quickActions = [
     { id: 'report', icon: Wrench, label: t('quick_report'), color: 'bg-orange-100 text-orange-600', path: '/report' },
     { id: 'schedule', icon: Calendar, label: t('quick_schedule'), color: 'bg-blue-100 text-blue-600', path: '/operations' }, 
@@ -40,15 +84,39 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* Stories Section (Horizontal Scroll) */}
-      <div className="w-full overflow-x-auto no-scrollbar pl-6 pb-2">
+      <div className="w-full overflow-x-auto no-scrollbar pl-6 pb-2 min-h-[110px]">
          <div className="flex gap-4">
-            {stories.map(story => (
-                <StoryCircle key={story.id} label={story.label} image={story.image} isUnread={story.unread} />
+            
+            {/* 0. GM Message (Static & Urgent) */}
+            <StoryCircle 
+                label={t('stories_gm')} 
+                image="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=150" 
+                status="urgent"
+                onClick={() => setShowGmModal(true)}
+            />
+
+            {/* 1..N Course Stories */}
+            {storyCourses.map(course => (
+                <StoryCircle 
+                    key={course.id} 
+                    label={course.title} 
+                    image={course.thumbnailUrl} 
+                    status="new" // Logic could be refined to 'progress' if we tracked %
+                    onClick={() => navigate(`/course/${course.id}`)}
+                />
             ))}
+
+            {/* Fallback if no courses */}
+            {storyCourses.length === 0 && (
+                <StoryCircle 
+                    label="Hepsini Tamamladın!" 
+                    status="viewed"
+                />
+            )}
          </div>
       </div>
 
-      {/* Journey Map Link Card (New Feature) */}
+      {/* Journey Map Link Card */}
       <div className="px-4">
           <motion.div 
             whileTap={{ scale: 0.98 }}
@@ -93,6 +161,58 @@ export const DashboardPage: React.FC = () => {
             ))}
          </div>
       </div>
+
+      {/* GM Message Modal */}
+      <AnimatePresence>
+        {showGmModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    exit={{ opacity: 0 }}
+                    onClick={() => setShowGmModal(false)}
+                    className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
+                />
+                <motion.div 
+                    initial={{ scale: 0.9, y: 20, opacity: 0 }}
+                    animate={{ scale: 1, y: 0, opacity: 1 }}
+                    exit={{ scale: 0.9, y: 20, opacity: 0 }}
+                    className="bg-white w-full max-w-sm rounded-3xl overflow-hidden relative z-10 shadow-2xl"
+                >
+                    <div className="relative h-48">
+                        <img 
+                            src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=600" 
+                            className="w-full h-full object-cover" 
+                            alt="GM" 
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                        <button 
+                            onClick={() => setShowGmModal(false)}
+                            className="absolute top-4 right-4 bg-black/40 text-white p-2 rounded-full hover:bg-black/60"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        <div className="absolute bottom-4 left-4 text-white">
+                            <div className="text-xs font-bold text-accent uppercase tracking-wider mb-1">Genel Müdür</div>
+                            <h3 className="text-xl font-bold">Mr. Anderson</h3>
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        <Quote className="w-8 h-8 text-primary/20 mb-2" />
+                        <p className="text-gray-600 italic text-lg leading-relaxed mb-6">
+                            "Günaydın arkadaşlar! Bugün doluluk oranımız %98. Özellikle resepsiyon ve kat hizmetleri ekiplerimizden ekstra özen bekliyorum. Harika bir gün olsun!"
+                        </p>
+                        <button 
+                            onClick={() => setShowGmModal(false)}
+                            className="w-full bg-primary text-white py-3 rounded-xl font-bold"
+                        >
+                            Mesajı Kapat
+                        </button>
+                    </div>
+                </motion.div>
+            </div>
+        )}
+      </AnimatePresence>
 
       {/* Bottom Spacer for Navigation */}
       <div className="h-8" />
