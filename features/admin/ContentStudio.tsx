@@ -1,18 +1,21 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Film, Image as ImageIcon, CheckCircle2, Loader2, Sparkles, Globe, FileText, Wand2 } from 'lucide-react';
+import { Upload, Film, Image as ImageIcon, CheckCircle2, Loader2, Sparkles, FileText, Wand2, Layers, Smartphone } from 'lucide-react';
 import { DepartmentType, Course } from '../../types';
 import { uploadFile } from '../../services/storage';
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { generateCourseDraft, generateCourseImage } from '../../services/geminiService';
+import { generateCourseDraft, generateCourseImage, ContentMode } from '../../services/geminiService';
 import { notifyDepartment } from '../../services/notificationService';
 
 export const ContentStudio: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   
+  // UI Mode
+  const [contentMode, setContentMode] = useState<ContentMode>('series');
+
   // AI State
   const [magicPrompt, setMagicPrompt] = useState('');
   const [magicLang, setMagicLang] = useState('Turkish');
@@ -21,8 +24,9 @@ export const ContentStudio: React.FC = () => {
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('cat_guest'); // Default
+  const [category, setCategory] = useState('cat_guest'); 
   const [targetDepts, setTargetDepts] = useState<DepartmentType[]>([]);
+  const [generatedModules, setGeneratedModules] = useState<{title: string, description: string}[]>([]);
   
   // Media State
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -36,24 +40,34 @@ export const ContentStudio: React.FC = () => {
       if (!magicPrompt) return;
       setIsGenerating(true);
 
-      // 1. Generate Text Content (Gemini 3 Pro Thinking)
-      const draft = await generateCourseDraft(magicPrompt, magicLang);
+      // 1. Generate Structured Content
+      const draft = await generateCourseDraft(magicPrompt, magicLang, contentMode);
       
       if (draft) {
-          setTitle(draft.title);
+          // Explicitly set fields to prevent "dumping all text to title"
+          setTitle(draft.title.replace(/"/g, '')); // Cleanup quotes if any
           setDescription(draft.description);
-          // Auto-select departments based on title keywords (Simple logic)
-          if (draft.title.toLowerCase().includes('kitchen') || draft.title.toLowerCase().includes('mutfak')) {
+          
+          // If series, populate modules
+          if (draft.modules && draft.modules.length > 0) {
+              setGeneratedModules(draft.modules);
+          } else {
+              setGeneratedModules([]);
+          }
+
+          // Auto-select departments based on title/desc keywords
+          const combinedText = (draft.title + " " + draft.description).toLowerCase();
+          if (combinedText.includes('kitchen') || combinedText.includes('mutfak') || combinedText.includes('chef') || combinedText.includes('yemek')) {
               setTargetDepts(['kitchen']);
-          } else if (draft.title.toLowerCase().includes('room') || draft.title.toLowerCase().includes('oda')) {
+          } else if (combinedText.includes('room') || combinedText.includes('oda') || combinedText.includes('temizlik') || combinedText.includes('housekeeping')) {
               setTargetDepts(['housekeeping']);
           }
 
-          // 2. Fetch Stock Image (No AI Generation)
+          // 2. Fetch Stock Image
           const stockImageUrl = await generateCourseImage(draft.imagePrompt);
           if (stockImageUrl) {
               setCoverPreview(stockImageUrl);
-              setCoverFile(null); // It's a remote URL, not a file upload
+              setCoverFile(null); 
           }
       }
 
@@ -84,7 +98,7 @@ export const ContentStudio: React.FC = () => {
 
   const handlePublish = async () => {
     if (!title) return;
-    if (!coverFile && !coverPreview) return; // Must have either a file or a preview URL
+    if (!coverFile && !coverPreview) return; 
 
     setLoading(true);
     setUploadProgress(0);
@@ -95,7 +109,6 @@ export const ContentStudio: React.FC = () => {
         if (coverFile) {
              coverUrl = await uploadFile(coverFile, 'course_covers');
         } else if (typeof coverPreview === 'string' && coverPreview.startsWith('http')) {
-             // Use remote URL directly (Stock Image)
              coverUrl = coverPreview;
         }
 
@@ -109,40 +122,53 @@ export const ContentStudio: React.FC = () => {
             });
         }
 
-        // 3. Save Course Data
+        // 3. Construct Steps based on Mode
+        let steps = [];
+        if (contentMode === 'series' && generatedModules.length > 0) {
+            // Map generated modules to steps
+            steps = generatedModules.map((mod, idx) => ({
+                id: `step_${idx}`,
+                type: 'video', // Default to video placeholder
+                title: mod.title,
+                description: mod.description,
+                videoUrl: videoUrl || undefined, // Use same video for demo, or logic to prompt for more
+                posterUrl: coverUrl
+            }));
+        } else {
+            // Single Mode
+            steps = [{
+                id: 'step1',
+                type: 'video',
+                title: title,
+                description: description,
+                videoUrl: videoUrl,
+                posterUrl: coverUrl
+            }];
+        }
+
+        // 4. Save Course Data
         const newCourse: Omit<Course, 'id'> = {
             categoryId: category,
             title,
             description,
             thumbnailUrl: coverUrl,
             videoUrl,
-            duration: 15,
-            xpReward: 100,
+            duration: contentMode === 'single' ? 1 : 15, // 1 min for single, 15 for series
+            xpReward: contentMode === 'single' ? 50 : 150,
             isFeatured: false,
-            // FIX: Do not pass undefined to Firestore. Conditionally add the property.
             ...(targetDepts.length > 0 ? { targetDepartments: targetDepts } : {}),
-            steps: [
-                {
-                    id: 'step1',
-                    type: 'video',
-                    title: 'Giriş',
-                    description: 'Eğitime giriş videosu.',
-                    videoUrl: videoUrl,
-                    posterUrl: coverUrl
-                }
-            ]
+            steps: steps as any
         };
 
         const docRef = await addDoc(collection(db, 'courses'), newCourse);
 
-        // 4. Notify Departments
+        // 5. Notify
         if (targetDepts.length > 0) {
             for (const dept of targetDepts) {
-                await notifyDepartment(dept, "Yeni Eğitim Atandı", `"${title}" eğitimi kütüphanene eklendi.`, `/course/${docRef.id}`);
+                await notifyDepartment(dept, "Yeni Eğitim", `"${title}" eklendi.`, `/course/${docRef.id}`);
             }
         } else {
-             // Notify All
-             await notifyDepartment('all', "Yeni Eğitim Yayında", `"${title}" eğitimi şimdi yayında.`, `/course/${docRef.id}`);
+             await notifyDepartment('all', "Yeni İçerik", `"${title}" yayında.`, `/course/${docRef.id}`);
         }
         
         setSuccess(true);
@@ -153,6 +179,7 @@ export const ContentStudio: React.FC = () => {
             setDescription('');
             setCoverPreview(null);
             setCoverFile(null);
+            setGeneratedModules([]);
         }, 3000);
 
     } catch (error) {
@@ -174,7 +201,7 @@ export const ContentStudio: React.FC = () => {
                   <CheckCircle2 className="w-12 h-12" />
               </motion.div>
               <h2 className="text-3xl font-bold text-gray-800">Yayında!</h2>
-              <p className="text-gray-500 mt-2">İçerik başarıyla yüklendi ve personele bildirildi.</p>
+              <p className="text-gray-500 mt-2">İçerik başarıyla yüklendi.</p>
               <button 
                 onClick={() => setSuccess(false)}
                 className="mt-8 bg-gray-800 text-white px-8 py-3 rounded-xl font-bold"
@@ -187,20 +214,40 @@ export const ContentStudio: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">İçerik Stüdyosu</h1>
-        <p className="text-gray-500">Yapay zeka destekli eğitim oluşturma aracı.</p>
+      <div className="mb-8 flex items-end justify-between">
+        <div>
+            <h1 className="text-3xl font-bold text-gray-800">İçerik Stüdyosu</h1>
+            <p className="text-gray-500">Yapay zeka ile eğitim veya duyuru oluşturun.</p>
+        </div>
+        
+        {/* MODE SWITCHER */}
+        <div className="bg-gray-100 p-1 rounded-xl flex gap-1">
+            <button 
+                onClick={() => setContentMode('single')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${contentMode === 'single' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                <Smartphone className="w-4 h-4" /> Tekli Gönderi
+            </button>
+            <button 
+                onClick={() => setContentMode('series')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${contentMode === 'series' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+                <Layers className="w-4 h-4" /> Eğitim Serisi
+            </button>
+        </div>
       </div>
 
       {/* --- MAGIC MODE SECTION --- */}
-      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-3xl p-1 shadow-xl mb-8">
+      <div className={`rounded-3xl p-1 shadow-xl mb-8 transition-colors duration-500 ${contentMode === 'single' ? 'bg-gradient-to-r from-pink-500 to-orange-400' : 'bg-gradient-to-r from-indigo-600 to-purple-600'}`}>
           <div className="bg-white/10 backdrop-blur-md rounded-[22px] p-6 text-white">
               <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 bg-white/20 rounded-lg">
                       <Sparkles className="w-6 h-6 text-yellow-300" />
                   </div>
-                  <h2 className="text-xl font-bold">Magic Mode (Gemini 3 Pro)</h2>
-                  <span className="bg-white/20 text-xs font-bold px-2 py-0.5 rounded ml-auto">THINKING AI</span>
+                  <h2 className="text-xl font-bold">
+                      {contentMode === 'single' ? 'Hızlı İçerik Üretici' : 'Müfredat Tasarımcısı'}
+                  </h2>
+                  <span className="bg-white/20 text-xs font-bold px-2 py-0.5 rounded ml-auto">GEMINI 3 PRO</span>
               </div>
               
               <div className="flex flex-col md:flex-row gap-4">
@@ -208,7 +255,10 @@ export const ContentStudio: React.FC = () => {
                       <textarea 
                           value={magicPrompt}
                           onChange={(e) => setMagicPrompt(e.target.value)}
-                          placeholder="Ne hakkında bir eğitim hazırlamak istiyorsun? (Örn: Housekeeping için havlu katlama teknikleri, detaylı ve motive edici olsun)"
+                          placeholder={contentMode === 'single' 
+                            ? "Ne hakkında bir gönderi hazırlamak istiyorsun? (Örn: Bugünün menüsü, havuz kuralları)"
+                            : "Eğitim konusu nedir? (Örn: Lüks hizmet standartları, şikayet yönetimi)"
+                          }
                           className="w-full h-24 bg-black/20 border border-white/10 rounded-xl p-4 text-white placeholder-white/50 focus:outline-none focus:bg-black/30 resize-none"
                       />
                   </div>
@@ -221,7 +271,6 @@ export const ContentStudio: React.FC = () => {
                           <option value="Turkish">Türkçe</option>
                           <option value="English">English</option>
                           <option value="Russian">Russian</option>
-                          <option value="Arabic">Arabic</option>
                       </select>
                       
                       <button 
@@ -230,15 +279,14 @@ export const ContentStudio: React.FC = () => {
                           className="flex-1 bg-white text-purple-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-gray-100 disabled:opacity-50 transition-colors"
                       >
                           {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
-                          {isGenerating ? 'Düşünülüyor...' : 'Taslak Oluştur'}
+                          {isGenerating ? 'Düşünülüyor...' : 'Oluştur'}
                       </button>
                   </div>
               </div>
               
-              {/* File Upload Trigger (Visual Only for Demo) */}
               <div className="flex items-center gap-4 mt-4 text-xs text-white/60">
                   <button className="flex items-center gap-1 hover:text-white transition-colors">
-                      <FileText className="w-4 h-4" /> Kaynak Dosya Ekle (PDF/Doc)
+                      <FileText className="w-4 h-4" /> Doküman Yükle (PDF/Word)
                   </button>
               </div>
           </div>
@@ -248,10 +296,11 @@ export const ContentStudio: React.FC = () => {
           
           {/* LEFT COLUMN: MEDIA */}
           <div className="lg:col-span-1 flex flex-col gap-6">
-              
               {/* Cover Upload */}
               <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Kapak Görseli (Dikey)</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                      {contentMode === 'single' ? 'Gönderi Görseli' : 'Kapak Görseli'}
+                  </label>
                   <label className="relative aspect-[3/4] bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors overflow-hidden group">
                       {coverPreview ? (
                           <>
@@ -268,9 +317,11 @@ export const ContentStudio: React.FC = () => {
                   </label>
               </div>
 
-              {/* Video Upload */}
+              {/* Video Upload (Optional for Single) */}
               <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Eğitim Videosu</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Video / Medya {contentMode === 'single' && '(Opsiyonel)'}
+                  </label>
                   <label className="relative h-32 bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors px-4 text-center">
                       {videoFile ? (
                           <div className="flex items-center gap-2 text-primary font-bold">
@@ -280,13 +331,12 @@ export const ContentStudio: React.FC = () => {
                       ) : (
                           <>
                              <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                             <span className="text-xs text-gray-500">Video Yükle (MP4)</span>
+                             <span className="text-xs text-gray-500">Dosya Yükle</span>
                           </>
                       )}
                       <input type="file" accept="video/mp4" className="hidden" onChange={handleVideoSelect} />
                   </label>
               </div>
-
           </div>
 
           {/* RIGHT COLUMN: DETAILS */}
@@ -294,7 +344,7 @@ export const ContentStudio: React.FC = () => {
               
               {/* Title & Desc */}
               <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Eğitim Başlığı</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Başlık</label>
                   <input 
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
@@ -304,20 +354,37 @@ export const ContentStudio: React.FC = () => {
               </div>
               
               <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Kısa Açıklama</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Açıklama</label>
                   <textarea 
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
+                    rows={contentMode === 'single' ? 6 : 3}
                     className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none resize-none"
-                    placeholder="Eğitimin içeriği hakkında kısa bilgi..."
+                    placeholder="İçerik detayı..."
                   />
               </div>
 
+              {/* Auto-Generated Modules Preview (Only for Series) */}
+              {contentMode === 'series' && generatedModules.length > 0 && (
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Otomatik Oluşturulan Modüller</label>
+                      <div className="space-y-2">
+                          {generatedModules.map((mod, idx) => (
+                              <div key={idx} className="flex gap-2 text-sm">
+                                  <span className="font-bold text-primary shrink-0">{idx+1}.</span>
+                                  <div>
+                                      <span className="font-bold text-gray-700">{mod.title}</span>
+                                      <p className="text-gray-500 text-xs line-clamp-1">{mod.description}</p>
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+
               {/* Targeting */}
               <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Hedef Kitle (Opsiyonel)</label>
-                  <p className="text-xs text-gray-400 mb-3">Seçim yapmazsanız tüm personele görünür.</p>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Hedef Departman</label>
                   <div className="flex flex-wrap gap-2">
                       {['housekeeping', 'kitchen', 'front_office', 'management'].map(d => (
                           <button
@@ -337,19 +404,6 @@ export const ContentStudio: React.FC = () => {
 
               <div className="h-px bg-gray-100 my-2" />
 
-              {/* Progress Bar (if uploading) */}
-              {loading && uploadProgress > 0 && uploadProgress < 100 && (
-                  <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden relative">
-                      <div 
-                        className="h-full bg-accent transition-all duration-300"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                      <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-primary">
-                          %{Math.round(uploadProgress)}
-                      </span>
-                  </div>
-              )}
-
               {/* Publish Button */}
               <button 
                 onClick={handlePublish}
@@ -357,7 +411,7 @@ export const ContentStudio: React.FC = () => {
                 className="w-full bg-primary disabled:bg-gray-300 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:brightness-110 transition-all active:scale-95"
               >
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                  {loading ? 'Yükleniyor...' : 'Yayına Al'}
+                  {loading ? 'Yükleniyor...' : contentMode === 'single' ? 'Gönderiyi Paylaş' : 'Eğitimi Yayınla'}
               </button>
 
           </div>
