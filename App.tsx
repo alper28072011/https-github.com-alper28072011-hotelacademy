@@ -64,6 +64,8 @@ const App: React.FC = () => {
     document.documentElement.lang = currentLanguage;
   }, [currentLanguage]);
 
+  const isAdminOrManager = ['manager', 'admin'].includes(currentUser?.role || '');
+
   return (
     <HashRouter>
       <Routes>
@@ -74,7 +76,7 @@ const App: React.FC = () => {
               <Route path="/course/:courseId" element={<CoursePlayerPage />} />
               
               {/* ADMIN ROUTES (Protected by Role) */}
-              {['manager', 'admin'].includes(currentUser?.role || '') && (
+              {isAdminOrManager && (
                   <Route path="/admin" element={<AdminLayout />}>
                       <Route index element={<Navigate to="staff" replace />} />
                       <Route path="staff" element={<StaffManager />} />
@@ -84,22 +86,26 @@ const App: React.FC = () => {
               )}
 
               {/* Main Dashboard (With Navigation) */}
-              <Route 
-                path="/*" 
-                element={
-                  <DashboardLayout>
-                      <Routes>
-                        <Route path="/" element={<DashboardPage />} />
-                        <Route path="/profile" element={<ProfilePage />} />
-                        <Route path="/operations" element={<OperationsPage />} />
-                        <Route path="/report" element={<ReportPage />} />
-                        <Route path="/library" element={<LibraryPage />} />
-                        {/* If a manager tries to go home, they go to dashboard, but they have a link to admin */}
-                        <Route path="*" element={<Navigate to="/" replace />} />
-                      </Routes>
-                  </DashboardLayout>
-                } 
-              />
+              {/* If Admin/Manager tries to hit root, redirect to admin panel */}
+              {isAdminOrManager ? (
+                 <Route path="*" element={<Navigate to="/admin" replace />} />
+              ) : (
+                 <Route 
+                    path="/*" 
+                    element={
+                    <DashboardLayout>
+                        <Routes>
+                            <Route path="/" element={<DashboardPage />} />
+                            <Route path="/profile" element={<ProfilePage />} />
+                            <Route path="/operations" element={<OperationsPage />} />
+                            <Route path="/report" element={<ReportPage />} />
+                            <Route path="/library" element={<LibraryPage />} />
+                            <Route path="*" element={<Navigate to="/" replace />} />
+                        </Routes>
+                    </DashboardLayout>
+                    } 
+                />
+              )}
            </>
         ) : (
            /* Public Login Route */

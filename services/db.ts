@@ -199,17 +199,20 @@ export const subscribeToUser = (userId: string, callback: (user: User) => void) 
 
 /**
  * Subscribes to the leaderboard for a specific department.
+ * MODIFIED: Uses client-side sorting to avoid Firestore Composite Index requirement.
  */
 export const subscribeToLeaderboard = (dept: DepartmentType, callback: (users: User[]) => void) => {
+  // Original query requiring index: query(usersRef, where('department', '==', dept), orderBy('xp', 'desc'), limit(5));
+  // Optimized for development/demo: fetch department users, sort locally.
   const q = query(
     usersRef, 
-    where('department', '==', dept),
-    orderBy('xp', 'desc'),
-    limit(5)
+    where('department', '==', dept)
   );
 
   return onSnapshot(q, (snapshot) => {
     const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-    callback(users);
+    // Client-side sort: Descending XP
+    const topUsers = users.sort((a, b) => (b.xp || 0) - (a.xp || 0)).slice(0, 5);
+    callback(topUsers);
   });
 };

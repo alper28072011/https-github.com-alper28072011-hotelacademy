@@ -14,10 +14,11 @@ export type UserRole = 'staff' | 'manager' | 'admin';
 
 export interface User {
   id: string;
+  email?: string; // Added for Admin/Manager Login
   name: string;
   avatar: string; // Initials or URL
   department: DepartmentType;
-  role: UserRole; // Added Role
+  role: UserRole; 
   pin: string; 
   xp: number;
   completedCourses: string[];

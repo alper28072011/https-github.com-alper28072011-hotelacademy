@@ -8,7 +8,18 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
   { name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], completedTasks: [] },
   { name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: [], completedTasks: [] },
   { name: 'Canan Kaya', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: [], completedTasks: [] },
-  { name: 'Ahmet Yildiz', avatar: 'AY', department: 'management', role: 'manager', pin: '1234', xp: 1000, completedCourses: [], completedTasks: [] }, // Manager Role
+  // Admin User - Needs to be created in Firebase Auth Console manually as well!
+  { 
+      name: 'System Admin', 
+      email: 'admin@hotelacademy.com',
+      avatar: 'AD', 
+      department: 'management', 
+      role: 'admin', 
+      pin: '9999', 
+      xp: 9999, 
+      completedCourses: [], 
+      completedTasks: [] 
+  },
 ];
 
 const MOCK_CATEGORIES: Category[] = [

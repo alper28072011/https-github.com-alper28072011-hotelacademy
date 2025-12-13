@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { User, DepartmentType } from '../types';
 import { getUsersByDepartment } from '../services/db';
+import { loginWithEmail, logoutUser } from '../services/authService';
 
 export type AuthStage = 'DEPARTMENT_SELECT' | 'USER_SELECT' | 'PIN_ENTRY' | 'SUCCESS';
 
@@ -27,6 +28,9 @@ interface AuthState {
   resetFlow: () => void;
   goBack: () => void;
   logout: () => void;
+  
+  // Admin Actions
+  loginAsAdmin: (email: string, pass: string) => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -123,14 +127,38 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: () => set({
-        isAuthenticated: false,
-        currentUser: null,
-        stage: 'DEPARTMENT_SELECT',
-        selectedDepartment: null,
-        selectedUser: null,
-        enteredPin: ''
-      })
+      loginAsAdmin: async (email, password) => {
+          set({ isLoading: true, error: false });
+          try {
+              const user = await loginWithEmail(email, password);
+              if (user.role === 'manager' || user.role === 'admin') {
+                  set({ 
+                      isAuthenticated: true, 
+                      currentUser: user,
+                      isLoading: false 
+                  });
+                  return true;
+              } else {
+                  throw new Error("Unauthorized access");
+              }
+          } catch (e) {
+              console.error(e);
+              set({ error: true, isLoading: false });
+              return false;
+          }
+      },
+
+      logout: () => {
+        logoutUser(); // Firebase SignOut
+        set({
+            isAuthenticated: false,
+            currentUser: null,
+            stage: 'DEPARTMENT_SELECT',
+            selectedDepartment: null,
+            selectedUser: null,
+            enteredPin: ''
+        });
+      }
     }),
     {
       name: 'hotel-academy-auth',
