@@ -1,421 +1,350 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Film, Image as ImageIcon, CheckCircle2, Loader2, Sparkles, FileText, Wand2, Layers, Smartphone } from 'lucide-react';
-import { DepartmentType, Course } from '../../types';
+import { Upload, Film, Image as ImageIcon, CheckCircle2, Loader2, Sparkles, Layers, Smartphone, Send, Plus, Wand2 } from 'lucide-react';
+import { DepartmentType, Course, FeedPost } from '../../types';
 import { uploadFile } from '../../services/storage';
 import { addDoc, collection } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { generateCourseDraft, generateCourseImage, ContentMode } from '../../services/geminiService';
-import { notifyDepartment } from '../../services/notificationService';
+import { createPost } from '../../services/db';
+import { useAuthStore } from '../../stores/useAuthStore';
+
+type CreateMode = 'select' | 'post' | 'series';
 
 export const ContentStudio: React.FC = () => {
+  const { currentUser } = useAuthStore();
+  const [mode, setMode] = useState<CreateMode>('select');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  
-  // UI Mode
-  const [contentMode, setContentMode] = useState<ContentMode>('series');
 
-  // AI State
+  // --- POST MODE STATE ---
+  const [postFile, setPostFile] = useState<File | null>(null);
+  const [postPreview, setPostPreview] = useState<string | null>(null);
+  const [postCaption, setPostCaption] = useState('');
+  const [postTargetDepts, setPostTargetDepts] = useState<DepartmentType[]>(['housekeeping', 'kitchen', 'front_office', 'management']);
+
+  // --- SERIES MODE STATE (Gemini) ---
   const [magicPrompt, setMagicPrompt] = useState('');
-  const [magicLang, setMagicLang] = useState('Turkish');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [seriesTitle, setSeriesTitle] = useState('');
+  const [seriesDesc, setSeriesDesc] = useState('');
+  const [seriesCover, setSeriesCover] = useState<string | null>(null);
+  const [seriesModules, setSeriesModules] = useState<{title: string, description: string}[]>([]);
 
-  // Form State
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('cat_guest'); 
-  const [targetDepts, setTargetDepts] = useState<DepartmentType[]>([]);
-  const [generatedModules, setGeneratedModules] = useState<{title: string, description: string}[]>([]);
-  
-  // Media State
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverPreview, setCoverPreview] = useState<string | null>(null);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  // --- HANDLERS ---
 
-  // --- AI HANDLERS ---
+  const handlePostFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files?.[0]) {
+          const file = e.target.files[0];
+          setPostFile(file);
+          setPostPreview(URL.createObjectURL(file));
+      }
+  };
 
-  const handleMagicGenerate = async () => {
+  const togglePostDept = (dept: DepartmentType) => {
+      setPostTargetDepts(prev => prev.includes(dept) ? prev.filter(d => d !== dept) : [...prev, dept]);
+  };
+
+  const handleCreatePost = async () => {
+      if (!postFile || !postCaption || !currentUser) return;
+      setLoading(true);
+
+      try {
+          // 1. Upload Media
+          const url = await uploadFile(postFile, 'feed_posts');
+          const type = postFile.type.startsWith('video') ? 'video' : 'image';
+
+          // 2. Create Feed Post
+          const newPost: Omit<FeedPost, 'id'> = {
+              authorId: currentUser.id,
+              authorName: currentUser.name,
+              authorAvatar: currentUser.avatar, // In real app, this is a URL
+              targetDepartments: postTargetDepts,
+              type,
+              mediaUrl: url,
+              caption: postCaption,
+              likes: 0,
+              createdAt: Date.now(),
+              likedBy: []
+          };
+
+          await createPost(newPost);
+          setSuccess(true);
+          setTimeout(() => {
+              setSuccess(false);
+              setMode('select');
+              setPostFile(null);
+              setPostPreview(null);
+              setPostCaption('');
+          }, 2000);
+
+      } catch (e) {
+          console.error(e);
+          alert("Hata oluştu.");
+      } finally {
+          setLoading(false);
+      }
+  };
+
+  const handleSeriesGenerate = async () => {
       if (!magicPrompt) return;
       setIsGenerating(true);
-
-      // 1. Generate Structured Content
-      const draft = await generateCourseDraft(magicPrompt, magicLang, contentMode);
+      // Generate structured course draft (Text only)
+      const draft = await generateCourseDraft(magicPrompt, 'Turkish', 'series');
       
       if (draft) {
-          // Explicitly set fields to prevent "dumping all text to title"
-          setTitle(draft.title.replace(/"/g, '')); // Cleanup quotes if any
-          setDescription(draft.description);
+          setSeriesTitle(draft.title.replace(/"/g, ''));
+          setSeriesDesc(draft.description);
+          setSeriesModules(draft.modules || []);
           
-          // If series, populate modules
-          if (draft.modules && draft.modules.length > 0) {
-              setGeneratedModules(draft.modules);
-          } else {
-              setGeneratedModules([]);
-          }
-
-          // Auto-select departments based on title/desc keywords
-          const combinedText = (draft.title + " " + draft.description).toLowerCase();
-          if (combinedText.includes('kitchen') || combinedText.includes('mutfak') || combinedText.includes('chef') || combinedText.includes('yemek')) {
-              setTargetDepts(['kitchen']);
-          } else if (combinedText.includes('room') || combinedText.includes('oda') || combinedText.includes('temizlik') || combinedText.includes('housekeeping')) {
-              setTargetDepts(['housekeeping']);
-          }
-
-          // 2. Fetch Stock Image
-          const stockImageUrl = await generateCourseImage(draft.imagePrompt);
-          if (stockImageUrl) {
-              setCoverPreview(stockImageUrl);
-              setCoverFile(null); 
-          }
+          // Use stock image instead of AI gen
+          const stock = await generateCourseImage(draft.imagePrompt);
+          setSeriesCover(stock);
       }
-
       setIsGenerating(false);
   };
 
-  // --- STANDARD HANDLERS ---
-
-  const toggleDept = (dept: DepartmentType) => {
-      setTargetDepts(prev => 
-        prev.includes(dept) ? prev.filter(d => d !== dept) : [...prev, dept]
-      );
-  };
-
-  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-        const file = e.target.files[0];
-        setCoverFile(file);
-        setCoverPreview(URL.createObjectURL(file));
-    }
-  };
-
-  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-        setVideoFile(e.target.files[0]);
-    }
-  };
-
-  const handlePublish = async () => {
-    if (!title) return;
-    if (!coverFile && !coverPreview) return; 
-
-    setLoading(true);
-    setUploadProgress(0);
-
-    try {
-        // 1. Determine Cover URL
-        let coverUrl = '';
-        if (coverFile) {
-             coverUrl = await uploadFile(coverFile, 'course_covers');
-        } else if (typeof coverPreview === 'string' && coverPreview.startsWith('http')) {
-             coverUrl = coverPreview;
-        }
-
-        if (!coverUrl) throw new Error("No cover image available");
-        
-        // 2. Upload Video (if exists)
-        let videoUrl = '';
-        if (videoFile) {
-            videoUrl = await uploadFile(videoFile, 'course_videos', (progress) => {
-                setUploadProgress(progress);
-            });
-        }
-
-        // 3. Construct Steps based on Mode
-        let steps = [];
-        if (contentMode === 'series' && generatedModules.length > 0) {
-            // Map generated modules to steps
-            steps = generatedModules.map((mod, idx) => ({
-                id: `step_${idx}`,
-                type: 'video', // Default to video placeholder
-                title: mod.title,
-                description: mod.description,
-                videoUrl: videoUrl || undefined, // Use same video for demo, or logic to prompt for more
-                posterUrl: coverUrl
-            }));
-        } else {
-            // Single Mode
-            steps = [{
-                id: 'step1',
+  const handleCreateSeries = async () => {
+      if (!seriesTitle || !seriesCover) return;
+      setLoading(true);
+      try {
+          // Simplified Course Creation for Demo
+           const newCourse: Omit<Course, 'id'> = {
+            categoryId: 'cat_guest',
+            title: seriesTitle,
+            description: seriesDesc,
+            thumbnailUrl: seriesCover,
+            duration: 15,
+            xpReward: 150,
+            isFeatured: true,
+            targetDepartments: ['housekeeping'], // Default
+            steps: seriesModules.map((m, i) => ({
+                id: `s_${i}`,
                 type: 'video',
-                title: title,
-                description: description,
-                videoUrl: videoUrl,
-                posterUrl: coverUrl
-            }];
-        }
-
-        // 4. Save Course Data
-        const newCourse: Omit<Course, 'id'> = {
-            categoryId: category,
-            title,
-            description,
-            thumbnailUrl: coverUrl,
-            videoUrl,
-            duration: contentMode === 'single' ? 1 : 15, // 1 min for single, 15 for series
-            xpReward: contentMode === 'single' ? 50 : 150,
-            isFeatured: false,
-            ...(targetDepts.length > 0 ? { targetDepartments: targetDepts } : {}),
-            steps: steps as any
+                title: m.title,
+                description: m.description,
+                posterUrl: seriesCover,
+                videoUrl: 'https://cdn.coverr.co/videos/coverr-people-eating-at-a-restaurant-4433/1080p.mp4' // Placeholder
+            }))
         };
-
-        const docRef = await addDoc(collection(db, 'courses'), newCourse);
-
-        // 5. Notify
-        if (targetDepts.length > 0) {
-            for (const dept of targetDepts) {
-                await notifyDepartment(dept, "Yeni Eğitim", `"${title}" eklendi.`, `/course/${docRef.id}`);
-            }
-        } else {
-             await notifyDepartment('all', "Yeni İçerik", `"${title}" yayında.`, `/course/${docRef.id}`);
-        }
-        
+        await addDoc(collection(db, 'courses'), newCourse);
         setSuccess(true);
         setTimeout(() => {
             setSuccess(false);
+            setMode('select');
+            setSeriesTitle('');
+            setSeriesCover(null);
             setMagicPrompt('');
-            setTitle('');
-            setDescription('');
-            setCoverPreview(null);
-            setCoverFile(null);
-            setGeneratedModules([]);
-        }, 3000);
+        }, 2000);
 
-    } catch (error) {
-        console.error("Publish error", error);
-        alert("Yükleme sırasında hata oluştu: " + (error as any).message);
-    } finally {
-        setLoading(false);
-    }
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setLoading(false);
+      }
   };
+
+  // --- RENDER ---
 
   if (success) {
       return (
-          <div className="flex flex-col items-center justify-center h-[60vh]">
-              <motion.div 
-                initial={{ scale: 0 }} 
-                animate={{ scale: 1 }} 
-                className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-6"
-              >
+          <div className="flex flex-col items-center justify-center h-[60vh] animate-in zoom-in">
+              <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-6">
                   <CheckCircle2 className="w-12 h-12" />
-              </motion.div>
-              <h2 className="text-3xl font-bold text-gray-800">Yayında!</h2>
-              <p className="text-gray-500 mt-2">İçerik başarıyla yüklendi.</p>
-              <button 
-                onClick={() => setSuccess(false)}
-                className="mt-8 bg-gray-800 text-white px-8 py-3 rounded-xl font-bold"
-              >
-                  Yeni İçerik Ekle
-              </button>
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800">Paylaşıldı!</h2>
           </div>
       );
   }
 
-  return (
-    <div className="max-w-4xl mx-auto">
-      <div className="mb-8 flex items-end justify-between">
-        <div>
-            <h1 className="text-3xl font-bold text-gray-800">İçerik Stüdyosu</h1>
-            <p className="text-gray-500">Yapay zeka ile eğitim veya duyuru oluşturun.</p>
-        </div>
-        
-        {/* MODE SWITCHER */}
-        <div className="bg-gray-100 p-1 rounded-xl flex gap-1">
-            <button 
-                onClick={() => setContentMode('single')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${contentMode === 'single' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-                <Smartphone className="w-4 h-4" /> Tekli Gönderi
-            </button>
-            <button 
-                onClick={() => setContentMode('series')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${contentMode === 'series' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-                <Layers className="w-4 h-4" /> Eğitim Serisi
-            </button>
-        </div>
-      </div>
+  // MODE SELECTION SCREEN
+  if (mode === 'select') {
+      return (
+          <div className="max-w-4xl mx-auto py-10">
+              <h1 className="text-3xl font-bold text-gray-800 mb-8 text-center">Ne paylaşmak istiyorsun?</h1>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  
+                  {/* OPTION A: NEW POST */}
+                  <button 
+                    onClick={() => setMode('post')}
+                    className="group relative bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100 hover:shadow-xl transition-all text-left overflow-hidden"
+                  >
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-pink-500 to-orange-400 rounded-bl-full opacity-10 group-hover:opacity-20 transition-opacity" />
+                      <div className="w-16 h-16 bg-pink-50 text-pink-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                          <Smartphone className="w-8 h-8" />
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-800 mb-2">Hızlı Gönderi</h2>
+                      <p className="text-gray-500">Instagram tarzı fotoğraf veya video paylaş. Haberler, duyurular veya günlük anlar için ideal.</p>
+                      <div className="mt-8 flex items-center gap-2 text-pink-600 font-bold">
+                          Oluştur <Plus className="w-5 h-5" />
+                      </div>
+                  </button>
 
-      {/* --- MAGIC MODE SECTION --- */}
-      <div className={`rounded-3xl p-1 shadow-xl mb-8 transition-colors duration-500 ${contentMode === 'single' ? 'bg-gradient-to-r from-pink-500 to-orange-400' : 'bg-gradient-to-r from-indigo-600 to-purple-600'}`}>
-          <div className="bg-white/10 backdrop-blur-md rounded-[22px] p-6 text-white">
-              <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2 bg-white/20 rounded-lg">
-                      <Sparkles className="w-6 h-6 text-yellow-300" />
-                  </div>
-                  <h2 className="text-xl font-bold">
-                      {contentMode === 'single' ? 'Hızlı İçerik Üretici' : 'Müfredat Tasarımcısı'}
-                  </h2>
-                  <span className="bg-white/20 text-xs font-bold px-2 py-0.5 rounded ml-auto">GEMINI 3 PRO</span>
+                  {/* OPTION B: TRAINING SERIES */}
+                  <button 
+                    onClick={() => setMode('series')}
+                    className="group relative bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100 hover:shadow-xl transition-all text-left overflow-hidden"
+                  >
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-bl-full opacity-10 group-hover:opacity-20 transition-opacity" />
+                      <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                          <Layers className="w-8 h-8" />
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-800 mb-2">Eğitim Serisi</h2>
+                      <p className="text-gray-500">Adım adım ilerleyen, video ve test içeren kapsamlı eğitim modülleri oluştur.</p>
+                      <div className="mt-8 flex items-center gap-2 text-indigo-600 font-bold">
+                          Tasarla <Plus className="w-5 h-5" />
+                      </div>
+                  </button>
+
               </div>
+          </div>
+      );
+  }
+
+  // POST CREATION SCREEN
+  if (mode === 'post') {
+      return (
+          <div className="max-w-xl mx-auto py-6">
+              <button onClick={() => setMode('select')} className="text-gray-500 hover:text-gray-800 mb-6 font-medium">← Geri Dön</button>
               
-              <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1">
-                      <textarea 
-                          value={magicPrompt}
-                          onChange={(e) => setMagicPrompt(e.target.value)}
-                          placeholder={contentMode === 'single' 
-                            ? "Ne hakkında bir gönderi hazırlamak istiyorsun? (Örn: Bugünün menüsü, havuz kuralları)"
-                            : "Eğitim konusu nedir? (Örn: Lüks hizmet standartları, şikayet yönetimi)"
-                          }
-                          className="w-full h-24 bg-black/20 border border-white/10 rounded-xl p-4 text-white placeholder-white/50 focus:outline-none focus:bg-black/30 resize-none"
-                      />
-                  </div>
-                  <div className="flex flex-col gap-3 min-w-[200px]">
-                      <select 
-                        value={magicLang}
-                        onChange={(e) => setMagicLang(e.target.value)}
-                        className="bg-black/20 border border-white/10 text-white rounded-xl p-3 focus:outline-none"
-                      >
-                          <option value="Turkish">Türkçe</option>
-                          <option value="English">English</option>
-                          <option value="Russian">Russian</option>
-                      </select>
-                      
+              <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100">
+                  <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                      <h2 className="font-bold text-lg">Yeni Gönderi</h2>
                       <button 
-                          onClick={handleMagicGenerate}
-                          disabled={isGenerating || !magicPrompt}
-                          className="flex-1 bg-white text-purple-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                        onClick={handleCreatePost}
+                        disabled={loading || !postFile}
+                        className="text-blue-600 font-bold hover:text-blue-700 disabled:opacity-50"
                       >
-                          {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
-                          {isGenerating ? 'Düşünülüyor...' : 'Oluştur'}
+                          {loading ? 'Paylaşılıyor...' : 'Paylaş'}
                       </button>
                   </div>
-              </div>
-              
-              <div className="flex items-center gap-4 mt-4 text-xs text-white/60">
-                  <button className="flex items-center gap-1 hover:text-white transition-colors">
-                      <FileText className="w-4 h-4" /> Doküman Yükle (PDF/Word)
-                  </button>
-              </div>
-          </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* LEFT COLUMN: MEDIA */}
-          <div className="lg:col-span-1 flex flex-col gap-6">
-              {/* Cover Upload */}
-              <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                      {contentMode === 'single' ? 'Gönderi Görseli' : 'Kapak Görseli'}
-                  </label>
-                  <label className="relative aspect-[3/4] bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors overflow-hidden group">
-                      {coverPreview ? (
+                  {/* Image/Video Upload Area */}
+                  <div className="w-full aspect-square bg-gray-50 relative flex flex-col items-center justify-center group cursor-pointer border-b border-gray-100">
+                      {postPreview ? (
                           <>
-                            <img src={coverPreview} className="w-full h-full object-cover" alt="Cover" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold">Değiştir</div>
+                            {postFile?.type.startsWith('video') ? (
+                                <video src={postPreview} className="w-full h-full object-cover" controls />
+                            ) : (
+                                <img src={postPreview} className="w-full h-full object-cover" alt="Preview" />
+                            )}
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold">
+                                Değiştirmek için tıkla
+                            </div>
                           </>
                       ) : (
-                          <>
-                             <ImageIcon className="w-10 h-10 text-gray-400 mb-2" />
-                             <span className="text-xs text-gray-500 font-bold uppercase">Görsel Seç</span>
-                          </>
-                      )}
-                      <input type="file" accept="image/*" className="hidden" onChange={handleCoverSelect} />
-                  </label>
-              </div>
-
-              {/* Video Upload (Optional for Single) */}
-              <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Video / Medya {contentMode === 'single' && '(Opsiyonel)'}
-                  </label>
-                  <label className="relative h-32 bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors px-4 text-center">
-                      {videoFile ? (
-                          <div className="flex items-center gap-2 text-primary font-bold">
-                              <Film className="w-5 h-5" />
-                              <span className="truncate max-w-[150px]">{videoFile.name}</span>
+                          <div className="flex flex-col items-center text-gray-400">
+                              <ImageIcon className="w-12 h-12 mb-2" />
+                              <span className="font-bold">Fotoğraf veya Video Seç</span>
                           </div>
-                      ) : (
-                          <>
-                             <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                             <span className="text-xs text-gray-500">Dosya Yükle</span>
-                          </>
                       )}
-                      <input type="file" accept="video/mp4" className="hidden" onChange={handleVideoSelect} />
-                  </label>
-              </div>
-          </div>
+                      <input type="file" accept="image/*,video/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handlePostFileSelect} />
+                  </div>
 
-          {/* RIGHT COLUMN: DETAILS */}
-          <div className="lg:col-span-2 flex flex-col gap-6 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-              
-              {/* Title & Desc */}
-              <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Başlık</label>
-                  <input 
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none font-bold text-lg"
-                    placeholder="Örn: Latte Art Teknikleri"
-                  />
-              </div>
-              
-              <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Açıklama</label>
-                  <textarea 
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={contentMode === 'single' ? 6 : 3}
-                    className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none resize-none"
-                    placeholder="İçerik detayı..."
-                  />
-              </div>
-
-              {/* Auto-Generated Modules Preview (Only for Series) */}
-              {contentMode === 'series' && generatedModules.length > 0 && (
-                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Otomatik Oluşturulan Modüller</label>
-                      <div className="space-y-2">
-                          {generatedModules.map((mod, idx) => (
-                              <div key={idx} className="flex gap-2 text-sm">
-                                  <span className="font-bold text-primary shrink-0">{idx+1}.</span>
-                                  <div>
-                                      <span className="font-bold text-gray-700">{mod.title}</span>
-                                      <p className="text-gray-500 text-xs line-clamp-1">{mod.description}</p>
-                                  </div>
-                              </div>
-                          ))}
+                  {/* Details */}
+                  <div className="p-6">
+                      <textarea 
+                        value={postCaption}
+                        onChange={(e) => setPostCaption(e.target.value)}
+                        placeholder="Bir açıklama yaz..."
+                        className="w-full h-24 resize-none outline-none text-gray-800 placeholder-gray-400 text-base"
+                      />
+                      
+                      <div className="mt-4">
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Hedef Kitle</label>
+                          <div className="flex flex-wrap gap-2">
+                              {['housekeeping', 'kitchen', 'front_office', 'management'].map(d => (
+                                  <button
+                                    key={d}
+                                    onClick={() => togglePostDept(d as any)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase transition-colors border ${
+                                        postTargetDepts.includes(d as any)
+                                        ? 'bg-black text-white border-black'
+                                        : 'bg-white text-gray-400 border-gray-200'
+                                    }`}
+                                  >
+                                      {d.replace('_', ' ')}
+                                  </button>
+                              ))}
+                          </div>
                       </div>
                   </div>
-              )}
-
-              {/* Targeting */}
-              <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Hedef Departman</label>
-                  <div className="flex flex-wrap gap-2">
-                      {['housekeeping', 'kitchen', 'front_office', 'management'].map(d => (
-                          <button
-                            key={d}
-                            onClick={() => toggleDept(d as any)}
-                            className={`px-4 py-2 rounded-full text-xs font-bold uppercase transition-colors border ${
-                                targetDepts.includes(d as any)
-                                ? 'bg-primary text-white border-primary'
-                                : 'bg-white text-gray-500 border-gray-200 hover:border-primary'
-                            }`}
-                          >
-                              {d.replace('_', ' ')}
-                          </button>
-                      ))}
-                  </div>
               </div>
-
-              <div className="h-px bg-gray-100 my-2" />
-
-              {/* Publish Button */}
-              <button 
-                onClick={handlePublish}
-                disabled={loading || !title || (!coverFile && !coverPreview)}
-                className="w-full bg-primary disabled:bg-gray-300 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:brightness-110 transition-all active:scale-95"
-              >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                  {loading ? 'Yükleniyor...' : contentMode === 'single' ? 'Gönderiyi Paylaş' : 'Eğitimi Yayınla'}
-              </button>
-
           </div>
-      </div>
-    </div>
-  );
+      );
+  }
+
+  // SERIES CREATION SCREEN (Gemini Powered)
+  if (mode === 'series') {
+      return (
+          <div className="max-w-3xl mx-auto py-6">
+               <button onClick={() => setMode('select')} className="text-gray-500 hover:text-gray-800 mb-6 font-medium">← Geri Dön</button>
+               
+               <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+                   {/* Gemini Header */}
+                   <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-8 text-white">
+                       <div className="flex items-center gap-2 mb-2">
+                           <Sparkles className="w-5 h-5 text-yellow-300" />
+                           <span className="font-bold uppercase tracking-wider text-xs">AI Asistan</span>
+                       </div>
+                       <h2 className="text-2xl font-bold mb-4">Eğitim Serisi Oluştur</h2>
+                       
+                       <div className="flex gap-2">
+                           <input 
+                             value={magicPrompt}
+                             onChange={(e) => setMagicPrompt(e.target.value)}
+                             placeholder="Konu nedir? (Örn: Lüks Restoran Adabı)"
+                             className="flex-1 bg-white/20 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/60 outline-none focus:bg-white/30"
+                           />
+                           <button 
+                             onClick={handleSeriesGenerate}
+                             disabled={isGenerating || !magicPrompt}
+                             className="bg-white text-indigo-600 px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-gray-100 disabled:opacity-50"
+                           >
+                               {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
+                               Oluştur
+                           </button>
+                       </div>
+                   </div>
+
+                   {/* Preview Area */}
+                   {seriesTitle && (
+                       <div className="p-8">
+                           <div className="flex gap-6 mb-8">
+                               <div className="w-1/3 aspect-[3/4] rounded-2xl overflow-hidden bg-gray-100 relative shadow-lg">
+                                    {seriesCover && <img src={seriesCover} className="w-full h-full object-cover" alt="Cover" />}
+                               </div>
+                               <div className="w-2/3">
+                                   <h3 className="text-2xl font-bold text-gray-800 mb-2">{seriesTitle}</h3>
+                                   <p className="text-gray-600 mb-4">{seriesDesc}</p>
+                                   <div className="bg-gray-50 rounded-xl p-4">
+                                       <h4 className="font-bold text-sm text-gray-500 uppercase mb-2">Modüller</h4>
+                                       <ul className="space-y-2">
+                                           {seriesModules.map((m, i) => (
+                                               <li key={i} className="text-sm font-medium text-gray-800 flex items-center gap-2">
+                                                   <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs">{i+1}</span>
+                                                   {m.title}
+                                               </li>
+                                           ))}
+                                       </ul>
+                                   </div>
+                               </div>
+                           </div>
+                           
+                           <button 
+                                onClick={handleCreateSeries}
+                                disabled={loading}
+                                className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                           >
+                               {loading ? 'Kaydediliyor...' : 'Seriyi Yayınla'}
+                           </button>
+                       </div>
+                   )}
+               </div>
+          </div>
+      );
+  }
+
+  return null;
 };

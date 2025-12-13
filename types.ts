@@ -62,6 +62,22 @@ export interface Course {
   steps: CourseStep[];
 }
 
+// --- HOTELGRAM FEED TYPES ---
+
+export interface FeedPost {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  targetDepartments: DepartmentType[]; // Who sees this?
+  type: 'image' | 'video';
+  mediaUrl: string;
+  caption: string;
+  likes: number;
+  createdAt: number;
+  likedBy?: string[]; // Array of user IDs who liked
+}
+
 export interface CareerPath {
   id: string;
   title: string;

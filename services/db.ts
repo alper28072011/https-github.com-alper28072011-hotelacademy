@@ -9,17 +9,19 @@ import {
   updateDoc, 
   increment, 
   arrayUnion,
+  arrayRemove,
   addDoc,
   onSnapshot,
   orderBy,
   limit
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course, Task, Issue, Category, CareerPath } from '../types';
+import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
 const coursesRef = collection(db, 'courses');
+const postsRef = collection(db, 'posts');
 const categoriesRef = collection(db, 'categories');
 const tasksRef = collection(db, 'tasks');
 const issuesRef = collection(db, 'issues');
@@ -29,15 +31,12 @@ const careerPathsRef = collection(db, 'careerPaths');
  * Fetches all users belonging to a specific department.
  */
 export const getUsersByDepartment = async (dept: DepartmentType): Promise<User[]> => {
-  console.group(`🔥 DB: getUsersByDepartment -> '${dept}'`);
   try {
     const q = query(usersRef, where('department', '==', dept));
     const snapshot = await getDocs(q);
     
-    console.log(`✅ Success: Found ${snapshot.size} documents.`);
-    
     if (snapshot.empty) {
-      console.warn("⚠️ Warning: No users found. Check if 'users' collection exists and 'department' fields match exactly.");
+      console.warn("⚠️ Warning: No users found.");
     }
 
     const users = snapshot.docs.map(doc => {
@@ -45,15 +44,10 @@ export const getUsersByDepartment = async (dept: DepartmentType): Promise<User[]
       return { id: doc.id, ...data } as User;
     });
 
-    console.groupEnd();
     return users;
 
   } catch (error: any) {
     console.error("❌ FIREBASE ERROR:", error);
-    if (error.code === 'permission-denied') {
-      console.error("🚨 PERMISSION DENIED: Please check your Firestore Security Rules in Firebase Console.");
-    }
-    console.groupEnd();
     return [];
   }
 };
@@ -69,6 +63,69 @@ export const getCourses = async (): Promise<Course[]> => {
     console.error("Error fetching courses:", error);
     return [];
   }
+};
+
+/**
+ * --- HOTELGRAM FEED FUNCTIONS ---
+ */
+
+export const createPost = async (post: Omit<FeedPost, 'id'>) => {
+    try {
+        await addDoc(postsRef, post);
+        return true;
+    } catch (e) {
+        console.error("Error creating post", e);
+        return false;
+    }
+};
+
+export const getFeedPosts = async (userDept: DepartmentType): Promise<FeedPost[]> => {
+    try {
+        // Fetch posts where targetDepartments contains userDept OR contains 'management' (as a catch-all usually)
+        // Note: Firestore 'array-contains' only allows one value. 
+        // For simplicity in this demo, we fetch all and filter client-side if needed, 
+        // or just rely on the main query.
+        
+        // Optimised Query: Get posts targeted to this dept ordered by date
+        const q = query(
+            postsRef, 
+            where('targetDepartments', 'array-contains', userDept),
+            orderBy('createdAt', 'desc'),
+            limit(20)
+        );
+        
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
+    } catch (e) {
+        // Fallback for indexing errors during dev
+        console.warn("Feed Query Error (likely missing index), falling back to basic fetch:", e);
+        const snapshot = await getDocs(postsRef);
+        const allPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
+        return allPosts
+            .filter(p => p.targetDepartments?.includes(userDept))
+            .sort((a,b) => b.createdAt - a.createdAt);
+    }
+};
+
+export const togglePostLike = async (postId: string, userId: string, isLiked: boolean) => {
+    try {
+        const postRef = doc(db, 'posts', postId);
+        if (isLiked) {
+            // Unlike
+            await updateDoc(postRef, {
+                likes: increment(-1),
+                likedBy: arrayRemove(userId)
+            });
+        } else {
+            // Like
+            await updateDoc(postRef, {
+                likes: increment(1),
+                likedBy: arrayUnion(userId)
+            });
+        }
+    } catch (e) {
+        console.error("Like error", e);
+    }
 };
 
 /**
@@ -201,11 +258,8 @@ export const subscribeToUser = (userId: string, callback: (user: User) => void) 
 
 /**
  * Subscribes to the leaderboard for a specific department.
- * MODIFIED: Uses client-side sorting to avoid Firestore Composite Index requirement.
  */
 export const subscribeToLeaderboard = (dept: DepartmentType, callback: (users: User[]) => void) => {
-  // Original query requiring index: query(usersRef, where('department', '==', dept), orderBy('xp', 'desc'), limit(5));
-  // Optimized for development/demo: fetch department users, sort locally.
   const q = query(
     usersRef, 
     where('department', '==', dept)
