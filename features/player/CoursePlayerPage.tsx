@@ -1,34 +1,58 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Volume2, VolumeX, CheckCircle, ArrowRight, RotateCcw, AlertTriangle } from 'lucide-react';
-import { MOCK_COURSE_STEPS } from './data';
+import { X, Volume2, VolumeX, CheckCircle, ArrowRight, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { getCourse, updateUserProgress } from '../../services/db';
+import { Course } from '../../types';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 export const CoursePlayerPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { courseId } = useParams<{ courseId: string }>();
+  const { currentUser } = useAuthStore();
+  
+  const [course, setCourse] = useState<Course | null>(null);
+  const [loading, setLoading] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [isMuted, setIsMuted] = useState(true); // Default muted for autoplay policies
+  const [isMuted, setIsMuted] = useState(true);
   const [quizError, setQuizError] = useState(false);
 
-  const currentStep = MOCK_COURSE_STEPS[currentStepIndex];
-  const totalSteps = MOCK_COURSE_STEPS.length;
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Progress Bar Width
+  // Fetch Course Data
+  useEffect(() => {
+    const fetchCourseData = async () => {
+      if (!courseId) return;
+      setLoading(true);
+      const data = await getCourse(courseId);
+      if (data) {
+        setCourse(data);
+      } else {
+        // Handle error or redirect
+        console.error("Course not found");
+        setTimeout(() => navigate('/'), 2000);
+      }
+      setLoading(false);
+    };
+    fetchCourseData();
+  }, [courseId, navigate]);
+
+  const currentStep = course?.steps[currentStepIndex];
+  const totalSteps = course?.steps.length || 0;
   const progress = ((currentStepIndex + 1) / totalSteps) * 100;
 
   // Handle Video Autoplay on Step Change
   useEffect(() => {
-    if (currentStep.type === 'video' && videoRef.current) {
+    if (currentStep?.type === 'video' && videoRef.current) {
         videoRef.current.currentTime = 0;
         videoRef.current.play().catch(e => console.log("Autoplay blocked:", e));
     }
-  }, [currentStepIndex, currentStep.type]);
+  }, [currentStepIndex, currentStep?.type]);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStepIndex < totalSteps - 1) {
       setCurrentStepIndex(prev => prev + 1);
     } else {
@@ -39,6 +63,12 @@ export const CoursePlayerPage: React.FC = () => {
         origin: { y: 0.6 },
         colors: ['#D4AF37', '#0B1E3B', '#ffffff']
       });
+
+      // Save Progress to DB
+      if (currentUser && courseId) {
+        await updateUserProgress(currentUser.id, courseId, 150); // Give 150 XP
+      }
+
       setTimeout(() => navigate('/'), 2000);
     }
   };
@@ -47,16 +77,17 @@ export const CoursePlayerPage: React.FC = () => {
     if (isCorrect) {
       handleNext();
     } else {
-      // Incorrect Answer Logic: Rewind to previous video
       setQuizError(true);
       setTimeout(() => {
         setQuizError(false);
-        // Find the most recent video step to rewind to
-        let prevVideoIndex = currentStepIndex - 1;
-        while(prevVideoIndex >= 0 && MOCK_COURSE_STEPS[prevVideoIndex].type !== 'video') {
-            prevVideoIndex--;
+        // Rewind Logic
+        if (course) {
+            let prevVideoIndex = currentStepIndex - 1;
+            while(prevVideoIndex >= 0 && course.steps[prevVideoIndex].type !== 'video') {
+                prevVideoIndex--;
+            }
+            if (prevVideoIndex >= 0) setCurrentStepIndex(prevVideoIndex);
         }
-        if (prevVideoIndex >= 0) setCurrentStepIndex(prevVideoIndex);
       }, 2000);
     }
   };
@@ -67,6 +98,16 @@ export const CoursePlayerPage: React.FC = () => {
       videoRef.current.muted = !isMuted;
     }
   };
+
+  if (loading) {
+    return (
+        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center text-white">
+            <Loader2 className="w-10 h-10 animate-spin text-accent" />
+        </div>
+    );
+  }
+
+  if (!currentStep) return null;
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col overflow-hidden">

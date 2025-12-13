@@ -1,16 +1,23 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuthStore, MOCK_USERS } from '../../stores/useAuthStore';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { AccessCard } from './components/AccessCard';
 import { DepartmentGrid } from './components/DepartmentGrid';
 import { Keypad } from './components/Keypad';
-import { CheckCircle2, User as UserIcon } from 'lucide-react';
+import { CheckCircle2, User as UserIcon, Loader2, Database } from 'lucide-react';
+import { seedDatabase } from '../../utils/seedDatabase';
 
 export const LoginPage: React.FC = () => {
   const { t } = useTranslation();
-  const { stage, selectedDepartment, selectedUser, setUser, resetFlow } = useAuthStore();
-
-  const departmentUsers = MOCK_USERS.filter(u => u.department === selectedDepartment);
+  const { 
+    stage, 
+    selectedDepartment, 
+    selectedUser, 
+    setUser, 
+    resetFlow,
+    departmentUsers,
+    isLoading
+  } = useAuthStore();
 
   // Title logic based on stage
   let title = t('login_title');
@@ -20,9 +27,17 @@ export const LoginPage: React.FC = () => {
   if (stage === 'SUCCESS') title = t('access_granted');
 
   return (
-    <div className="w-full flex justify-center items-center py-4">
+    <div className="w-full flex flex-col justify-center items-center py-4 relative">
       <AccessCard title={title}>
         
+        {/* Loading Overlay */}
+        {isLoading && (
+            <div className="absolute inset-0 bg-primary-dark/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+                <Loader2 className="w-12 h-12 text-accent animate-spin mb-4" />
+                <span className="text-white font-medium animate-pulse">{t('loading')}</span>
+            </div>
+        )}
+
         {/* Stage 1: Department Selection */}
         {stage === 'DEPARTMENT_SELECT' && (
            <DepartmentGrid />
@@ -31,6 +46,11 @@ export const LoginPage: React.FC = () => {
         {/* Stage 2: User Selection */}
         {stage === 'USER_SELECT' && (
           <div className="grid grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar animate-in slide-in-from-right-8 fade-in duration-500">
+            {departmentUsers.length === 0 && !isLoading && (
+                 <div className="col-span-2 text-center text-white/50 py-10">
+                    No staff found in this department.
+                 </div>
+            )}
             {departmentUsers.map((user) => (
               <button
                 key={user.id}
@@ -82,13 +102,22 @@ export const LoginPage: React.FC = () => {
                 onClick={resetFlow}
                 className="mt-12 bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-full text-sm font-medium transition-colors"
              >
-                (Demo: Reset)
+                Loading Dashboard...
              </button>
           </div>
         )}
 
       </AccessCard>
       
+      {/* Dev Tool: Database Seeder Button (Hidden-ish) */}
+      <button 
+        onClick={seedDatabase}
+        className="mt-8 text-white/10 hover:text-white/40 text-xs flex items-center gap-1 transition-colors"
+        title="Populate Database (Dev Only)"
+      >
+        <Database className="w-3 h-3" /> Initialize DB
+      </button>
+
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }

@@ -1,7 +1,8 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { BedDouble, Utensils, ConciergeBell, Users } from 'lucide-react';
-import { useAuthStore, DepartmentType } from '../../../stores/useAuthStore';
+import { useAuthStore } from '../../../stores/useAuthStore';
+import { DepartmentType } from '../../../types';
 
 const departments: { id: DepartmentType; icon: React.FC<any>; labelKey: string }[] = [
   { id: 'housekeeping', icon: BedDouble, labelKey: 'dept_housekeeping' },

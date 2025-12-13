@@ -1,25 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { User, DepartmentType } from '../types';
+import { getUsersByDepartment } from '../services/db';
 
 export type AuthStage = 'DEPARTMENT_SELECT' | 'USER_SELECT' | 'PIN_ENTRY' | 'SUCCESS';
-export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management';
-
-export interface User {
-  id: string;
-  name: string;
-  avatar: string; // Initials or URL
-  department: DepartmentType;
-  pin: string; // Mock PIN for demo
-}
-
-// Mock Data
-export const MOCK_USERS: User[] = [
-  { id: '1', name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', pin: '1234' },
-  { id: '2', name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', pin: '1234' },
-  { id: '3', name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', pin: '1234' },
-  { id: '4', name: 'Canan Kaya', avatar: 'CK', department: 'front_office', pin: '1234' },
-  { id: '5', name: 'Ahmet Yildiz', avatar: 'AY', department: 'management', pin: '1234' },
-];
 
 interface AuthState {
   // Session State
@@ -29,9 +13,11 @@ interface AuthState {
   // Login Process State
   stage: AuthStage;
   selectedDepartment: DepartmentType | null;
+  departmentUsers: User[]; // Users fetched from DB
   selectedUser: User | null;
   enteredPin: string;
   error: boolean;
+  isLoading: boolean;
   
   // Actions
   setDepartment: (dept: DepartmentType) => void;
@@ -51,15 +37,25 @@ export const useAuthStore = create<AuthState>()(
       
       stage: 'DEPARTMENT_SELECT',
       selectedDepartment: null,
+      departmentUsers: [],
       selectedUser: null,
       enteredPin: '',
       error: false,
+      isLoading: false,
 
-      setDepartment: (dept) => set({ 
-        selectedDepartment: dept, 
-        stage: 'USER_SELECT',
-        error: false 
-      }),
+      setDepartment: async (dept) => {
+        set({ isLoading: true, error: false });
+        
+        // Fetch users from Firestore
+        const users = await getUsersByDepartment(dept);
+        
+        set({ 
+          selectedDepartment: dept, 
+          departmentUsers: users,
+          stage: 'USER_SELECT',
+          isLoading: false
+        });
+      },
 
       setUser: (user) => set({ 
         selectedUser: user, 
@@ -77,6 +73,8 @@ export const useAuthStore = create<AuthState>()(
 
         // Check PIN immediately when length is 4
         if (newPin.length === 4) {
+            // In this Kiosk-mode, we check against the loaded user object
+            // for instant feedback without network latency.
             if (newPin === selectedUser?.pin) {
                 // Success
                 set({ stage: 'SUCCESS' });
@@ -89,6 +87,7 @@ export const useAuthStore = create<AuthState>()(
                     // Reset login flow for next time
                     stage: 'DEPARTMENT_SELECT',
                     selectedDepartment: null,
+                    departmentUsers: [],
                     selectedUser: null,
                     enteredPin: ''
                   });
@@ -118,7 +117,7 @@ export const useAuthStore = create<AuthState>()(
       goBack: () => {
         const { stage } = get();
         if (stage === 'USER_SELECT') {
-          set({ stage: 'DEPARTMENT_SELECT', selectedDepartment: null });
+          set({ stage: 'DEPARTMENT_SELECT', selectedDepartment: null, departmentUsers: [] });
         } else if (stage === 'PIN_ENTRY') {
           set({ stage: 'USER_SELECT', selectedUser: null, enteredPin: '' });
         }
@@ -139,7 +138,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({ 
         isAuthenticated: state.isAuthenticated, 
         currentUser: state.currentUser 
-      }), // Only persist authentication state
+      }),
     }
   )
 );
