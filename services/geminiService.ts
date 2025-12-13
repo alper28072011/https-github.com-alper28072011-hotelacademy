@@ -84,6 +84,9 @@ export const translateContent = async (text: string, targetLanguage: string): Pr
 
 export const generateCourseImage = async (prompt: string): Promise<string | null> => {
   try {
+    // Ensure prompt is valid before making request
+    if (!prompt || typeof prompt !== 'string') throw new Error("Prompt is empty or invalid");
+
     // Note: In a real app, we check if the user selected a high-quality option.
     // Defaulting to 1K square image for course thumbnails.
     const response = await ai.models.generateContent({
@@ -109,6 +112,8 @@ export const generateCourseImage = async (prompt: string): Promise<string | null
   } catch (error) {
     console.warn("Gemini Image Gen Error (Falling back to Unsplash):", error);
     // Fallback if API key doesn't support image gen or quota exceeded
-    return `https://source.unsplash.com/800x1200/?hotel,${encodeURIComponent(prompt.split(' ')[0])}`;
+    // Safe split check
+    const safePrompt = (typeof prompt === 'string' && prompt) ? prompt : "hotel service";
+    return `https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80`; 
   }
 };

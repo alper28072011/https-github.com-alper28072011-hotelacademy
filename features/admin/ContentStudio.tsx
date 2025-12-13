@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Upload, Film, Image as ImageIcon, CheckCircle2, Loader2, Sparkles, Globe, FileText, Wand2 } from 'lucide-react';
@@ -49,16 +50,25 @@ export const ContentStudio: React.FC = () => {
           }
 
           // 2. Generate Image
-          const aiImageBase64 = await generateCourseImage(draft.imagePrompt);
-          if (aiImageBase64) {
-              setCoverPreview(aiImageBase64);
-              // Convert base64 to blob for uploading logic later if needed, 
-              // or handle base64 storage directly. For this demo, we assume uploadFile handles it or we skip file upload if string is dataURL.
-              // Note: uploadFile expects File object. We'll convert base64 to File.
-              const res = await fetch(aiImageBase64);
-              const blob = await res.blob();
-              const file = new File([blob], "ai_cover.png", { type: "image/png" });
-              setCoverFile(file);
+          const aiImageResult = await generateCourseImage(draft.imagePrompt);
+          if (aiImageResult) {
+              setCoverPreview(aiImageResult);
+              
+              if (aiImageResult.startsWith('data:')) {
+                  // Only convert to file if it is a data URI (base64)
+                  try {
+                      const res = await fetch(aiImageResult);
+                      const blob = await res.blob();
+                      const file = new File([blob], "ai_cover.png", { type: "image/png" });
+                      setCoverFile(file);
+                  } catch (e) {
+                      console.error("Failed to convert base64 to file", e);
+                  }
+              } else {
+                  // If it's a remote URL, we don't convert to File to avoid CORS errors.
+                  // We just use the URL directly in handlePublish.
+                  setCoverFile(null); 
+              }
           }
       }
 
@@ -88,13 +98,23 @@ export const ContentStudio: React.FC = () => {
   };
 
   const handlePublish = async () => {
-    if (!title || !coverFile) return;
+    if (!title) return;
+    if (!coverFile && !coverPreview) return; // Must have either a file or a preview URL
+
     setLoading(true);
     setUploadProgress(0);
 
     try {
-        // 1. Upload Cover
-        const coverUrl = await uploadFile(coverFile, 'course_covers');
+        // 1. Determine Cover URL
+        let coverUrl = '';
+        if (coverFile) {
+             coverUrl = await uploadFile(coverFile, 'course_covers');
+        } else if (typeof coverPreview === 'string' && coverPreview.startsWith('http')) {
+             // Use remote URL directly
+             coverUrl = coverPreview;
+        }
+
+        if (!coverUrl) throw new Error("No cover image available");
         
         // 2. Upload Video (if exists)
         let videoUrl = '';
@@ -151,7 +171,7 @@ export const ContentStudio: React.FC = () => {
 
     } catch (error) {
         console.error("Publish error", error);
-        alert("Yükleme sırasında hata oluştu.");
+        alert("Yükleme sırasında hata oluştu: " + (error as any).message);
     } finally {
         setLoading(false);
     }
@@ -347,7 +367,7 @@ export const ContentStudio: React.FC = () => {
               {/* Publish Button */}
               <button 
                 onClick={handlePublish}
-                disabled={loading || !title || !coverFile}
+                disabled={loading || !title || (!coverFile && !coverPreview)}
                 className="w-full bg-primary disabled:bg-gray-300 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 hover:brightness-110 transition-all active:scale-95"
               >
                   {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}

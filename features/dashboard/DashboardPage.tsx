@@ -76,7 +76,7 @@ export const DashboardPage: React.FC = () => {
       <div className="px-6 pt-8 pb-4 flex justify-between items-center text-white">
         <div>
            <p className="text-accent text-sm font-medium tracking-wider uppercase mb-0.5">Hotel Academy</p>
-           <h1 className="text-2xl font-bold">{t('welcome_back')} {currentUser?.name.split(' ')[0]}</h1>
+           <h1 className="text-2xl font-bold">{t('welcome_back')} {(currentUser?.name || '').split(' ')[0]}</h1>
         </div>
         <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-sm font-bold cursor-pointer" onClick={logout}>
             {currentUser?.avatar}
