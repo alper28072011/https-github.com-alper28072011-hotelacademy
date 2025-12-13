@@ -7,7 +7,7 @@ import { Keypad } from './components/Keypad';
 import { AdminLoginForm } from './components/AdminLoginForm';
 import { CheckCircle2, Loader2, Database, Shield, Lock } from 'lucide-react';
 import { seedDatabase } from '../../utils/seedDatabase';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 export const LoginPage: React.FC = () => {
   const { t } = useTranslation();

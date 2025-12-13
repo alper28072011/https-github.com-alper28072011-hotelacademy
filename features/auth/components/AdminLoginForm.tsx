@@ -56,7 +56,7 @@ export const AdminLoginForm: React.FC = () => {
         <button 
             type="submit"
             disabled={isLoading}
-            className="mt-4 bg-white text-black font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 active:scale-[0.98]"
+            className="mt-4 bg-[#D4AF37] hover:bg-[#E5C158] text-primary font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 active:scale-[0.98] shadow-lg shadow-[#D4AF37]/20"
         >
             {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
