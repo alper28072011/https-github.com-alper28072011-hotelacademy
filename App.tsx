@@ -5,6 +5,7 @@ import { useAppStore } from './stores/useAppStore';
 import { useAuthStore } from './stores/useAuthStore';
 import { LoginPage } from './features/auth/LoginPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
+import { ProfilePage } from './features/profile/ProfilePage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { CoursePlayerPage } from './features/player/CoursePlayerPage';
 
@@ -71,6 +72,7 @@ const App: React.FC = () => {
                   <DashboardLayout>
                       <Routes>
                         <Route path="/" element={<DashboardPage />} />
+                        <Route path="/profile" element={<ProfilePage />} />
                         <Route path="*" element={<Navigate to="/" replace />} />
                       </Routes>
                   </DashboardLayout>
