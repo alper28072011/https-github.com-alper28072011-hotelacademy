@@ -47,7 +47,8 @@ export interface Course {
   categoryId: string;
   title: string;
   description: string;
-  thumbnailUrl: string;
+  thumbnailUrl: string; // Portrait Poster URL
+  videoUrl?: string; // Trailer or Intro URL
   duration: number; // Minutes
   xpReward: number;
   isFeatured?: boolean;

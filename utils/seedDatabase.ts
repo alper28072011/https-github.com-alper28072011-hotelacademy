@@ -12,19 +12,21 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
 ];
 
 const MOCK_CATEGORIES: Category[] = [
+    { id: 'cat_guest', title: 'Misafir İlişkileri' },
+    { id: 'cat_kitchen', title: 'Mutfak Sanatları' },
+    { id: 'cat_safety', title: 'Acil Durum & Güvenlik' },
+    { id: 'cat_lang', title: 'Dil Okulu' },
     { id: 'cat_hk', title: 'Housekeeping Pro' },
-    { id: 'cat_service', title: 'Service Excellence' },
-    { id: 'cat_kitchen', title: 'Culinary Arts' },
-    { id: 'cat_lang', title: 'English for Staff' },
 ];
 
 const MOCK_COURSES: Course[] = [
+  // --- FEATURED ---
   {
     id: '101',
-    categoryId: 'cat_service',
-    title: 'Upselling Techniques',
-    description: 'Learn the key phrases to increase guest satisfaction.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1556740758-90de374c12ad?auto=format&fit=crop&q=80&w=800',
+    categoryId: 'cat_guest',
+    title: 'Zor Misafir Yönetimi',
+    description: 'Şikayet eden misafiri sadık bir müşteriye dönüştürme sanatı.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f7a07d?auto=format&fit=crop&q=80&w=800', // Wide for Featured (handled in UI logic to pick wide if needed, but here using a good quality image)
     duration: 15,
     xpReward: 150,
     isFeatured: true,
@@ -32,89 +34,114 @@ const MOCK_COURSES: Course[] = [
       {
         id: 'step1',
         type: 'video',
-        title: 'The First Impression',
-        description: 'Eye contact and a warm smile are your most powerful tools.',
+        title: 'Empati Kurmak',
+        description: 'Dinleyin, anladığınızı gösterin ve çözüm üretin.',
         videoUrl: 'https://cdn.coverr.co/videos/coverr-receptionist-talking-on-the-phone-4338/1080p.mp4',
         posterUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f7a07d?auto=format&fit=crop&w=800&q=80',
-      },
-      {
-        id: 'step2',
-        type: 'quiz',
-        title: 'Quick Check',
-        question: 'What is the best way to suggest a dessert?',
-        options: [
-          { id: 'a', label: 'Do you want dessert?', isCorrect: false },
-          { id: 'b', label: 'Would you like to try our signature Tiramisu?', isCorrect: true },
-        ],
-      },
+      }
     ]
   },
+  // --- KITCHEN ---
   {
     id: '102',
-    categoryId: 'cat_hk',
-    title: '5-Star Bed Making',
-    description: 'The art of the perfect tuck and pillow placement.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&q=80&w=800',
-    duration: 10,
-    xpReward: 100,
-    steps: [] // Empty for mock
-  },
-  {
-    id: '103',
     categoryId: 'cat_kitchen',
-    title: 'Knife Safety Skills',
-    description: 'Essential handling techniques for professional chefs.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1556910103-1c02745a30bf?auto=format&fit=crop&q=80&w=800',
+    title: 'Tabak Sunum Teknikleri',
+    description: 'Michelin yıldızlı sunumlar için temel kurallar.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=600', // Portrait-friendly
     duration: 20,
     xpReward: 200,
     steps: []
   },
   {
-    id: '104',
-    categoryId: 'cat_service',
-    title: 'Wine Service 101',
-    description: 'Opening, pouring, and presenting wine elegantly.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=800',
+    id: '103',
+    categoryId: 'cat_kitchen',
+    title: 'Barista 101: Latte Art',
+    description: 'Mükemmel süt köpüğü ve kalp çizme teknikleri.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&q=80&w=600',
     duration: 12,
     xpReward: 120,
     steps: []
   },
   {
-    id: '105',
-    categoryId: 'cat_lang',
-    title: 'Greeting Guests',
-    description: 'English phrases for welcoming guests at the door.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=800',
-    duration: 5,
-    xpReward: 50,
+    id: '104',
+    categoryId: 'cat_kitchen',
+    title: 'Şarap Servis Kuralları',
+    description: 'Şarap açma, tattırma ve servis etme adımları.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=600',
+    duration: 18,
+    xpReward: 180,
+    steps: []
+  },
+  // --- SAFETY ---
+  {
+    id: '201',
+    categoryId: 'cat_safety',
+    title: 'Yangın Güvenliği',
+    description: 'Acil durumlarda tahliye planı ve yangın tüpü kullanımı.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1591501662705-045388048259?auto=format&fit=crop&q=80&w=600',
+    duration: 10,
+    xpReward: 100,
     steps: []
   },
   {
-    id: '106',
+    id: '202',
+    categoryId: 'cat_safety',
+    title: 'İlk Yardım Temelleri',
+    description: 'Bayılma ve kesiklerde ilk müdahale.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80&w=600',
+    duration: 25,
+    xpReward: 250,
+    steps: []
+  },
+  // --- LANGUAGE ---
+  {
+    id: '301',
+    categoryId: 'cat_lang',
+    title: 'Resepsiyon İngilizcesi',
+    description: 'Check-in ve Check-out sırasında kullanılan kalıplar.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=600',
+    duration: 15,
+    xpReward: 150,
+    steps: []
+  },
+  {
+    id: '302',
+    categoryId: 'cat_lang',
+    title: 'Rusça Temel Kelimeler',
+    description: 'Rus misafirlerle temel iletişim.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&q=80&w=600',
+    duration: 20,
+    xpReward: 200,
+    steps: []
+  },
+  // --- HK ---
+  {
+    id: '401',
     categoryId: 'cat_hk',
-    title: 'Bathroom Sanitation',
-    description: 'Deep cleaning checklists for marble surfaces.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=800',
+    title: '5 Yıldızlı Yatak Yapımı',
+    description: 'Jilet gibi çarşaflar için katlama teknikleri.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&q=80&w=600',
     duration: 8,
     xpReward: 80,
+    steps: []
+  },
+  {
+    id: '402',
+    categoryId: 'cat_hk',
+    title: 'Mermer Yüzey Bakımı',
+    description: 'Leke çıkarma ve parlatma sırları.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=600',
+    duration: 12,
+    xpReward: 120,
     steps: []
   }
 ];
 
-// Operational Tasks for "Ayşe Teyze"
 const MOCK_TASKS: Task[] = [
-    // Housekeeping
     { id: 'hk_1', department: 'housekeeping', title: 'Koridor Halı Kontrolü', xpReward: 50, type: 'checklist' },
     { id: 'hk_2', department: 'housekeeping', title: 'Kat Arabası Düzeni', xpReward: 75, type: 'photo' },
-    { id: 'hk_3', department: 'housekeeping', title: 'Lobi Çiçek Sulama', xpReward: 50, type: 'checklist' },
-    { id: 'hk_4', department: 'housekeeping', title: 'Asansör Ayna Temizliği', xpReward: 40, type: 'checklist' },
-    // Kitchen
     { id: 'kt_1', department: 'kitchen', title: 'Dolap Sıcaklık Kontrolü', xpReward: 100, type: 'photo' },
-    { id: 'kt_2', department: 'kitchen', title: 'Bıçak Sterilizasyonu', xpReward: 50, type: 'checklist' },
-    { id: 'kt_3', department: 'kitchen', title: 'Tezgahlarda "Mise en Place"', xpReward: 80, type: 'photo' },
-    // Front Office
-    { id: 'fo_1', department: 'front_office', title: 'VIP Giriş Listesi Kontrolü', xpReward: 60, type: 'checklist' },
-    { id: 'fo_2', department: 'front_office', title: 'Kasa Devir Kontrolü', xpReward: 100, type: 'checklist' },
+    { id: 'fo_1', department: 'front_office', title: 'VIP Giriş Listesi', xpReward: 60, type: 'checklist' },
 ];
 
 export const seedDatabase = async (): Promise<boolean> => {
@@ -164,15 +191,6 @@ export const seedDatabase = async (): Promise<boolean> => {
   } catch (error: any) {
     console.error("❌ Error seeding database:", error);
     console.groupEnd();
-    
-    let msg = "Unknown error occurred.";
-    if (error.code === 'permission-denied') {
-        msg = "Permission Denied. Please set Firestore Rules to 'allow read, write: if true;' in Firebase Console.";
-    } else {
-        msg = error.message || JSON.stringify(error);
-    }
-    
-    alert(`System Initialization Failed:\n${msg}`);
     return false;
   }
 };
