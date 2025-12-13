@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { AccessCard } from './components/AccessCard';
 import { DepartmentGrid } from './components/DepartmentGrid';
 import { Keypad } from './components/Keypad';
-import { CheckCircle2, User as UserIcon, Loader2, Database, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Loader2, Database, AlertTriangle } from 'lucide-react';
 import { seedDatabase } from '../../utils/seedDatabase';
 
 export const LoginPage: React.FC = () => {
@@ -16,8 +16,22 @@ export const LoginPage: React.FC = () => {
     setUser, 
     resetFlow,
     departmentUsers,
-    isLoading
+    isLoading: isAuthLoading
   } = useAuthStore();
+
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  // Helper to handle seeding
+  const handleInitializeSystem = async () => {
+    setIsSeeding(true);
+    const success = await seedDatabase();
+    setIsSeeding(false);
+    
+    if (success) {
+        // Reload to fetch the new data
+        window.location.reload();
+    }
+  };
 
   // Title logic based on stage
   let title = t('login_title');
@@ -25,6 +39,8 @@ export const LoginPage: React.FC = () => {
   if (stage === 'USER_SELECT') title = t('select_your_profile');
   if (stage === 'PIN_ENTRY') title = t('enter_pin');
   if (stage === 'SUCCESS') title = t('access_granted');
+
+  const isLoading = isAuthLoading || isSeeding;
 
   return (
     <div className="w-full flex flex-col justify-center items-center py-4 relative">
@@ -34,7 +50,9 @@ export const LoginPage: React.FC = () => {
         {isLoading && (
             <div className="absolute inset-0 bg-primary-dark/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
                 <Loader2 className="w-12 h-12 text-accent animate-spin mb-4" />
-                <span className="text-white font-medium animate-pulse">{t('loading')}</span>
+                <span className="text-white font-medium animate-pulse">
+                    {isSeeding ? "Setting up Database..." : t('loading')}
+                </span>
             </div>
         )}
 
@@ -47,12 +65,27 @@ export const LoginPage: React.FC = () => {
         {stage === 'USER_SELECT' && (
           <div className="grid grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar animate-in slide-in-from-right-8 fade-in duration-500">
             {departmentUsers.length === 0 && !isLoading && (
-                 <div className="col-span-2 flex flex-col items-center justify-center text-center text-white/50 py-10 gap-3 border border-dashed border-white/10 rounded-xl p-4">
-                    <AlertTriangle className="w-8 h-8 text-yellow-500/50" />
-                    <span className="text-sm">No staff found.</span>
-                    <div className="text-[10px] font-mono text-red-300 bg-black/40 px-2 py-1 rounded">
-                      Debug: Department="{selectedDepartment}"<br/>
-                      Check Firestore Console.
+                 <div className="col-span-2 flex flex-col items-center justify-center text-center text-white/50 py-12 gap-4 border-2 border-dashed border-white/10 rounded-2xl bg-white/5">
+                    <div className="w-16 h-16 rounded-full bg-yellow-500/20 flex items-center justify-center mb-2 border border-yellow-500/30">
+                        <Database className="w-8 h-8 text-yellow-500" />
+                    </div>
+                    
+                    <div>
+                        <h3 className="text-white font-bold text-lg">System Empty</h3>
+                        <p className="text-sm opacity-70">No staff records found for {selectedDepartment}.</p>
+                    </div>
+
+                    <button 
+                        onClick={handleInitializeSystem}
+                        disabled={isSeeding}
+                        className="mt-2 bg-accent hover:bg-accent-light text-primary font-bold py-3 px-8 rounded-full shadow-lg shadow-accent/20 flex items-center gap-2 transition-all active:scale-95 animate-pulse"
+                    >
+                        {isSeeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+                        Initialize System Data
+                    </button>
+                    
+                    <div className="text-[10px] font-mono text-white/30 mt-4 max-w-[200px]">
+                      Tap to populate database with demo users and courses.
                     </div>
                  </div>
             )}
@@ -113,15 +146,6 @@ export const LoginPage: React.FC = () => {
         )}
 
       </AccessCard>
-      
-      {/* Dev Tool: Database Seeder Button (Hidden-ish) */}
-      <button 
-        onClick={seedDatabase}
-        className="mt-8 text-white/10 hover:text-white/40 text-xs flex items-center gap-1 transition-colors"
-        title="Populate Database (Dev Only)"
-      >
-        <Database className="w-3 h-3" /> Initialize DB
-      </button>
 
       <style>{`
         @keyframes shake {

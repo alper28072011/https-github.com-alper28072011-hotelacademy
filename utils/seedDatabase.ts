@@ -45,41 +45,47 @@ const COURSE_101: Course = {
   ]
 }
 
-export const seedDatabase = async () => {
-  console.group("🌱 Seeding Database");
+export const seedDatabase = async (): Promise<boolean> => {
+  console.group("🚀 Initializing System Data (Seeding)");
   const batch = writeBatch(db);
 
-  // Seed Users
-  console.log(`Preparing ${MOCK_USERS.length} users...`);
-  MOCK_USERS.forEach((user, index) => {
-    // Check if dept is valid lowercase string just in case
-    if(user.department !== user.department.toLowerCase()) {
-        console.warn(`Correcting case for ${user.name}: ${user.department}`);
-        user.department = user.department.toLowerCase() as DepartmentType;
-    }
-    
-    const userRef = doc(collection(db, 'users')); // Auto-ID
-    batch.set(userRef, user);
-  });
-
-  // Seed Course
-  console.log(`Preparing course 101...`);
-  const courseRef = doc(db, 'courses', '101');
-  batch.set(courseRef, COURSE_101);
-
   try {
+    // Seed Users
+    console.log(`📦 Preparing ${MOCK_USERS.length} user records...`);
+    MOCK_USERS.forEach((user) => {
+      // Ensure department is lowercase to avoid mismatches
+      if(user.department !== user.department.toLowerCase()) {
+          user.department = user.department.toLowerCase() as DepartmentType;
+      }
+      const userRef = doc(collection(db, 'users')); // Auto-ID
+      batch.set(userRef, user);
+    });
+
+    // Seed Course
+    console.log(`📚 Preparing default course content...`);
+    const courseRef = doc(db, 'courses', '101');
+    batch.set(courseRef, COURSE_101);
+
+    // Commit
+    console.log("💾 Writing to Firestore...");
     await batch.commit();
+    
     console.log("✅ Database seeded successfully!");
     console.groupEnd();
-    alert("Database seeded! Please refresh the page.");
+    return true;
+
   } catch (error: any) {
     console.error("❌ Error seeding database:", error);
     console.groupEnd();
     
+    let msg = "Unknown error occurred.";
     if (error.code === 'permission-denied') {
-        alert("Permission Denied! Check Console for Rules.");
+        msg = "Permission Denied. Please set Firestore Rules to 'allow read, write: if true;' in Firebase Console.";
     } else {
-        alert("Error seeding database. Check console.");
+        msg = error.message || JSON.stringify(error);
     }
+    
+    alert(`System Initialization Failed:\n${msg}`);
+    return false;
   }
 };
