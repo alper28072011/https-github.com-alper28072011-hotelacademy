@@ -10,12 +10,14 @@ export interface Language {
 }
 
 export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management';
+export type UserRole = 'staff' | 'manager' | 'admin';
 
 export interface User {
   id: string;
   name: string;
   avatar: string; // Initials or URL
   department: DepartmentType;
+  role: UserRole; // Added Role
   pin: string; 
   xp: number;
   completedCourses: string[];
@@ -52,6 +54,7 @@ export interface Course {
   duration: number; // Minutes
   xpReward: number;
   isFeatured?: boolean;
+  targetDepartments?: DepartmentType[]; // Added for targeting
   steps: CourseStep[];
 }
 

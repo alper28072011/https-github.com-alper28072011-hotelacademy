@@ -4,11 +4,11 @@ import { User, Course, DepartmentType, Task, Category } from '../types';
 
 // Explicitly type the mock users
 const MOCK_USERS: Omit<User, 'id'>[] = [
-  { name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', pin: '1234', xp: 120, completedCourses: [], completedTasks: [] },
-  { name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', pin: '1234', xp: 50, completedCourses: [], completedTasks: [] },
-  { name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', pin: '1234', xp: 300, completedCourses: [], completedTasks: [] },
-  { name: 'Canan Kaya', avatar: 'CK', department: 'front_office', pin: '1234', xp: 450, completedCourses: [], completedTasks: [] },
-  { name: 'Ahmet Yildiz', avatar: 'AY', department: 'management', pin: '1234', xp: 1000, completedCourses: [], completedTasks: [] },
+  { name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: [], completedTasks: [] },
+  { name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], completedTasks: [] },
+  { name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: [], completedTasks: [] },
+  { name: 'Canan Kaya', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: [], completedTasks: [] },
+  { name: 'Ahmet Yildiz', avatar: 'AY', department: 'management', role: 'manager', pin: '1234', xp: 1000, completedCourses: [], completedTasks: [] }, // Manager Role
 ];
 
 const MOCK_CATEGORIES: Category[] = [

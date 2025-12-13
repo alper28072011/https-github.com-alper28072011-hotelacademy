@@ -12,6 +12,11 @@ import { LibraryPage } from './features/library/LibraryPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { CoursePlayerPage } from './features/player/CoursePlayerPage';
 
+// Admin Imports
+import { AdminLayout } from './features/admin/AdminLayout';
+import { StaffManager } from './features/admin/StaffManager';
+import { ContentStudio } from './features/admin/ContentStudio';
+
 // Simple Layout Wrapper for Login
 const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -50,7 +55,7 @@ const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const App: React.FC = () => {
   const { currentLanguage } = useAppStore();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, currentUser } = useAuthStore();
 
   // Initial setup effect
   useEffect(() => {
@@ -68,6 +73,16 @@ const App: React.FC = () => {
               {/* Course Player (Fullscreen, No Layout) */}
               <Route path="/course/:courseId" element={<CoursePlayerPage />} />
               
+              {/* ADMIN ROUTES (Protected by Role) */}
+              {['manager', 'admin'].includes(currentUser?.role || '') && (
+                  <Route path="/admin" element={<AdminLayout />}>
+                      <Route index element={<Navigate to="staff" replace />} />
+                      <Route path="staff" element={<StaffManager />} />
+                      <Route path="content" element={<ContentStudio />} />
+                      <Route path="reports" element={<div>Raporlar (Yakında)</div>} />
+                  </Route>
+              )}
+
               {/* Main Dashboard (With Navigation) */}
               <Route 
                 path="/*" 
@@ -79,6 +94,7 @@ const App: React.FC = () => {
                         <Route path="/operations" element={<OperationsPage />} />
                         <Route path="/report" element={<ReportPage />} />
                         <Route path="/library" element={<LibraryPage />} />
+                        {/* If a manager tries to go home, they go to dashboard, but they have a link to admin */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                       </Routes>
                   </DashboardLayout>
