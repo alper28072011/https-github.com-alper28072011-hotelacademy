@@ -1,11 +1,14 @@
 import React, { useEffect } from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LanguageSelector } from './components/ui/LanguageSelector';
 import { useAppStore } from './stores/useAppStore';
+import { useAuthStore } from './stores/useAuthStore';
 import { LoginPage } from './features/auth/LoginPage';
+import { DashboardPage } from './features/dashboard/DashboardPage';
+import { DashboardLayout } from './components/layout/DashboardLayout';
 
-// Simple Layout Wrapper
-const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// Simple Layout Wrapper for Login
+const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="min-h-screen bg-surface flex flex-col relative overflow-hidden">
       {/* Decorative Background Elements */}
@@ -42,6 +45,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const App: React.FC = () => {
   const { currentLanguage } = useAppStore();
+  const { isAuthenticated } = useAuthStore();
 
   // Initial setup effect
   useEffect(() => {
@@ -52,11 +56,32 @@ const App: React.FC = () => {
 
   return (
     <HashRouter>
-      <MainLayout>
-        <Routes>
-          <Route path="/" element={<LoginPage />} />
-        </Routes>
-      </MainLayout>
+      <Routes>
+        {/* Protected Dashboard Route */}
+        {isAuthenticated ? (
+           <Route 
+             path="/*" 
+             element={
+               <DashboardLayout>
+                  <Routes>
+                    <Route path="/" element={<DashboardPage />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+               </DashboardLayout>
+             } 
+           />
+        ) : (
+           /* Public Login Route */
+           <Route 
+             path="/*" 
+             element={
+               <LoginLayout>
+                 <LoginPage />
+               </LoginLayout>
+             } 
+           />
+        )}
+      </Routes>
     </HashRouter>
   );
 };

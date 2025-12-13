@@ -17,7 +17,21 @@ export const resources = {
       dept_front_office: "Front Office",
       dept_management: "Management",
       error_wrong_pin: "Incorrect PIN, try again",
-      back: "Back"
+      back: "Back",
+      // Dashboard
+      nav_home: "Home",
+      nav_learning: "My Learning",
+      nav_profile: "Me",
+      stories_gm: "GM Message",
+      stories_menu: "Daily Menu",
+      stories_tips: "Tips",
+      hero_task_title: "Upselling Techniques",
+      hero_task_subtitle: "Mandatory • 15 Mins",
+      btn_start: "Start Now",
+      quick_report: "Report Issue",
+      quick_leave: "Request Leave",
+      quick_schedule: "My Shift",
+      section_quick_actions: "Quick Actions"
     },
   },
   tr: {
@@ -38,7 +52,21 @@ export const resources = {
       dept_front_office: "Ön Büro",
       dept_management: "Yönetim",
       error_wrong_pin: "Hatalı PIN, tekrar deneyin",
-      back: "Geri"
+      back: "Geri",
+      // Dashboard
+      nav_home: "Ana Sayfa",
+      nav_learning: "Eğitimlerim",
+      nav_profile: "Ben",
+      stories_gm: "GM Mesajı",
+      stories_menu: "Günün Menüsü",
+      stories_tips: "Püf Noktalar",
+      hero_task_title: "Satış Arttırma Teknikleri",
+      hero_task_subtitle: "Zorunlu • 15 Dk",
+      btn_start: "Hemen Başla",
+      quick_report: "Arıza Bildir",
+      quick_leave: "İzin İste",
+      quick_schedule: "Vardiyam",
+      section_quick_actions: "Hızlı İşlemler"
     },
   },
   ru: {
@@ -59,7 +87,21 @@ export const resources = {
       dept_front_office: "Ресепшн",
       dept_management: "Управление",
       error_wrong_pin: "Неверный PIN, попробуйте снова",
-      back: "Назад"
+      back: "Назад",
+      // Dashboard
+      nav_home: "Главная",
+      nav_learning: "Обучение",
+      nav_profile: "Я",
+      stories_gm: "Сообщение GM",
+      stories_menu: "Меню дня",
+      stories_tips: "Советы",
+      hero_task_title: "Техники продаж",
+      hero_task_subtitle: "Обязательно • 15 мин",
+      btn_start: "Начать",
+      quick_report: "Сообщить",
+      quick_leave: "Отпуск",
+      quick_schedule: "Смена",
+      section_quick_actions: "Быстрые действия"
     },
   },
   de: {
@@ -80,7 +122,21 @@ export const resources = {
       dept_front_office: "Rezeption",
       dept_management: "Management",
       error_wrong_pin: "Falsche PIN, erneut versuchen",
-      back: "Zurück"
+      back: "Zurück",
+      // Dashboard
+      nav_home: "Startseite",
+      nav_learning: "Lernen",
+      nav_profile: "Ich",
+      stories_gm: "GM Nachricht",
+      stories_menu: "Tagesmenü",
+      stories_tips: "Tipps",
+      hero_task_title: "Verkaufstechniken",
+      hero_task_subtitle: "Pflicht • 15 Min",
+      btn_start: "Starten",
+      quick_report: "Melden",
+      quick_leave: "Urlaub",
+      quick_schedule: "Schicht",
+      section_quick_actions: "Schnellaktionen"
     },
   },
   id: {
@@ -101,7 +157,21 @@ export const resources = {
       dept_front_office: "Kantor Depan",
       dept_management: "Manajemen",
       error_wrong_pin: "PIN salah, coba lagi",
-      back: "Kembali"
+      back: "Kembali",
+      // Dashboard
+      nav_home: "Beranda",
+      nav_learning: "Belajar",
+      nav_profile: "Saya",
+      stories_gm: "Pesan GM",
+      stories_menu: "Menu Hari Ini",
+      stories_tips: "Tips",
+      hero_task_title: "Teknik Penjualan",
+      hero_task_subtitle: "Wajib • 15 Mnt",
+      btn_start: "Mulai",
+      quick_report: "Lapor",
+      quick_leave: "Cuti",
+      quick_schedule: "Shift",
+      section_quick_actions: "Aksi Cepat"
     },
   },
   ar: {
@@ -122,7 +192,21 @@ export const resources = {
       dept_front_office: "المكتب الأمامي",
       dept_management: "إدارة",
       error_wrong_pin: "رقم التعريف الشخصي غير صحيح، حاول مرة أخرى",
-      back: "رجوع"
+      back: "رجوع",
+      // Dashboard
+      nav_home: "الرئيسية",
+      nav_learning: "تعلمي",
+      nav_profile: "أنا",
+      stories_gm: "رسالة المدير",
+      stories_menu: "قائمة اليوم",
+      stories_tips: "نصائح",
+      hero_task_title: "تقنيات البيع",
+      hero_task_subtitle: "إلزامي • 15 دقيقة",
+      btn_start: "ابدأ الآن",
+      quick_report: "إبلاغ",
+      quick_leave: "طلب إجازة",
+      quick_schedule: "مناوبتي",
+      section_quick_actions: "إجراءات سريعة"
     },
   },
 };

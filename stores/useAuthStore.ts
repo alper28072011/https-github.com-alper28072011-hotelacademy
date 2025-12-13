@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type AuthStage = 'DEPARTMENT_SELECT' | 'USER_SELECT' | 'PIN_ENTRY' | 'SUCCESS';
 export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management';
@@ -21,6 +22,11 @@ export const MOCK_USERS: User[] = [
 ];
 
 interface AuthState {
+  // Session State
+  isAuthenticated: boolean;
+  currentUser: User | null;
+
+  // Login Process State
   stage: AuthStage;
   selectedDepartment: DepartmentType | null;
   selectedUser: User | null;
@@ -34,70 +40,106 @@ interface AuthState {
   deletePin: () => void;
   resetFlow: () => void;
   goBack: () => void;
+  logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-  stage: 'DEPARTMENT_SELECT',
-  selectedDepartment: null,
-  selectedUser: null,
-  enteredPin: '',
-  error: false,
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      isAuthenticated: false,
+      currentUser: null,
+      
+      stage: 'DEPARTMENT_SELECT',
+      selectedDepartment: null,
+      selectedUser: null,
+      enteredPin: '',
+      error: false,
 
-  setDepartment: (dept) => set({ 
-    selectedDepartment: dept, 
-    stage: 'USER_SELECT',
-    error: false 
-  }),
+      setDepartment: (dept) => set({ 
+        selectedDepartment: dept, 
+        stage: 'USER_SELECT',
+        error: false 
+      }),
 
-  setUser: (user) => set({ 
-    selectedUser: user, 
-    stage: 'PIN_ENTRY', 
-    enteredPin: '',
-    error: false 
-  }),
+      setUser: (user) => set({ 
+        selectedUser: user, 
+        stage: 'PIN_ENTRY', 
+        enteredPin: '',
+        error: false 
+      }),
 
-  appendPin: (digit) => {
-    const { enteredPin, selectedUser } = get();
-    if (enteredPin.length >= 4) return;
+      appendPin: (digit) => {
+        const { enteredPin, selectedUser } = get();
+        if (enteredPin.length >= 4) return;
 
-    const newPin = enteredPin + digit;
-    set({ enteredPin: newPin, error: false });
+        const newPin = enteredPin + digit;
+        set({ enteredPin: newPin, error: false });
 
-    // Check PIN immediately when length is 4
-    if (newPin.length === 4) {
-        if (newPin === selectedUser?.pin) {
-            // Success
-            setTimeout(() => {
+        // Check PIN immediately when length is 4
+        if (newPin.length === 4) {
+            if (newPin === selectedUser?.pin) {
+                // Success
                 set({ stage: 'SUCCESS' });
-            }, 300);
-        } else {
-            // Error handling with small delay for UX
-            setTimeout(() => {
-                set({ error: true, enteredPin: '' });
-            }, 300);
+                
+                // Transition to Authenticated State after animation
+                setTimeout(() => {
+                  set({ 
+                    isAuthenticated: true, 
+                    currentUser: selectedUser,
+                    // Reset login flow for next time
+                    stage: 'DEPARTMENT_SELECT',
+                    selectedDepartment: null,
+                    selectedUser: null,
+                    enteredPin: ''
+                  });
+                }, 1500); // Wait for the checkmark animation
+            } else {
+                // Error handling with small delay for UX
+                setTimeout(() => {
+                    set({ error: true, enteredPin: '' });
+                }, 300);
+            }
         }
+      },
+
+      deletePin: () => set((state) => ({ 
+        enteredPin: state.enteredPin.slice(0, -1),
+        error: false 
+      })),
+
+      resetFlow: () => set({ 
+        stage: 'DEPARTMENT_SELECT', 
+        selectedDepartment: null, 
+        selectedUser: null, 
+        enteredPin: '',
+        error: false
+      }),
+
+      goBack: () => {
+        const { stage } = get();
+        if (stage === 'USER_SELECT') {
+          set({ stage: 'DEPARTMENT_SELECT', selectedDepartment: null });
+        } else if (stage === 'PIN_ENTRY') {
+          set({ stage: 'USER_SELECT', selectedUser: null, enteredPin: '' });
+        }
+      },
+
+      logout: () => set({
+        isAuthenticated: false,
+        currentUser: null,
+        stage: 'DEPARTMENT_SELECT',
+        selectedDepartment: null,
+        selectedUser: null,
+        enteredPin: ''
+      })
+    }),
+    {
+      name: 'hotel-academy-auth',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({ 
+        isAuthenticated: state.isAuthenticated, 
+        currentUser: state.currentUser 
+      }), // Only persist authentication state
     }
-  },
-
-  deletePin: () => set((state) => ({ 
-    enteredPin: state.enteredPin.slice(0, -1),
-    error: false 
-  })),
-
-  resetFlow: () => set({ 
-    stage: 'DEPARTMENT_SELECT', 
-    selectedDepartment: null, 
-    selectedUser: null, 
-    enteredPin: '',
-    error: false
-  }),
-
-  goBack: () => {
-    const { stage } = get();
-    if (stage === 'USER_SELECT') {
-      set({ stage: 'DEPARTMENT_SELECT', selectedDepartment: null });
-    } else if (stage === 'PIN_ENTRY') {
-      set({ stage: 'USER_SELECT', selectedUser: null, enteredPin: '' });
-    }
-  }
-}));
+  )
+);

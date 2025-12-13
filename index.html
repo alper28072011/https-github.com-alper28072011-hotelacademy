@@ -36,6 +36,14 @@
         background-color: #F8F9FA;
         -webkit-tap-highlight-color: transparent;
       }
+      /* Hide scrollbar for horizontal scrolling areas */
+      .no-scrollbar::-webkit-scrollbar {
+          display: none;
+      }
+      .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+      }
     </style>
   <script type="importmap">
 {
@@ -47,9 +55,11 @@
     "react-i18next": "https://esm.sh/react-i18next@^16.5.0",
     "zustand/": "https://esm.sh/zustand@^5.0.9/",
     "zustand": "https://esm.sh/zustand@^5.0.9",
+    "zustand/middleware": "https://esm.sh/zustand@^5.0.9/middleware",
     "firebase/": "https://esm.sh/firebase@^12.6.0/",
     "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1",
-    "lucide-react": "https://esm.sh/lucide-react@^0.561.0"
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
+    "framer-motion": "https://esm.sh/framer-motion@^11.13.1"
   }
 }
 </script>
