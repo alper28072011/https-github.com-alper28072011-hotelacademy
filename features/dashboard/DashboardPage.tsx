@@ -1,10 +1,11 @@
+
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { StoryCircle } from './components/StoryCircle';
 import { PriorityTaskCard } from './components/PriorityTaskCard';
-import { Wrench, Calendar, LogOut } from 'lucide-react';
+import { Wrench, Calendar, LogOut, Map } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export const DashboardPage: React.FC = () => {
@@ -45,6 +46,27 @@ export const DashboardPage: React.FC = () => {
                 <StoryCircle key={story.id} label={story.label} image={story.image} isUnread={story.unread} />
             ))}
          </div>
+      </div>
+
+      {/* Journey Map Link Card (New Feature) */}
+      <div className="px-4">
+          <motion.div 
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate('/journey')}
+            className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 rounded-3xl p-6 shadow-xl relative overflow-hidden cursor-pointer"
+          >
+              <div className="absolute top-0 right-0 p-4 opacity-20"><Map className="w-24 h-24 text-white" /></div>
+              <div className="relative z-10 text-white">
+                  <div className="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold mb-3 border border-white/20">
+                      KARİYER YOLU
+                  </div>
+                  <h3 className="text-xl font-bold mb-1">Geleceğe Yolculuk</h3>
+                  <p className="text-indigo-100 text-sm mb-4">Bir sonraki terfi için atman gereken adımları gör.</p>
+                  <div className="flex items-center gap-2 text-sm font-bold bg-white text-indigo-600 px-4 py-2 rounded-xl w-max">
+                      Haritayı Aç <Map className="w-4 h-4" />
+                  </div>
+              </div>
+          </motion.div>
       </div>
 
       {/* Hero / Priority Task Section */}

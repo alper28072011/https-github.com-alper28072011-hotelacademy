@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LanguageSelector } from './components/ui/LanguageSelector';
@@ -11,11 +12,14 @@ import { ReportPage } from './features/issues/ReportPage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { CoursePlayerPage } from './features/player/CoursePlayerPage';
+import { JourneyMap } from './features/career/JourneyMap';
 
 // Admin Imports
 import { AdminLayout } from './features/admin/AdminLayout';
 import { StaffManager } from './features/admin/StaffManager';
 import { ContentStudio } from './features/admin/ContentStudio';
+import { CareerBuilder } from './features/admin/CareerBuilder';
+import { TalentRadar } from './features/admin/TalentRadar';
 
 // Simple Layout Wrapper for Login
 const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -80,8 +84,9 @@ const App: React.FC = () => {
                   <Route path="/admin" element={<AdminLayout />}>
                       <Route index element={<Navigate to="staff" replace />} />
                       <Route path="staff" element={<StaffManager />} />
+                      <Route path="career" element={<CareerBuilder />} />
                       <Route path="content" element={<ContentStudio />} />
-                      <Route path="reports" element={<div>Raporlar (Yakında)</div>} />
+                      <Route path="reports" element={<TalentRadar />} />
                   </Route>
               )}
 
@@ -96,6 +101,7 @@ const App: React.FC = () => {
                     <DashboardLayout>
                         <Routes>
                             <Route path="/" element={<DashboardPage />} />
+                            <Route path="/journey" element={<JourneyMap />} />
                             <Route path="/profile" element={<ProfilePage />} />
                             <Route path="/operations" element={<OperationsPage />} />
                             <Route path="/report" element={<ReportPage />} />

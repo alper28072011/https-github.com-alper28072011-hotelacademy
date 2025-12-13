@@ -23,6 +23,9 @@ export interface User {
   xp: number;
   completedCourses: string[];
   completedTasks?: string[]; // IDs of daily operational tasks completed
+  
+  // Career Module
+  assignedPathId?: string; // ID of the CareerPath assigned to this user
 }
 
 export type StepType = 'video' | 'quiz';
@@ -57,6 +60,15 @@ export interface Course {
   isFeatured?: boolean;
   targetDepartments?: DepartmentType[]; // Added for targeting
   steps: CourseStep[];
+}
+
+export interface CareerPath {
+  id: string;
+  title: string;
+  description: string;
+  targetRole: string; // e.g. "Senior Housekeeper"
+  courseIds: string[]; // Ordered list of course IDs
+  department: DepartmentType;
 }
 
 export type TaskType = 'checklist' | 'photo';

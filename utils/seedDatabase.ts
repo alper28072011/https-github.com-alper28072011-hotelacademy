@@ -1,14 +1,14 @@
 import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { User, Course, DepartmentType, Task, Category } from '../types';
+import { User, Course, DepartmentType, Task, Category, CareerPath } from '../types';
 
 // Explicitly type the mock users
 const MOCK_USERS: Omit<User, 'id'>[] = [
-  { name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: [], completedTasks: [] },
+  { name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: ['401'], completedTasks: [], assignedPathId: 'path_hk_manager' },
   { name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], completedTasks: [] },
-  { name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: [], completedTasks: [] },
-  { name: 'Canan Kaya', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: [], completedTasks: [] },
-  // Admin User - Needs to be created in Firebase Auth Console manually as well!
+  { name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: ['102'], completedTasks: [] },
+  { name: 'Canan Kaya', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: ['301', '101'], completedTasks: [], assignedPathId: 'path_fo_manager' },
+  // Admin User
   { 
       name: 'System Admin', 
       email: 'admin@hotelacademy.com',
@@ -31,34 +31,23 @@ const MOCK_CATEGORIES: Category[] = [
 ];
 
 const MOCK_COURSES: Course[] = [
-  // --- FEATURED ---
   {
     id: '101',
     categoryId: 'cat_guest',
     title: 'Zor Misafir Yönetimi',
     description: 'Şikayet eden misafiri sadık bir müşteriye dönüştürme sanatı.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f7a07d?auto=format&fit=crop&q=80&w=800', // Wide for Featured (handled in UI logic to pick wide if needed, but here using a good quality image)
+    thumbnailUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f7a07d?auto=format&fit=crop&q=80&w=800', 
     duration: 15,
     xpReward: 150,
     isFeatured: true,
-    steps: [
-      {
-        id: 'step1',
-        type: 'video',
-        title: 'Empati Kurmak',
-        description: 'Dinleyin, anladığınızı gösterin ve çözüm üretin.',
-        videoUrl: 'https://cdn.coverr.co/videos/coverr-receptionist-talking-on-the-phone-4338/1080p.mp4',
-        posterUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f7a07d?auto=format&fit=crop&w=800&q=80',
-      }
-    ]
+    steps: []
   },
-  // --- KITCHEN ---
   {
     id: '102',
     categoryId: 'cat_kitchen',
     title: 'Tabak Sunum Teknikleri',
     description: 'Michelin yıldızlı sunumlar için temel kurallar.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=600', // Portrait-friendly
+    thumbnailUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=600',
     duration: 20,
     xpReward: 200,
     steps: []
@@ -83,7 +72,6 @@ const MOCK_COURSES: Course[] = [
     xpReward: 180,
     steps: []
   },
-  // --- SAFETY ---
   {
     id: '201',
     categoryId: 'cat_safety',
@@ -104,7 +92,6 @@ const MOCK_COURSES: Course[] = [
     xpReward: 250,
     steps: []
   },
-  // --- LANGUAGE ---
   {
     id: '301',
     categoryId: 'cat_lang',
@@ -125,7 +112,6 @@ const MOCK_COURSES: Course[] = [
     xpReward: 200,
     steps: []
   },
-  // --- HK ---
   {
     id: '401',
     categoryId: 'cat_hk',
@@ -153,6 +139,25 @@ const MOCK_TASKS: Task[] = [
     { id: 'hk_2', department: 'housekeeping', title: 'Kat Arabası Düzeni', xpReward: 75, type: 'photo' },
     { id: 'kt_1', department: 'kitchen', title: 'Dolap Sıcaklık Kontrolü', xpReward: 100, type: 'photo' },
     { id: 'fo_1', department: 'front_office', title: 'VIP Giriş Listesi', xpReward: 60, type: 'checklist' },
+];
+
+const MOCK_PATHS: CareerPath[] = [
+    {
+        id: 'path_hk_manager',
+        title: 'Housekeeping Liderlik Yolu',
+        description: 'Kat görevlisinden Kat Şefliğine uzanan mükemmellik yolu.',
+        targetRole: 'Kat Şefi',
+        department: 'housekeeping',
+        courseIds: ['401', '402', '201', '202']
+    },
+    {
+        id: 'path_fo_manager',
+        title: 'Misafir Deneyimi Uzmanı',
+        description: 'Resepsiyondan Ön Büro Müdürlüğüne kariyer adımları.',
+        targetRole: 'Ön Büro Şefi',
+        department: 'front_office',
+        courseIds: ['301', '101', '201', '302']
+    }
 ];
 
 export const seedDatabase = async (): Promise<boolean> => {
@@ -189,6 +194,13 @@ export const seedDatabase = async (): Promise<boolean> => {
     MOCK_TASKS.forEach((task) => {
         const taskRef = doc(collection(db, 'tasks'), task.id);
         batch.set(taskRef, task);
+    });
+
+    // Seed Career Paths
+    console.log(`🚀 Preparing career paths...`);
+    MOCK_PATHS.forEach((path) => {
+        const pathRef = doc(collection(db, 'careerPaths'), path.id);
+        batch.set(pathRef, path);
     });
 
     // Commit

@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Users, Film, PieChart, LogOut, ArrowLeft } from 'lucide-react';
+import { Users, Film, PieChart, LogOut, ArrowLeft, Map, BarChart2 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 
 export const AdminLayout: React.FC = () => {
@@ -9,8 +10,9 @@ export const AdminLayout: React.FC = () => {
 
   const navItems = [
     { path: '/admin/staff', icon: Users, label: 'Personel' },
+    { path: '/admin/career', icon: Map, label: 'Kariyer Yolları' },
     { path: '/admin/content', icon: Film, label: 'İçerik Stüdyosu' },
-    { path: '/admin/reports', icon: PieChart, label: 'Raporlar' },
+    { path: '/admin/reports', icon: BarChart2, label: 'Yetenek Analitiği' },
   ];
 
   return (

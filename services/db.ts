@@ -1,3 +1,4 @@
+
 import { 
   collection, 
   getDocs, 
@@ -14,7 +15,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course, Task, Issue, Category } from '../types';
+import { User, DepartmentType, Course, Task, Issue, Category, CareerPath } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -22,6 +23,7 @@ const coursesRef = collection(db, 'courses');
 const categoriesRef = collection(db, 'categories');
 const tasksRef = collection(db, 'tasks');
 const issuesRef = collection(db, 'issues');
+const careerPathsRef = collection(db, 'careerPaths');
 
 /**
  * Fetches all users belonging to a specific department.
@@ -215,4 +217,53 @@ export const subscribeToLeaderboard = (dept: DepartmentType, callback: (users: U
     const topUsers = users.sort((a, b) => (b.xp || 0) - (a.xp || 0)).slice(0, 5);
     callback(topUsers);
   });
+};
+
+/**
+ * --- CAREER PATH FUNCTIONS ---
+ */
+
+export const createCareerPath = async (path: Omit<CareerPath, 'id'>) => {
+    try {
+        await addDoc(careerPathsRef, path);
+        return true;
+    } catch (e) {
+        console.error("Error creating career path", e);
+        return false;
+    }
+};
+
+export const getCareerPaths = async (): Promise<CareerPath[]> => {
+    try {
+        const snapshot = await getDocs(careerPathsRef);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CareerPath));
+    } catch (e) {
+        console.error("Error fetching career paths", e);
+        return [];
+    }
+};
+
+export const getCareerPath = async (id: string): Promise<CareerPath | null> => {
+    try {
+        const docRef = doc(db, 'careerPaths', id);
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists()) return { id: snapshot.id, ...snapshot.data() } as CareerPath;
+        return null;
+    } catch (e) {
+        console.error("Error fetching career path", e);
+        return null;
+    }
+};
+
+export const assignCareerPath = async (userId: string, pathId: string) => {
+    try {
+        const userRef = doc(db, 'users', userId);
+        await updateDoc(userRef, {
+            assignedPathId: pathId
+        });
+        return true;
+    } catch (e) {
+        console.error("Error assigning path", e);
+        return false;
+    }
 };
