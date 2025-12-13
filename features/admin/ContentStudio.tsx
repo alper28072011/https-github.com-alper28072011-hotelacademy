@@ -36,7 +36,7 @@ export const ContentStudio: React.FC = () => {
       if (!magicPrompt) return;
       setIsGenerating(true);
 
-      // 1. Generate Text Content
+      // 1. Generate Text Content (Gemini 3 Pro Thinking)
       const draft = await generateCourseDraft(magicPrompt, magicLang);
       
       if (draft) {
@@ -49,26 +49,11 @@ export const ContentStudio: React.FC = () => {
               setTargetDepts(['housekeeping']);
           }
 
-          // 2. Generate Image
-          const aiImageResult = await generateCourseImage(draft.imagePrompt);
-          if (aiImageResult) {
-              setCoverPreview(aiImageResult);
-              
-              if (aiImageResult.startsWith('data:')) {
-                  // Only convert to file if it is a data URI (base64)
-                  try {
-                      const res = await fetch(aiImageResult);
-                      const blob = await res.blob();
-                      const file = new File([blob], "ai_cover.png", { type: "image/png" });
-                      setCoverFile(file);
-                  } catch (e) {
-                      console.error("Failed to convert base64 to file", e);
-                  }
-              } else {
-                  // If it's a remote URL, we don't convert to File to avoid CORS errors.
-                  // We just use the URL directly in handlePublish.
-                  setCoverFile(null); 
-              }
+          // 2. Fetch Stock Image (No AI Generation)
+          const stockImageUrl = await generateCourseImage(draft.imagePrompt);
+          if (stockImageUrl) {
+              setCoverPreview(stockImageUrl);
+              setCoverFile(null); // It's a remote URL, not a file upload
           }
       }
 
@@ -110,7 +95,7 @@ export const ContentStudio: React.FC = () => {
         if (coverFile) {
              coverUrl = await uploadFile(coverFile, 'course_covers');
         } else if (typeof coverPreview === 'string' && coverPreview.startsWith('http')) {
-             // Use remote URL directly
+             // Use remote URL directly (Stock Image)
              coverUrl = coverPreview;
         }
 
@@ -134,7 +119,8 @@ export const ContentStudio: React.FC = () => {
             duration: 15,
             xpReward: 100,
             isFeatured: false,
-            targetDepartments: targetDepts.length > 0 ? targetDepts : undefined,
+            // FIX: Do not pass undefined to Firestore. Conditionally add the property.
+            ...(targetDepts.length > 0 ? { targetDepartments: targetDepts } : {}),
             steps: [
                 {
                     id: 'step1',
@@ -213,8 +199,8 @@ export const ContentStudio: React.FC = () => {
                   <div className="p-2 bg-white/20 rounded-lg">
                       <Sparkles className="w-6 h-6 text-yellow-300" />
                   </div>
-                  <h2 className="text-xl font-bold">Magic Mode</h2>
-                  <span className="bg-white/20 text-xs font-bold px-2 py-0.5 rounded ml-auto">AI POWERED</span>
+                  <h2 className="text-xl font-bold">Magic Mode (Gemini 3 Pro)</h2>
+                  <span className="bg-white/20 text-xs font-bold px-2 py-0.5 rounded ml-auto">THINKING AI</span>
               </div>
               
               <div className="flex flex-col md:flex-row gap-4">
@@ -244,7 +230,7 @@ export const ContentStudio: React.FC = () => {
                           className="flex-1 bg-white text-purple-600 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-gray-100 disabled:opacity-50 transition-colors"
                       >
                           {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
-                          {isGenerating ? 'Yaratılıyor...' : 'Sihir Yap'}
+                          {isGenerating ? 'Düşünülüyor...' : 'Taslak Oluştur'}
                       </button>
                   </div>
               </div>
