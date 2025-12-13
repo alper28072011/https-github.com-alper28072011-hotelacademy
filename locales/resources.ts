@@ -31,7 +31,15 @@ export const resources = {
       quick_report: "Report Issue",
       quick_leave: "Request Leave",
       quick_schedule: "My Shift",
-      section_quick_actions: "Quick Actions"
+      section_quick_actions: "Quick Actions",
+      // Player
+      player_complete_step: "I Completed This",
+      player_next_step: "Next Step",
+      player_finish_course: "Finish Course",
+      player_quiz_title: "Quick Check",
+      player_quiz_retry: "Incorrect. Rewinding video...",
+      player_quiz_correct: "Correct!",
+      player_step: "Step",
     },
   },
   tr: {
@@ -66,7 +74,15 @@ export const resources = {
       quick_report: "Arıza Bildir",
       quick_leave: "İzin İste",
       quick_schedule: "Vardiyam",
-      section_quick_actions: "Hızlı İşlemler"
+      section_quick_actions: "Hızlı İşlemler",
+      // Player
+      player_complete_step: "Tamamladım",
+      player_next_step: "Sonraki Adım",
+      player_finish_course: "Dersi Bitir",
+      player_quiz_title: "Kısa Kontrol",
+      player_quiz_retry: "Yanlış cevap. Video başa sarılıyor...",
+      player_quiz_correct: "Doğru!",
+      player_step: "Adım",
     },
   },
   ru: {
@@ -101,7 +117,15 @@ export const resources = {
       quick_report: "Сообщить",
       quick_leave: "Отпуск",
       quick_schedule: "Смена",
-      section_quick_actions: "Быстрые действия"
+      section_quick_actions: "Быстрые действия",
+      // Player
+      player_complete_step: "Завершено",
+      player_next_step: "Далее",
+      player_finish_course: "Закончить",
+      player_quiz_title: "Проверка",
+      player_quiz_retry: "Неверно. Перемотка...",
+      player_quiz_correct: "Верно!",
+      player_step: "Шаг",
     },
   },
   de: {
@@ -136,7 +160,15 @@ export const resources = {
       quick_report: "Melden",
       quick_leave: "Urlaub",
       quick_schedule: "Schicht",
-      section_quick_actions: "Schnellaktionen"
+      section_quick_actions: "Schnellaktionen",
+      // Player
+      player_complete_step: "Abgeschlossen",
+      player_next_step: "Nächster Schritt",
+      player_finish_course: "Kurs beenden",
+      player_quiz_title: "Schnelltest",
+      player_quiz_retry: "Falsch. Video wird zurückgespult...",
+      player_quiz_correct: "Richtig!",
+      player_step: "Schritt",
     },
   },
   id: {
@@ -171,7 +203,15 @@ export const resources = {
       quick_report: "Lapor",
       quick_leave: "Cuti",
       quick_schedule: "Shift",
-      section_quick_actions: "Aksi Cepat"
+      section_quick_actions: "Aksi Cepat",
+      // Player
+      player_complete_step: "Selesai",
+      player_next_step: "Langkah Selanjutnya",
+      player_finish_course: "Selesaikan Kursus",
+      player_quiz_title: "Cek Cepat",
+      player_quiz_retry: "Salah. Memutar ulang video...",
+      player_quiz_correct: "Benar!",
+      player_step: "Langkah",
     },
   },
   ar: {
@@ -206,7 +246,15 @@ export const resources = {
       quick_report: "إبلاغ",
       quick_leave: "طلب إجازة",
       quick_schedule: "مناوبتي",
-      section_quick_actions: "إجراءات سريعة"
+      section_quick_actions: "إجراءات سريعة",
+      // Player
+      player_complete_step: "أكملت هذا",
+      player_next_step: "الخطوة التالية",
+      player_finish_course: "إنهاء الدورة",
+      player_quiz_title: "فحص سريع",
+      player_quiz_retry: "غير صحيح. إرجاع الفيديو...",
+      player_quiz_correct: "صحيح!",
+      player_step: "خطوة",
     },
   },
 };

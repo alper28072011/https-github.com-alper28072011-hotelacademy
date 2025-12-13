@@ -6,6 +6,7 @@ import { useAuthStore } from './stores/useAuthStore';
 import { LoginPage } from './features/auth/LoginPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
+import { CoursePlayerPage } from './features/player/CoursePlayerPage';
 
 // Simple Layout Wrapper for Login
 const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -57,19 +58,25 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <Routes>
-        {/* Protected Dashboard Route */}
+        {/* Protected Routes */}
         {isAuthenticated ? (
-           <Route 
-             path="/*" 
-             element={
-               <DashboardLayout>
-                  <Routes>
-                    <Route path="/" element={<DashboardPage />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-               </DashboardLayout>
-             } 
-           />
+           <>
+              {/* Course Player (Fullscreen, No Layout) */}
+              <Route path="/course/:courseId" element={<CoursePlayerPage />} />
+              
+              {/* Main Dashboard (With Navigation) */}
+              <Route 
+                path="/*" 
+                element={
+                  <DashboardLayout>
+                      <Routes>
+                        <Route path="/" element={<DashboardPage />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                      </Routes>
+                  </DashboardLayout>
+                } 
+              />
+           </>
         ) : (
            /* Public Login Route */
            <Route 

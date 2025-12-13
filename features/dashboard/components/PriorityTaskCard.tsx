@@ -2,9 +2,11 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { PlayCircle, Clock, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 export const PriorityTaskCard: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   return (
     <motion.div 
@@ -41,7 +43,10 @@ export const PriorityTaskCard: React.FC = () => {
             Learn the key phrases and body language to increase guest satisfaction and room service revenue.
         </p>
 
-        <button className="w-full bg-accent hover:bg-accent-light text-primary font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+        <button 
+          onClick={() => navigate('/course/101')}
+          className="w-full bg-accent hover:bg-accent-light text-primary font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg shadow-black/20"
+        >
             <PlayCircle className="w-5 h-5" />
             {t('btn_start')}
         </button>
