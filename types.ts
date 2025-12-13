@@ -37,9 +37,20 @@ export interface CourseStep {
   options?: { id: string; label: string; isCorrect: boolean }[];
 }
 
-export interface Course {
+export interface Category {
   id: string;
   title: string;
+}
+
+export interface Course {
+  id: string;
+  categoryId: string;
+  title: string;
+  description: string;
+  thumbnailUrl: string;
+  duration: number; // Minutes
+  xpReward: number;
+  isFeatured?: boolean;
   steps: CourseStep[];
 }
 
@@ -52,4 +63,21 @@ export interface Task {
   xpReward: number;
   type: TaskType;
   icon?: string; // Icon name reference
+}
+
+// --- REPORTING MODULE TYPES ---
+
+export type IssueType = 'maintenance' | 'housekeeping' | 'security';
+export type IssueStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+
+export interface Issue {
+  id?: string;
+  userId: string;
+  userName: string; // Denormalized for easy display
+  department: DepartmentType;
+  type: IssueType;
+  location: string;
+  photoUrl?: string; // Base64 or Storage URL
+  status: IssueStatus;
+  createdAt: number; // Timestamp
 }

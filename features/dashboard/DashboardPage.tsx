@@ -19,8 +19,8 @@ export const DashboardPage: React.FC = () => {
   ];
 
   const quickActions = [
-    { id: 'report', icon: Wrench, label: t('quick_report'), color: 'bg-orange-100 text-orange-600', path: '/operations' },
-    { id: 'schedule', icon: Calendar, label: t('quick_schedule'), color: 'bg-blue-100 text-blue-600', path: '/operations' }, // Linked to operations
+    { id: 'report', icon: Wrench, label: t('quick_report'), color: 'bg-orange-100 text-orange-600', path: '/report' },
+    { id: 'schedule', icon: Calendar, label: t('quick_schedule'), color: 'bg-blue-100 text-blue-600', path: '/operations' }, 
     { id: 'leave', icon: LogOut, label: t('quick_leave'), color: 'bg-purple-100 text-purple-600', path: '/profile' },
   ];
 

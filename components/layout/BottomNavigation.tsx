@@ -11,7 +11,7 @@ export const BottomNavigation: React.FC = () => {
 
   const tabs = [
     { id: '/', icon: Home, label: t('nav_home') },
-    { id: '/learning', icon: GraduationCap, label: t('nav_learning') },
+    { id: '/library', icon: GraduationCap, label: t('nav_learning') },
     { id: '/profile', icon: User, label: t('nav_profile') },
   ];
 

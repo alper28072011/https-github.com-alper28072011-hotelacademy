@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import * as firebaseApp from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
@@ -13,7 +13,8 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase only if config is valid (prevent crash in demo)
-const app = initializeApp(firebaseConfig);
+// Use type casting to bypass potential type definition mismatches
+const app = (firebaseApp as any).initializeApp(firebaseConfig);
 
 // Export services
 export const auth = getAuth(app);

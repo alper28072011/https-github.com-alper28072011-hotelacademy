@@ -8,17 +8,20 @@ import {
   updateDoc, 
   increment, 
   arrayUnion,
+  addDoc,
   onSnapshot,
   orderBy,
   limit
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course, Task } from '../types';
+import { User, DepartmentType, Course, Task, Issue, Category } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
 const coursesRef = collection(db, 'courses');
+const categoriesRef = collection(db, 'categories');
 const tasksRef = collection(db, 'tasks');
+const issuesRef = collection(db, 'issues');
 
 /**
  * Fetches all users belonging to a specific department.
@@ -54,6 +57,32 @@ export const getUsersByDepartment = async (dept: DepartmentType): Promise<User[]
 };
 
 /**
+ * Fetches all available courses.
+ */
+export const getCourses = async (): Promise<Course[]> => {
+  try {
+    const snapshot = await getDocs(coursesRef);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
+  } catch (error) {
+    console.error("Error fetching courses:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches all course categories.
+ */
+export const getCategories = async (): Promise<Category[]> => {
+  try {
+    const snapshot = await getDocs(categoriesRef);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
+  } catch (error) {
+    console.error("Error fetching categories:", error);
+    return [];
+  }
+};
+
+/**
  * Fetches daily tasks for a specific department.
  */
 export const getDailyTasks = async (dept: DepartmentType): Promise<Task[]> => {
@@ -80,6 +109,26 @@ export const completeTask = async (userId: string, taskId: string, xpReward: num
     console.log(`Task ${taskId} completed by ${userId}. +${xpReward} XP`);
   } catch (error) {
     console.error("Error completing task:", error);
+  }
+};
+
+/**
+ * Submits a new issue report.
+ */
+export const createIssue = async (issue: Issue): Promise<boolean> => {
+  try {
+    await addDoc(issuesRef, issue);
+    
+    // Give XP to reporter
+    const userDocRef = doc(db, 'users', issue.userId);
+    await updateDoc(userDocRef, {
+        xp: increment(50) // Fixed reward for reporting
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error creating issue:", error);
+    return false;
   }
 };
 
