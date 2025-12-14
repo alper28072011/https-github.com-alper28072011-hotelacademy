@@ -1,9 +1,9 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Play } from 'lucide-react';
+import { Play, AlertCircle } from 'lucide-react';
 
-export type StoryStatus = 'urgent' | 'new' | 'progress' | 'viewed';
+export type StoryStatus = 'urgent' | 'mandatory' | 'progress' | 'viewed' | 'optional';
 
 interface StoryCircleProps {
   image?: string;
@@ -17,12 +17,14 @@ export const StoryCircle: React.FC<StoryCircleProps> = ({ image, label, status =
   // Ring Styles based on Status
   const getRingStyle = () => {
     switch (status) {
-      case 'urgent': // GM Message (Red/Pulse)
-        return "bg-gradient-to-tr from-red-600 via-red-500 to-orange-500 animate-pulse";
-      case 'new': // Not Started (Instagram-like Gradient)
+      case 'urgent': // HIGH PRIORITY (Red/Pulse)
+        return "bg-gradient-to-tr from-red-600 via-red-500 to-orange-500 animate-pulse ring-4 ring-red-500/20";
+      case 'mandatory': // NORMAL MANDATORY (Gold/Orange)
         return "bg-gradient-to-tr from-yellow-400 via-orange-500 to-purple-600";
-      case 'progress': // In Progress (Green/Gold)
+      case 'progress': // STARTED (Green)
         return "bg-gradient-to-tr from-green-400 to-emerald-600";
+      case 'optional': // Optional (Blue/Gray)
+        return "bg-gradient-to-tr from-blue-300 to-gray-400";
       default: // Viewed (Gray)
         return "bg-gray-300";
     }
@@ -43,8 +45,8 @@ export const StoryCircle: React.FC<StoryCircleProps> = ({ image, label, status =
                     </div>
                 )}
                 
-                {/* Play Overlay for 'new' or 'progress' */}
-                {(status === 'new' || status === 'progress') && (
+                {/* Play Overlay for Unread */}
+                {(status === 'urgent' || status === 'mandatory' || status === 'progress') && (
                     <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <Play className="w-6 h-6 text-white fill-white" />
                     </div>
@@ -52,10 +54,10 @@ export const StoryCircle: React.FC<StoryCircleProps> = ({ image, label, status =
             </div>
         </div>
 
-        {/* Live Badge for Urgent */}
+        {/* Priority Badge */}
         {status === 'urgent' && (
-            <div className="absolute bottom-0 right-0 bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded border border-white animate-bounce">
-                LIVE
+            <div className="absolute bottom-0 right-0 bg-red-600 text-white text-[10px] p-1 rounded-full border-2 border-white animate-bounce">
+                <AlertCircle className="w-3 h-3" />
             </div>
         )}
       </div>

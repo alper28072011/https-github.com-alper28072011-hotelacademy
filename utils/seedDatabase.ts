@@ -1,3 +1,4 @@
+
 import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { User, Course, DepartmentType, Task, Category, CareerPath } from '../types';
@@ -40,6 +41,8 @@ const MOCK_COURSES: Course[] = [
     duration: 15,
     xpReward: 150,
     isFeatured: true,
+    assignmentType: 'OPTIONAL',
+    priority: 'NORMAL',
     steps: []
   },
   {
@@ -50,6 +53,9 @@ const MOCK_COURSES: Course[] = [
     thumbnailUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=600',
     duration: 20,
     xpReward: 200,
+    assignmentType: 'DEPARTMENT',
+    targetDepartments: ['kitchen'],
+    priority: 'NORMAL',
     steps: []
   },
   {
@@ -60,16 +66,7 @@ const MOCK_COURSES: Course[] = [
     thumbnailUrl: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&q=80&w=600',
     duration: 12,
     xpReward: 120,
-    steps: []
-  },
-  {
-    id: '104',
-    categoryId: 'cat_kitchen',
-    title: 'Şarap Servis Kuralları',
-    description: 'Şarap açma, tattırma ve servis etme adımları.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=600',
-    duration: 18,
-    xpReward: 180,
+    assignmentType: 'OPTIONAL',
     steps: []
   },
   {
@@ -80,6 +77,8 @@ const MOCK_COURSES: Course[] = [
     thumbnailUrl: 'https://images.unsplash.com/photo-1591501662705-045388048259?auto=format&fit=crop&q=80&w=600',
     duration: 10,
     xpReward: 100,
+    assignmentType: 'GLOBAL', // MANDATORY FOR ALL
+    priority: 'HIGH', // URGENT RED RING
     steps: []
   },
   {
@@ -90,6 +89,8 @@ const MOCK_COURSES: Course[] = [
     thumbnailUrl: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&q=80&w=600',
     duration: 25,
     xpReward: 250,
+    assignmentType: 'GLOBAL',
+    priority: 'NORMAL',
     steps: []
   },
   {
@@ -100,16 +101,9 @@ const MOCK_COURSES: Course[] = [
     thumbnailUrl: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=600',
     duration: 15,
     xpReward: 150,
-    steps: []
-  },
-  {
-    id: '302',
-    categoryId: 'cat_lang',
-    title: 'Rusça Temel Kelimeler',
-    description: 'Rus misafirlerle temel iletişim.',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&q=80&w=600',
-    duration: 20,
-    xpReward: 200,
+    assignmentType: 'DEPARTMENT',
+    targetDepartments: ['front_office'],
+    priority: 'HIGH',
     steps: []
   },
   {
@@ -120,6 +114,9 @@ const MOCK_COURSES: Course[] = [
     thumbnailUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&q=80&w=600',
     duration: 8,
     xpReward: 80,
+    assignmentType: 'DEPARTMENT',
+    targetDepartments: ['housekeeping'],
+    priority: 'HIGH',
     steps: []
   },
   {
@@ -130,6 +127,9 @@ const MOCK_COURSES: Course[] = [
     thumbnailUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80&w=600',
     duration: 12,
     xpReward: 120,
+    assignmentType: 'DEPARTMENT',
+    targetDepartments: ['housekeeping'],
+    priority: 'NORMAL',
     steps: []
   }
 ];

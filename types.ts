@@ -71,6 +71,10 @@ export interface Category {
   title: string;
 }
 
+// --- NEW TARGETING TYPES ---
+export type AssignmentType = 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
+export type ContentPriority = 'HIGH' | 'NORMAL';
+
 export interface Course {
   id: string;
   categoryId: string;
@@ -81,7 +85,12 @@ export interface Course {
   duration: number; // Minutes
   xpReward: number;
   isFeatured?: boolean;
-  targetDepartments?: DepartmentType[]; // Added for targeting
+  
+  // TARGETING & PRIORITY
+  assignmentType?: AssignmentType; // NEW
+  targetDepartments?: DepartmentType[]; 
+  priority?: ContentPriority; // NEW
+  
   steps: CourseStep[];
 }
 
@@ -92,7 +101,12 @@ export interface FeedPost {
   authorId: string;
   authorName: string;
   authorAvatar: string;
+  
+  // TARGETING
+  assignmentType?: AssignmentType; // NEW
   targetDepartments: DepartmentType[]; // Who sees this?
+  priority?: ContentPriority; // NEW
+  
   type: 'image' | 'video';
   mediaUrl: string;
   caption: string;

@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useContentStore } from '../../stores/useContentStore';
 import { getCareerPath, getCareerPathByDepartment, getFeedPosts } from '../../services/db';
-import { StoryCircle } from './components/StoryCircle';
+import { StoryCircle, StoryStatus } from './components/StoryCircle';
 import { FeedPostCard } from './components/FeedPostCard';
 import { X, Quote, Map, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -31,47 +31,58 @@ export const DashboardPage: React.FC = () => {
     const loadData = async () => {
         if (!currentUser) return;
         
-        // --- LOAD STORIES (COURSES) ---
-        // Strategy: 
-        // 1. Look for Active Career Path (assigned OR departmental)
-        // 2. Add those courses first (Unfinished ones)
-        // 3. Fill rest with featured courses
+        // --- SMART SORTING ALGORITHM FOR STORIES ---
+        // Philosophy: "Eat vegetables first (Mandatory), then dessert (Optional)"
         
-        let relevantCourses: Course[] = [];
-        let activePath: CareerPath | null = null;
+        // 1. Filter Relevant Courses
+        const myDept = currentUser.department;
+        const relevantCourses = courses.filter(course => {
+            // Include if Global
+            if (course.assignmentType === 'GLOBAL') return true;
+            // Include if Department Matches
+            if (course.assignmentType === 'DEPARTMENT' && course.targetDepartments?.includes(myDept)) return true;
+            // Include if part of assigned Career Path (legacy fallback)
+            // (We handle career path logic mainly via 'DEPARTMENT' assignment now, but keeping for safety)
+            return false;
+        });
 
-        if (currentUser.assignedPathId) {
-            activePath = await getCareerPath(currentUser.assignedPathId);
-        }
+        // 2. Assign Scores for Sorting
+        const getScore = (c: Course) => {
+            const isCompleted = currentUser.completedCourses.includes(c.id);
+            if (isCompleted) return 0; // Completed goes to end
+
+            let score = 50; // Base score for uncompleted
+
+            // Priority Boost
+            if (c.priority === 'HIGH') score += 50;
+
+            // Assignment Type Boost
+            if (c.assignmentType === 'GLOBAL') score += 20;
+            if (c.assignmentType === 'DEPARTMENT') score += 20;
+            if (c.assignmentType === 'OPTIONAL') score -= 10;
+
+            return score;
+        };
+
+        // 3. Sort Descending by Score
+        const sortedCourses = relevantCourses.sort((a, b) => getScore(b) - getScore(a));
         
-        if (!activePath) {
-            activePath = await getCareerPathByDepartment(currentUser.department);
-        }
-
-        if (activePath) {
-            // Find courses in this path
-            const pathCourses = courses.filter(c => activePath!.courseIds.includes(c.id));
-            
-            // Sort: Pending first
-            const pending = pathCourses.filter(c => !currentUser.completedCourses.includes(c.id));
-            const completed = pathCourses.filter(c => currentUser.completedCourses.includes(c.id));
-            
-            relevantCourses = [...pending, ...completed];
-        }
-
-        // Fill remaining slots with featured
-        if (relevantCourses.length < 5) {
+        // 4. Fill with "Discovery" (Optional/Other) courses if list is short
+        let finalCourses = [...sortedCourses];
+        if (finalCourses.length < 5) {
              const others = courses.filter(c => 
-                !relevantCourses.find(rc => rc.id === c.id) && 
-                c.isFeatured
+                !finalCourses.find(rc => rc.id === c.id) && 
+                (c.assignmentType === 'OPTIONAL' || !c.assignmentType)
              );
-             relevantCourses = [...relevantCourses, ...others];
+             finalCourses = [...finalCourses, ...others];
         }
-        
-        setStoryCourses(relevantCourses.slice(0, 10)); // Show up to 10 stories
+
+        setStoryCourses(finalCourses.slice(0, 15)); // Show up to 15 stories
 
         // --- LOAD FEED POSTS ---
+        // Feed also respects department targeting now
         const posts = await getFeedPosts(currentUser.department);
+        // We can sort posts by priority too if we want, but for now date is fine.
         setFeedPosts(posts);
     };
 
@@ -86,6 +97,19 @@ export const DashboardPage: React.FC = () => {
       const posts = await getFeedPosts(currentUser.department);
       setFeedPosts(posts);
       setTimeout(() => setIsRefreshing(false), 500);
+  };
+
+  // Helper to determine ring color/status
+  const getStoryStatus = (course: Course): StoryStatus => {
+      if (!currentUser) return 'viewed';
+      const isCompleted = currentUser.completedCourses.includes(course.id);
+      
+      if (isCompleted) return 'viewed';
+      if (course.priority === 'HIGH') return 'urgent';
+      if (course.assignmentType === 'GLOBAL' || course.assignmentType === 'DEPARTMENT') return 'mandatory';
+      if (course.assignmentType === 'OPTIONAL') return 'optional';
+      
+      return 'mandatory'; // Default
   };
 
   return (
@@ -135,19 +159,16 @@ export const DashboardPage: React.FC = () => {
                 onClick={() => setShowGmModal(true)}
             />
 
-            {/* Courses as Stories */}
-            {storyCourses.map(course => {
-                const isCompleted = currentUser?.completedCourses.includes(course.id);
-                return (
-                    <StoryCircle 
-                        key={course.id} 
-                        label={course.title.substring(0, 10) + "..."} 
-                        image={course.thumbnailUrl} 
-                        status={isCompleted ? 'viewed' : 'new'}
-                        onClick={() => navigate(`/course/${course.id}`)}
-                    />
-                );
-            })}
+            {/* Smartly Sorted Courses */}
+            {storyCourses.map(course => (
+                <StoryCircle 
+                    key={course.id} 
+                    label={course.title.substring(0, 10) + "..."} 
+                    image={course.thumbnailUrl} 
+                    status={getStoryStatus(course)}
+                    onClick={() => navigate(`/course/${course.id}`)}
+                />
+            ))}
          </div>
       </div>
 

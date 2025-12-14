@@ -1,13 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
-import { User, CareerPath, DepartmentType } from '../../types';
-import { getUsersByDepartment, getCareerPaths } from '../../services/db';
-import { Loader2, TrendingUp, AlertCircle, Award, Briefcase } from 'lucide-react';
+import { User, CareerPath, DepartmentType, Course } from '../../types';
+import { getUsersByDepartment, getCareerPaths, getCourses } from '../../services/db';
+import { Loader2, TrendingUp, AlertCircle, Award, Briefcase, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export const TalentRadar: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [paths, setPaths] = useState<CareerPath[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,9 +21,11 @@ export const TalentRadar: React.FC = () => {
             const u = await getUsersByDepartment(d);
             allUsers = [...allUsers, ...u];
         }
-        const p = await getCareerPaths();
+        const [p, c] = await Promise.all([getCareerPaths(), getCourses()]);
+        
         setUsers(allUsers);
         setPaths(p);
+        setCourses(c);
         setLoading(false);
     };
     init();
@@ -34,12 +37,19 @@ export const TalentRadar: React.FC = () => {
   const readyForPromotion: any[] = [];
   const needsAttention: any[] = [];
   const deptScores: Record<string, { total: number, progress: number }> = {};
+  
+  // Mandatory Training Compliance Calc
+  let mandatoryTotal = 0;
+  let mandatoryCompleted = 0;
+  const mandatoryCourses = courses.filter(c => c.assignmentType === 'GLOBAL' || c.priority === 'HIGH');
+  const mandatoryCourseIds = mandatoryCourses.map(c => c.id);
 
   users.forEach(user => {
       // Dept Score Calc
       if (!deptScores[user.department]) deptScores[user.department] = { total: 0, progress: 0 };
       deptScores[user.department].total += 1;
       
+      // Promotion Logic
       if (user.assignedPathId) {
           const path = paths.find(p => p.id === user.assignedPathId);
           if (path) {
@@ -57,14 +67,48 @@ export const TalentRadar: React.FC = () => {
               }
           }
       }
+
+      // Mandatory Compliance Logic
+      mandatoryCourseIds.forEach(mId => {
+          mandatoryTotal++;
+          if(user.completedCourses.includes(mId)) {
+              mandatoryCompleted++;
+          }
+      });
   });
 
+  const complianceRate = mandatoryTotal > 0 ? Math.round((mandatoryCompleted / mandatoryTotal) * 100) : 100;
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 pb-10">
        {/* Intro */}
        <div>
             <h1 className="text-2xl font-bold text-gray-800">Yetenek Radarı</h1>
             <p className="text-gray-500">Ekip gelişim analitiği ve terfi önerileri.</p>
+       </div>
+
+       {/* Compliance Card (New) */}
+       <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center border-4 text-xl font-bold ${complianceRate > 80 ? 'border-green-500 text-green-600 bg-green-50' : 'border-orange-500 text-orange-600 bg-orange-50'}`}>
+                    %{complianceRate}
+                </div>
+                <div>
+                    <h3 className="font-bold text-lg text-gray-800">Zorunlu Eğitim Uyumu</h3>
+                    <p className="text-gray-500 text-sm">Global ve Acil eğitimlerin tamamlanma oranı.</p>
+                </div>
+            </div>
+            <div className="hidden md:flex gap-4">
+                <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-800">{mandatoryCompleted}</div>
+                    <div className="text-xs text-gray-500 uppercase">Tamamlanan</div>
+                </div>
+                <div className="w-px bg-gray-200" />
+                <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-400">{mandatoryTotal}</div>
+                    <div className="text-xs text-gray-400 uppercase">Atanan</div>
+                </div>
+            </div>
        </div>
 
        {/* Top Cards */}

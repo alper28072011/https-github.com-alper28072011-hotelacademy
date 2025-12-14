@@ -4,9 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Upload, Image as ImageIcon, CheckCircle2, Loader2, Sparkles, 
     Smartphone, Send, Plus, Trash2, Link as LinkIcon, HelpCircle, 
-    BarChart2, Zap, MoreHorizontal, Heart, MessageCircle, Share2
+    BarChart2, Zap, MoreHorizontal, Heart, MessageCircle, Share2,
+    Users, Globe, AlertCircle, Clock
 } from 'lucide-react';
-import { DepartmentType, FeedPost, Interaction, InteractionType } from '../../types';
+import { DepartmentType, FeedPost, Interaction, InteractionType, AssignmentType, ContentPriority } from '../../types';
 import { uploadFile } from '../../services/storage';
 import { createInteractivePost } from '../../services/db';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -68,8 +69,13 @@ export const ContentStudio: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
-  const [targetDepts, setTargetDepts] = useState<DepartmentType[]>(['housekeeping']);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
+  
+  // Targeting Wizard State
+  const [showWizard, setShowWizard] = useState(false);
+  const [assignmentType, setAssignmentType] = useState<AssignmentType>('DEPARTMENT');
+  const [targetDepts, setTargetDepts] = useState<DepartmentType[]>(['housekeeping']);
+  const [priority, setPriority] = useState<ContentPriority>('NORMAL');
   
   // UI State
   const [isPublishing, setIsPublishing] = useState(false);
@@ -86,12 +92,10 @@ export const ContentStudio: React.FC = () => {
   };
 
   const addInteraction = (type: InteractionType) => {
-      // Limit: Only 1 interaction for Feed posts to keep it clean for now
       if (interactions.length > 0) {
           alert("Şimdilik gönderi başına sadece 1 etkileşim ekleyebilirsiniz.");
           return;
       }
-
       const newId = Date.now().toString();
       const defaultData: any = {};
       
@@ -122,6 +126,15 @@ export const ContentStudio: React.FC = () => {
       setActiveInteractionId(null);
   };
 
+  const toggleDept = (d: DepartmentType) => {
+      setTargetDepts(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+  };
+
+  const initiatePublish = () => {
+      if (!file) return;
+      setShowWizard(true);
+  };
+
   const handlePublish = async () => {
       if (!file || !currentUser) return;
       setIsPublishing(true);
@@ -133,7 +146,12 @@ export const ContentStudio: React.FC = () => {
               authorId: currentUser.id,
               authorName: currentUser.name,
               authorAvatar: currentUser.avatar,
-              targetDepartments: targetDepts,
+              
+              // New Smart Targeting Fields
+              assignmentType: assignmentType,
+              targetDepartments: assignmentType === 'GLOBAL' ? ['housekeeping', 'kitchen', 'front_office', 'management'] : targetDepts,
+              priority: priority,
+
               type: file.type.startsWith('video') ? 'video' : 'image',
               mediaUrl: url,
               caption: caption,
@@ -148,10 +166,14 @@ export const ContentStudio: React.FC = () => {
           setIsSuccess(true);
           setTimeout(() => {
               setIsSuccess(false);
+              setShowWizard(false);
               setFile(null);
               setPreviewUrl(null);
               setCaption('');
               setInteractions([]);
+              // Reset wizard defaults
+              setAssignmentType('DEPARTMENT');
+              setPriority('NORMAL');
           }, 2000);
 
       } catch (error) {
@@ -160,10 +182,6 @@ export const ContentStudio: React.FC = () => {
       } finally {
           setIsPublishing(false);
       }
-  };
-
-  const toggleDept = (d: DepartmentType) => {
-      setTargetDepts(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
   };
 
   // --- RENDER HELPERS ---
@@ -183,7 +201,7 @@ export const ContentStudio: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col xl:flex-row gap-8 h-[calc(100vh-100px)]">
+    <div className="flex flex-col xl:flex-row gap-8 h-[calc(100vh-100px)] relative">
         
         {/* LEFT PANEL: EDITOR & TOOLS */}
         <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2">
@@ -319,32 +337,15 @@ export const ContentStudio: React.FC = () => {
                 </motion.div>
             )}
 
-            {/* Targeting */}
+            {/* Publishing Button */}
             <div className="mt-auto pt-4 border-t border-gray-100">
-                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Hedef Kitle</label>
-                <div className="flex flex-wrap gap-2 mb-6">
-                    {['housekeeping', 'kitchen', 'front_office', 'management'].map(d => (
-                        <button
-                          key={d}
-                          onClick={() => toggleDept(d as any)}
-                          className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase transition-colors border ${
-                              targetDepts.includes(d as any)
-                              ? 'bg-gray-800 text-white border-gray-800'
-                              : 'bg-white text-gray-500 border-gray-200'
-                          }`}
-                        >
-                            {d.replace('_', ' ')}
-                        </button>
-                    ))}
-                </div>
-
                 <button 
-                    onClick={handlePublish}
-                    disabled={!file || isPublishing}
+                    onClick={initiatePublish}
+                    disabled={!file}
                     className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 transition-all active:scale-[0.98]"
                 >
-                    {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                    Yayınla
+                    <Send className="w-5 h-5" />
+                    Devam Et
                 </button>
             </div>
         </div>
@@ -458,6 +459,150 @@ export const ContentStudio: React.FC = () => {
                  <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-32 h-1 bg-gray-900 rounded-full"></div>
              </div>
         </div>
+
+        {/* TARGETING WIZARD OVERLAY */}
+        <AnimatePresence>
+            {showWizard && (
+                <div className="absolute inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setShowWizard(false)}
+                    />
+                    <motion.div 
+                        initial={{ y: 100, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 100, opacity: 0 }}
+                        className="bg-white w-full max-w-lg rounded-3xl overflow-hidden relative z-10 shadow-2xl flex flex-col max-h-[90vh]"
+                    >
+                        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-gray-800">Hedefleme Sihirbazı</h2>
+                            <button onClick={() => setShowWizard(false)} className="text-gray-400">
+                                İptal
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 flex-1 overflow-y-auto space-y-8">
+                            
+                            {/* Question 1: Assignment Type */}
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                                    <Users className="w-4 h-4" /> 1. Bu içerik kime gidecek?
+                                </h3>
+                                <div className="grid grid-cols-1 gap-3">
+                                    <button 
+                                        onClick={() => setAssignmentType('GLOBAL')}
+                                        className={`p-4 rounded-xl border-2 text-left flex items-center gap-4 transition-all ${assignmentType === 'GLOBAL' ? 'border-primary bg-primary/5' : 'border-gray-100'}`}
+                                    >
+                                        <div className={`p-2 rounded-full ${assignmentType === 'GLOBAL' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                            <Globe className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-gray-800">Herkese (Global)</div>
+                                            <div className="text-xs text-gray-500">Tüm otel personeli görür. Zorunlu duyurular için.</div>
+                                        </div>
+                                    </button>
+
+                                    <button 
+                                        onClick={() => setAssignmentType('DEPARTMENT')}
+                                        className={`p-4 rounded-xl border-2 text-left flex items-center gap-4 transition-all ${assignmentType === 'DEPARTMENT' ? 'border-primary bg-primary/5' : 'border-gray-100'}`}
+                                    >
+                                        <div className={`p-2 rounded-full ${assignmentType === 'DEPARTMENT' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                            <Users className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-gray-800">Departmana Özel</div>
+                                            <div className="text-xs text-gray-500">Sadece seçilen birimler görür.</div>
+                                        </div>
+                                    </button>
+
+                                    <button 
+                                        onClick={() => setAssignmentType('OPTIONAL')}
+                                        className={`p-4 rounded-xl border-2 text-left flex items-center gap-4 transition-all ${assignmentType === 'OPTIONAL' ? 'border-primary bg-primary/5' : 'border-gray-100'}`}
+                                    >
+                                        <div className={`p-2 rounded-full ${assignmentType === 'OPTIONAL' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                            <Sparkles className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-gray-800">İsteğe Bağlı (Kütüphane)</div>
+                                            <div className="text-xs text-gray-500">Akışta görünmez, keşfet kısmında çıkar.</div>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Question 2: Departments (Conditional) */}
+                            {assignmentType === 'DEPARTMENT' && (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                    <h3 className="text-sm font-bold text-gray-500 uppercase mb-3">
+                                        Hangi Departmanlar?
+                                    </h3>
+                                    <div className="flex flex-wrap gap-2">
+                                        {['housekeeping', 'kitchen', 'front_office', 'management'].map(d => (
+                                            <button
+                                              key={d}
+                                              onClick={() => toggleDept(d as any)}
+                                              className={`px-4 py-2 rounded-full text-sm font-bold capitalize transition-colors border ${
+                                                  targetDepts.includes(d as any)
+                                                  ? 'bg-gray-800 text-white border-gray-800'
+                                                  : 'bg-white text-gray-500 border-gray-200'
+                                              }`}
+                                            >
+                                                {d.replace('_', ' ')}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* Question 3: Priority */}
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4" /> 2. Aciliyet Durumu?
+                                </h3>
+                                <div className="flex gap-4">
+                                     <button 
+                                        onClick={() => setPriority('HIGH')}
+                                        className={`flex-1 p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${priority === 'HIGH' ? 'border-red-500 bg-red-50' : 'border-gray-100'}`}
+                                     >
+                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${priority === 'HIGH' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                                             <AlertCircle className="w-5 h-5" />
+                                         </div>
+                                         <span className={`font-bold text-sm ${priority === 'HIGH' ? 'text-red-600' : 'text-gray-500'}`}>Çok Acil</span>
+                                         <span className="text-[10px] text-gray-400 text-center">En başa sabitlenir, kırmızı yanar.</span>
+                                     </button>
+
+                                     <button 
+                                        onClick={() => setPriority('NORMAL')}
+                                        className={`flex-1 p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${priority === 'NORMAL' ? 'border-green-500 bg-green-50' : 'border-gray-100'}`}
+                                     >
+                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${priority === 'NORMAL' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                                             <Clock className="w-5 h-5" />
+                                         </div>
+                                         <span className={`font-bold text-sm ${priority === 'NORMAL' ? 'text-green-600' : 'text-gray-500'}`}>Normal</span>
+                                         <span className="text-[10px] text-gray-400 text-center">Standart akış sıralaması.</span>
+                                     </button>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <div className="p-6 border-t border-gray-100">
+                             <button 
+                                onClick={handlePublish}
+                                disabled={isPublishing}
+                                className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 transition-all active:scale-[0.98]"
+                            >
+                                {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                Şimdi Yayınla
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
     </div>
   );
 };
