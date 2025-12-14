@@ -8,12 +8,12 @@ import {
   getDoc, 
   updateDoc, 
   increment, 
-  arrayUnion,
-  arrayRemove,
-  addDoc,
-  onSnapshot,
-  orderBy,
-  limit
+  arrayUnion, 
+  arrayRemove, 
+  addDoc, 
+  onSnapshot, 
+  orderBy, 
+  limit 
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost } from '../types';
@@ -81,29 +81,24 @@ export const createPost = async (post: Omit<FeedPost, 'id'>) => {
 
 export const getFeedPosts = async (userDept: DepartmentType): Promise<FeedPost[]> => {
     try {
-        // Fetch posts where targetDepartments contains userDept OR contains 'management' (as a catch-all usually)
-        // Note: Firestore 'array-contains' only allows one value. 
-        // For simplicity in this demo, we fetch all and filter client-side if needed, 
-        // or just rely on the main query.
+        // TEMPORARY FIX: Avoid "Missing Index" error by removing orderBy('createdAt') from Firestore query.
+        // We fetch posts for the department and sort them client-side.
+        // To re-enable server-side sorting, create a composite index in Firebase Console: 
+        // Collection: posts, Fields: targetDepartments (Arrays), createdAt (Descending)
         
-        // Optimised Query: Get posts targeted to this dept ordered by date
         const q = query(
             postsRef, 
-            where('targetDepartments', 'array-contains', userDept),
-            orderBy('createdAt', 'desc'),
-            limit(20)
+            where('targetDepartments', 'array-contains', userDept)
         );
         
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
+        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
+        
+        // Client-side sort: Newest first
+        return posts.sort((a,b) => b.createdAt - a.createdAt);
     } catch (e) {
-        // Fallback for indexing errors during dev
-        console.warn("Feed Query Error (likely missing index), falling back to basic fetch:", e);
-        const snapshot = await getDocs(postsRef);
-        const allPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
-        return allPosts
-            .filter(p => p.targetDepartments?.includes(userDept))
-            .sort((a,b) => b.createdAt - a.createdAt);
+        console.warn("Feed Fetch Error:", e);
+        return [];
     }
 };
 
@@ -305,6 +300,25 @@ export const getCareerPath = async (id: string): Promise<CareerPath | null> => {
         return null;
     } catch (e) {
         console.error("Error fetching career path", e);
+        return null;
+    }
+};
+
+/**
+ * New function to automatically find a path for the user's department
+ * eliminating the need for manual assignment.
+ */
+export const getCareerPathByDepartment = async (dept: DepartmentType): Promise<CareerPath | null> => {
+    try {
+        const q = query(careerPathsRef, where('department', '==', dept));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            // Return the first found path for this department
+            return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as CareerPath;
+        }
+        return null;
+    } catch (e) {
+        console.error("Error finding dept path", e);
         return null;
     }
 };

@@ -4,12 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useContentStore } from '../../stores/useContentStore';
-import { getCareerPath, getFeedPosts } from '../../services/db';
+import { getCareerPath, getCareerPathByDepartment, getFeedPosts } from '../../services/db';
 import { StoryCircle } from './components/StoryCircle';
 import { FeedPostCard } from './components/FeedPostCard';
 import { X, Quote, Map, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Course, FeedPost } from '../../types';
+import { Course, FeedPost, CareerPath } from '../../types';
 
 export const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
@@ -32,33 +32,52 @@ export const DashboardPage: React.FC = () => {
         if (!currentUser) return;
         
         // --- LOAD STORIES (COURSES) ---
-        // Filter courses relevant to user (Career Path or Featured)
+        // Strategy: 
+        // 1. Look for Active Career Path (assigned OR departmental)
+        // 2. Add those courses first (Unfinished ones)
+        // 3. Fill rest with featured courses
+        
         let relevantCourses: Course[] = [];
+        let activePath: CareerPath | null = null;
+
         if (currentUser.assignedPathId) {
-            const path = await getCareerPath(currentUser.assignedPathId);
-            if (path) {
-                const pendingIds = path.courseIds.filter(id => !currentUser.completedCourses.includes(id));
-                const pathCourses = courses.filter(c => pendingIds.includes(c.id));
-                relevantCourses = [...relevantCourses, ...pathCourses];
-            }
+            activePath = await getCareerPath(currentUser.assignedPathId);
         }
-        // Fill remaining slots
+        
+        if (!activePath) {
+            activePath = await getCareerPathByDepartment(currentUser.department);
+        }
+
+        if (activePath) {
+            // Find courses in this path
+            const pathCourses = courses.filter(c => activePath!.courseIds.includes(c.id));
+            
+            // Sort: Pending first
+            const pending = pathCourses.filter(c => !currentUser.completedCourses.includes(c.id));
+            const completed = pathCourses.filter(c => currentUser.completedCourses.includes(c.id));
+            
+            relevantCourses = [...pending, ...completed];
+        }
+
+        // Fill remaining slots with featured
         if (relevantCourses.length < 5) {
              const others = courses.filter(c => 
-                !currentUser.completedCourses.includes(c.id) && 
                 !relevantCourses.find(rc => rc.id === c.id) && 
                 c.isFeatured
              );
              relevantCourses = [...relevantCourses, ...others];
         }
-        setStoryCourses(relevantCourses.slice(0, 8));
+        
+        setStoryCourses(relevantCourses.slice(0, 10)); // Show up to 10 stories
 
         // --- LOAD FEED POSTS ---
         const posts = await getFeedPosts(currentUser.department);
         setFeedPosts(posts);
     };
 
-    loadData();
+    if (courses.length > 0) {
+        loadData();
+    }
   }, [currentUser, courses]);
 
   const handleRefresh = async () => {
@@ -96,6 +115,18 @@ export const DashboardPage: React.FC = () => {
       <div className="bg-white py-4 border-b border-gray-100 overflow-x-auto no-scrollbar">
          <div className="flex gap-4 px-4 min-w-max">
             
+            {/* Journey Map Link (Special Bubble - First) */}
+            <div className="flex flex-col items-center gap-2 min-w-[72px] cursor-pointer group" onClick={() => navigate('/journey')}>
+                <div className="relative p-[3px] rounded-full bg-gradient-to-tr from-blue-400 to-indigo-600 animate-pulse-slow">
+                    <div className="bg-white rounded-full p-[2px]">
+                        <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center">
+                            <Map className="w-7 h-7 text-indigo-600" />
+                        </div>
+                    </div>
+                </div>
+                <span className="text-xs font-bold text-gray-800">Yolculuğum</span>
+            </div>
+
             {/* GM Message (Story) */}
             <StoryCircle 
                 label={t('stories_gm')} 
@@ -105,27 +136,18 @@ export const DashboardPage: React.FC = () => {
             />
 
             {/* Courses as Stories */}
-            {storyCourses.map(course => (
-                <StoryCircle 
-                    key={course.id} 
-                    label={course.title.substring(0, 12) + "..."} 
-                    image={course.thumbnailUrl} 
-                    status="new"
-                    onClick={() => navigate(`/course/${course.id}`)}
-                />
-            ))}
-            
-            {/* Journey Map Link (Special Bubble) */}
-            <div className="flex flex-col items-center gap-2 min-w-[72px] cursor-pointer group" onClick={() => navigate('/journey')}>
-                <div className="relative p-[3px] rounded-full bg-gradient-to-tr from-blue-400 to-indigo-600">
-                    <div className="bg-white rounded-full p-[2px]">
-                        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
-                            <Map className="w-8 h-8 text-indigo-600" />
-                        </div>
-                    </div>
-                </div>
-                <span className="text-xs font-medium text-gray-700">Yolculuğum</span>
-            </div>
+            {storyCourses.map(course => {
+                const isCompleted = currentUser?.completedCourses.includes(course.id);
+                return (
+                    <StoryCircle 
+                        key={course.id} 
+                        label={course.title.substring(0, 10) + "..."} 
+                        image={course.thumbnailUrl} 
+                        status={isCompleted ? 'viewed' : 'new'}
+                        onClick={() => navigate(`/course/${course.id}`)}
+                    />
+                );
+            })}
          </div>
       </div>
 

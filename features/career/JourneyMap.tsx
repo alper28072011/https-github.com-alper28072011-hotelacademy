@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { CareerPath, Course } from '../../types';
-import { getCareerPath, getCourse } from '../../services/db';
+import { getCareerPath, getCourse, getCareerPathByDepartment } from '../../services/db';
 import { CheckCircle2, Lock, Play, Star, MapPin, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -16,23 +16,32 @@ export const JourneyMap: React.FC = () => {
 
   useEffect(() => {
     const loadJourney = async () => {
-        if (currentUser?.assignedPathId) {
-            setLoading(true);
-            const p = await getCareerPath(currentUser.assignedPathId);
-            if (p) {
-                setPath(p);
-                // Fetch specific courses in order
-                const orderedCourses: Course[] = [];
-                for(const id of p.courseIds) {
-                    const c = await getCourse(id);
-                    if(c) orderedCourses.push(c);
-                }
-                setCourses(orderedCourses);
-            }
-            setLoading(false);
-        } else {
-            setLoading(false);
+        if (!currentUser) return;
+        setLoading(true);
+
+        let activePath: CareerPath | null = null;
+
+        // 1. Check if user has a specifically assigned path
+        if (currentUser.assignedPathId) {
+            activePath = await getCareerPath(currentUser.assignedPathId);
         }
+
+        // 2. If no assigned path (or failed to fetch), auto-discover for department
+        if (!activePath) {
+            activePath = await getCareerPathByDepartment(currentUser.department);
+        }
+
+        if (activePath) {
+            setPath(activePath);
+            // Fetch specific courses in order
+            const orderedCourses: Course[] = [];
+            for(const id of activePath.courseIds) {
+                const c = await getCourse(id);
+                if(c) orderedCourses.push(c);
+            }
+            setCourses(orderedCourses);
+        }
+        setLoading(false);
     };
     loadJourney();
   }, [currentUser]);
@@ -45,8 +54,8 @@ export const JourneyMap: React.FC = () => {
               <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                   <MapPin className="w-10 h-10 text-gray-400" />
               </div>
-              <h2 className="text-xl font-bold text-primary mb-2">Henüz Bir Yol Atanmadı</h2>
-              <p className="text-gray-500 text-sm">Yöneticiniz sizin için özel bir kariyer planı oluşturduğunda burada göreceksiniz.</p>
+              <h2 className="text-xl font-bold text-primary mb-2">Henüz Bir Yol Yok</h2>
+              <p className="text-gray-500 text-sm">Departmanınız ({currentUser?.department}) için henüz bir kariyer yolu tanımlanmamış. Yöneticinizle görüşün.</p>
           </div>
       );
   }
