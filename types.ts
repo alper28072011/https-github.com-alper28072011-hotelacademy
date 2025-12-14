@@ -30,6 +30,27 @@ export interface User {
 
 export type StepType = 'video' | 'quiz';
 
+// --- INTERACTION TYPES (NEW) ---
+export type InteractionType = 'POLL' | 'QUIZ' | 'LINK' | 'XP_BOOST';
+
+export interface Interaction {
+  id: string;
+  type: InteractionType;
+  data: {
+    question?: string;
+    options?: string[];
+    correctOptionIndex?: number; // For Quiz
+    url?: string; // For Link
+    label?: string; // For Link button text
+    xpAmount?: number; // For XP Boost
+  };
+  style?: {
+    x: number; // Percentage position X
+    y: number; // Percentage position Y
+    scale: number;
+  };
+}
+
 export interface CourseStep {
   id: string;
   type: StepType;
@@ -41,6 +62,8 @@ export interface CourseStep {
   // Quiz Props
   question?: string;
   options?: { id: string; label: string; isCorrect: boolean }[];
+  // NEW: Story Interactions
+  interactions?: Interaction[]; 
 }
 
 export interface Category {
@@ -76,6 +99,10 @@ export interface FeedPost {
   likes: number;
   createdAt: number;
   likedBy?: string[]; // Array of user IDs who liked
+  
+  // NEW: Interactive Content
+  interactions?: Interaction[];
+  scheduledFor?: number; // Timestamp for future publishing
 }
 
 export interface CareerPath {

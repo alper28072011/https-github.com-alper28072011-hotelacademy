@@ -79,6 +79,13 @@ export const createPost = async (post: Omit<FeedPost, 'id'>) => {
     }
 };
 
+/**
+ * Alias for createPost to support legacy calls if any, or specific interactive logic
+ */
+export const createInteractivePost = async (post: Omit<FeedPost, 'id'>) => {
+    return createPost(post);
+};
+
 export const getFeedPosts = async (userDept: DepartmentType): Promise<FeedPost[]> => {
     try {
         // TEMPORARY FIX: Avoid "Missing Index" error by removing orderBy('createdAt') from Firestore query.
