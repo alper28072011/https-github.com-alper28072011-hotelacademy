@@ -375,8 +375,12 @@ export const ContentStudio: React.FC = () => {
                          {/* Header */}
                          <div className="flex items-center justify-between p-3">
                              <div className="flex items-center gap-2">
-                                 <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-primary text-xs border border-gray-300">
-                                     {currentUser?.avatar || 'ME'}
+                                 <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-primary text-xs border border-gray-300 overflow-hidden">
+                                     {currentUser?.avatar && currentUser.avatar.length > 4 ? (
+                                         <img src={currentUser.avatar} alt="Me" className="w-full h-full object-cover" />
+                                     ) : (
+                                        currentUser?.avatar || 'ME'
+                                     )}
                                  </div>
                                  <div>
                                      <div className="text-xs font-bold text-gray-900">{currentUser?.name || 'Sen'}</div>

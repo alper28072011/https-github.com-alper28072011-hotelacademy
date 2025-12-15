@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { User } from '../../../types';
@@ -41,10 +42,14 @@ export const TopPerformers: React.FC<TopPerformersProps> = ({ users, currentUser
                 {rankIcon}
               </div>
 
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm overflow-hidden ${
                 isCurrentUser ? 'bg-accent text-primary' : 'bg-white border border-gray-200 text-primary'
               }`}>
-                {user.avatar}
+                {user.avatar.length > 4 ? (
+                    <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                    user.avatar
+                )}
               </div>
 
               <div className="flex-1">

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -108,8 +109,12 @@ export const LoginPage: React.FC = () => {
                             onClick={() => setUser(user)}
                             className="flex flex-col items-center p-4 rounded-xl bg-white/5 border border-white/10 hover:border-accent hover:bg-white/10 transition-all active:scale-95"
                         >
-                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white font-bold text-xl border-2 border-accent/50 mb-3 shadow-lg">
-                            {user.avatar}
+                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white font-bold text-xl border-2 border-accent/50 mb-3 shadow-lg overflow-hidden">
+                                {user.avatar.length > 4 ? (
+                                    <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    user.avatar
+                                )}
                             </div>
                             <span className="text-white text-center font-medium leading-tight">
                             {user.name}
@@ -123,8 +128,12 @@ export const LoginPage: React.FC = () => {
                     {stage === 'PIN_ENTRY' && selectedUser && (
                     <div className="flex flex-col items-center h-full">
                         <div className="flex items-center gap-3 mb-6 bg-white/5 px-4 py-2 rounded-full border border-white/10">
-                        <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-primary font-bold text-xs">
-                            {selectedUser.avatar}
+                        <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-primary font-bold text-xs overflow-hidden">
+                            {selectedUser.avatar.length > 4 ? (
+                                <img src={selectedUser.avatar} alt={selectedUser.name} className="w-full h-full object-cover" />
+                            ) : (
+                                selectedUser.avatar
+                            )}
                         </div>
                         <span className="text-white/80">{selectedUser.name}</span>
                         </div>

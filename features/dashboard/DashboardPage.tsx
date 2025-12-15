@@ -126,10 +126,14 @@ export const DashboardPage: React.FC = () => {
             <button onClick={handleRefresh} className={`${isRefreshing ? 'animate-spin' : ''}`}>
                 <RefreshCw className="w-6 h-6 text-gray-700" />
             </button>
-            <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden cursor-pointer" onClick={logout}>
-                <div className="w-full h-full bg-primary text-white flex items-center justify-center font-bold text-xs">
-                    {currentUser?.avatar}
-                </div>
+            <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden cursor-pointer border border-gray-300" onClick={logout}>
+                {currentUser?.avatar && currentUser.avatar.length > 4 ? (
+                    <img src={currentUser.avatar} alt="Me" className="w-full h-full object-cover" />
+                ) : (
+                    <div className="w-full h-full bg-primary text-white flex items-center justify-center font-bold text-xs">
+                        {currentUser?.avatar}
+                    </div>
+                )}
             </div>
          </div>
       </div>

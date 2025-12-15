@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
@@ -71,8 +72,12 @@ export const ProfilePage: React.FC = () => {
         {/* Top Row */}
         <div className="relative z-10 flex justify-between items-start">
             <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-full bg-accent border-2 border-primary shadow-lg flex items-center justify-center text-primary font-bold text-xl">
-                    {activeUser.avatar}
+                <div className="w-14 h-14 rounded-full bg-accent border-2 border-primary shadow-lg flex items-center justify-center text-primary font-bold text-xl overflow-hidden">
+                    {activeUser.avatar.length > 4 ? (
+                        <img src={activeUser.avatar} alt={activeUser.name} className="w-full h-full object-cover" />
+                    ) : (
+                        activeUser.avatar
+                    )}
                 </div>
                 <div>
                     <h2 className="text-white font-bold text-lg leading-tight">{activeUser.name}</h2>
@@ -109,7 +114,7 @@ export const ProfilePage: React.FC = () => {
       <div className="grid grid-cols-3 gap-3">
          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center">
             <span className="text-2xl font-bold text-primary"><Counter value={xp} /></span>
-            <span className="text-[10px] text-gray-400 font-bold uppercase mt-1 text-center">{t('profile_total_xp')}</span>
+            <span className="text--[10px] text-gray-400 font-bold uppercase mt-1 text-center">{t('profile_total_xp')}</span>
          </div>
          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center">
             <span className="text-2xl font-bold text-primary">{activeUser.completedCourses?.length || 0}</span>
