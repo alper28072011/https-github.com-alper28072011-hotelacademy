@@ -231,6 +231,21 @@ export const getCourse = async (courseId: string): Promise<Course | null> => {
 };
 
 /**
+ * Marks a course as "Started" in user profile.
+ */
+export const startCourse = async (userId: string, courseId: string) => {
+    try {
+        const userDocRef = doc(db, 'users', userId);
+        await updateDoc(userDocRef, {
+            startedCourses: arrayUnion(courseId)
+        });
+        console.log(`Course ${courseId} started by ${userId}`);
+    } catch (e) {
+        console.error("Error starting course:", e);
+    }
+};
+
+/**
  * Updates user progress after completing a course.
  */
 export const updateUserProgress = async (userId: string, courseId: string, earnedXp: number) => {

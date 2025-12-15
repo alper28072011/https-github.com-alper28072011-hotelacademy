@@ -12,6 +12,7 @@ import { ReportPage } from './features/issues/ReportPage';
 import { LibraryPage } from './features/library/LibraryPage';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { CoursePlayerPage } from './features/player/CoursePlayerPage';
+import { CourseIntroPage } from './features/course/CourseIntroPage'; // NEW IMPORT
 import { JourneyMap } from './features/career/JourneyMap';
 
 // Admin Imports
@@ -76,8 +77,9 @@ const App: React.FC = () => {
         {/* Protected Routes */}
         {isAuthenticated ? (
            <>
-              {/* Course Player (Fullscreen, No Layout) */}
-              <Route path="/course/:courseId" element={<CoursePlayerPage />} />
+              {/* Course Flow Routes */}
+              <Route path="/course/:courseId" element={<CourseIntroPage />} />
+              <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
               
               {/* ADMIN ROUTES (Protected by Role) */}
               {isAdminOrManager && (

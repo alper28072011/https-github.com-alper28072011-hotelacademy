@@ -5,10 +5,10 @@ import { User, Course, DepartmentType, Task, Category, CareerPath } from '../typ
 
 // Explicitly type the mock users
 const MOCK_USERS: Omit<User, 'id'>[] = [
-  { name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: ['401'], completedTasks: [], assignedPathId: 'path_hk_manager' },
-  { name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], completedTasks: [] },
-  { name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: ['102'], completedTasks: [] },
-  { name: 'Canan Kaya', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: ['301', '101'], completedTasks: [], assignedPathId: 'path_fo_manager' },
+  { name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: ['401'], startedCourses: [], completedTasks: [], assignedPathId: 'path_hk_manager' },
+  { name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], startedCourses: [], completedTasks: [] },
+  { name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: ['102'], startedCourses: [], completedTasks: [] },
+  { name: 'Canan Kaya', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: ['301', '101'], startedCourses: [], completedTasks: [], assignedPathId: 'path_fo_manager' },
   // Admin User
   { 
       name: 'System Admin', 
@@ -19,11 +19,13 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       pin: '9999', 
       xp: 9999, 
       completedCourses: [], 
+      startedCourses: [],
       completedTasks: [] 
   },
 ];
 
 const MOCK_CATEGORIES: Category[] = [
+    { id: 'cat_onboarding', title: 'Oryantasyon' }, // NEW
     { id: 'cat_guest', title: 'Misafir İlişkileri' },
     { id: 'cat_kitchen', title: 'Mutfak Sanatları' },
     { id: 'cat_safety', title: 'Acil Durum & Güvenlik' },
@@ -32,6 +34,50 @@ const MOCK_CATEGORIES: Category[] = [
 ];
 
 const MOCK_COURSES: Course[] = [
+  {
+      id: '001',
+      categoryId: 'cat_onboarding',
+      title: 'Aileye Hoş Geldin',
+      description: 'Otelimizin kültürünü, değerlerini ve senin buradaki rolünü keşfet. Bu yolculukta yalnız değilsin.',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&q=80&w=800',
+      coverQuote: '"Burada misafirler kraldır, sen de kralların ev sahibisin."',
+      duration: 5,
+      xpReward: 100,
+      assignmentType: 'GLOBAL',
+      priority: 'HIGH',
+      tags: ['#YeniBaşlayan', '#Kültür'],
+      steps: [
+          { id: 's1', type: 'video', title: 'Hoşgeldin', videoUrl: 'https://cdn.coverr.co/videos/coverr-hotel-lobby-4432/1080p.mp4' }
+      ]
+  },
+  {
+      id: '002',
+      categoryId: 'cat_onboarding',
+      title: 'Yaşam Rehberi',
+      description: 'Yemek saatleri, servis güzergahları ve üniforma kuralları hakkında bilmen gereken her şey.',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&q=80&w=800',
+      coverQuote: '"Disiplin, başarının anahtarıdır."',
+      duration: 10,
+      xpReward: 50,
+      assignmentType: 'GLOBAL',
+      priority: 'NORMAL',
+      tags: ['#Rehber', '#Kurallar'],
+      steps: []
+  },
+  {
+      id: '003',
+      categoryId: 'cat_onboarding',
+      title: 'Görgü & Nezaket',
+      description: '5 Yıldızlı hizmetin altın kuralı: Asla "Bilmiyorum" deme.',
+      thumbnailUrl: 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&q=80&w=800',
+      coverQuote: '"Nezaket, hiç maliyeti olmayan ama çok şey kazandıran bir hazinedir."',
+      duration: 8,
+      xpReward: 150,
+      assignmentType: 'GLOBAL',
+      priority: 'HIGH',
+      tags: ['#Hizmet', '#Kalite'],
+      steps: []
+  },
   {
     id: '101',
     categoryId: 'cat_guest',

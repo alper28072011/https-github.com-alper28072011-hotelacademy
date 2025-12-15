@@ -22,6 +22,7 @@ export interface User {
   pin: string; 
   xp: number;
   completedCourses: string[];
+  startedCourses?: string[]; // NEW: Tracks courses that have been opened/started
   completedTasks?: string[]; // IDs of daily operational tasks completed
   
   // Career Module
@@ -86,10 +87,14 @@ export interface Course {
   xpReward: number;
   isFeatured?: boolean;
   
+  // NEW: Hype Content
+  coverQuote?: string; // Inspirational quote for the intro page
+  tags?: string[]; // e.g., #Onboarding, #Culture
+  
   // TARGETING & PRIORITY
-  assignmentType?: AssignmentType; // NEW
+  assignmentType?: AssignmentType; 
   targetDepartments?: DepartmentType[]; 
-  priority?: ContentPriority; // NEW
+  priority?: ContentPriority; 
   
   steps: CourseStep[];
 }

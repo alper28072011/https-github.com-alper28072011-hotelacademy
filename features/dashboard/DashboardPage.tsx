@@ -32,17 +32,17 @@ export const DashboardPage: React.FC = () => {
         if (!currentUser) return;
         
         // --- SMART SORTING ALGORITHM FOR STORIES ---
-        // Philosophy: "Eat vegetables first (Mandatory), then dessert (Optional)"
         
         // 1. Filter Relevant Courses
         const myDept = currentUser.department;
         const relevantCourses = courses.filter(course => {
+            // Always show Onboarding
+            if (course.categoryId === 'cat_onboarding') return true;
             // Include if Global
             if (course.assignmentType === 'GLOBAL') return true;
             // Include if Department Matches
             if (course.assignmentType === 'DEPARTMENT' && course.targetDepartments?.includes(myDept)) return true;
-            // Include if part of assigned Career Path (legacy fallback)
-            // (We handle career path logic mainly via 'DEPARTMENT' assignment now, but keeping for safety)
+            
             return false;
         });
 
@@ -52,6 +52,12 @@ export const DashboardPage: React.FC = () => {
             if (isCompleted) return 0; // Completed goes to end
 
             let score = 50; // Base score for uncompleted
+            
+            // Onboarding Boost
+            if (c.categoryId === 'cat_onboarding') score += 100;
+
+            // Started Boost (In Progress should be near top)
+            if (currentUser.startedCourses?.includes(c.id)) score += 60;
 
             // Priority Boost
             if (c.priority === 'HIGH') score += 50;
@@ -59,7 +65,6 @@ export const DashboardPage: React.FC = () => {
             // Assignment Type Boost
             if (c.assignmentType === 'GLOBAL') score += 20;
             if (c.assignmentType === 'DEPARTMENT') score += 20;
-            if (c.assignmentType === 'OPTIONAL') score -= 10;
 
             return score;
         };
@@ -67,22 +72,10 @@ export const DashboardPage: React.FC = () => {
         // 3. Sort Descending by Score
         const sortedCourses = relevantCourses.sort((a, b) => getScore(b) - getScore(a));
         
-        // 4. Fill with "Discovery" (Optional/Other) courses if list is short
-        let finalCourses = [...sortedCourses];
-        if (finalCourses.length < 5) {
-             const others = courses.filter(c => 
-                !finalCourses.find(rc => rc.id === c.id) && 
-                (c.assignmentType === 'OPTIONAL' || !c.assignmentType)
-             );
-             finalCourses = [...finalCourses, ...others];
-        }
-
-        setStoryCourses(finalCourses.slice(0, 15)); // Show up to 15 stories
+        setStoryCourses(sortedCourses.slice(0, 15)); // Show up to 15 stories
 
         // --- LOAD FEED POSTS ---
-        // Feed also respects department targeting now
         const posts = await getFeedPosts(currentUser.department);
-        // We can sort posts by priority too if we want, but for now date is fine.
         setFeedPosts(posts);
     };
 
@@ -102,12 +95,18 @@ export const DashboardPage: React.FC = () => {
   // Helper to determine ring color/status
   const getStoryStatus = (course: Course): StoryStatus => {
       if (!currentUser) return 'viewed';
-      const isCompleted = currentUser.completedCourses.includes(course.id);
       
+      const isCompleted = currentUser.completedCourses.includes(course.id);
       if (isCompleted) return 'viewed';
+
+      const isStarted = currentUser.startedCourses?.includes(course.id);
+      if (isStarted) return 'progress';
+
+      // Special 'Fiery' Ring for Onboarding
+      if (course.categoryId === 'cat_onboarding') return 'fiery';
+
       if (course.priority === 'HIGH') return 'urgent';
       if (course.assignmentType === 'GLOBAL' || course.assignmentType === 'DEPARTMENT') return 'mandatory';
-      if (course.assignmentType === 'OPTIONAL') return 'optional';
       
       return 'mandatory'; // Default
   };
@@ -166,7 +165,7 @@ export const DashboardPage: React.FC = () => {
                     label={course.title.substring(0, 10) + "..."} 
                     image={course.thumbnailUrl} 
                     status={getStoryStatus(course)}
-                    onClick={() => navigate(`/course/${course.id}`)}
+                    onClick={() => navigate(`/course/${course.id}`)} 
                 />
             ))}
          </div>

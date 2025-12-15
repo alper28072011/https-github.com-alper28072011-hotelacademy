@@ -1,9 +1,9 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Play, AlertCircle } from 'lucide-react';
+import { Play, AlertCircle, Sparkles } from 'lucide-react';
 
-export type StoryStatus = 'urgent' | 'mandatory' | 'progress' | 'viewed' | 'optional';
+export type StoryStatus = 'urgent' | 'mandatory' | 'progress' | 'viewed' | 'optional' | 'fiery';
 
 interface StoryCircleProps {
   image?: string;
@@ -17,6 +17,8 @@ export const StoryCircle: React.FC<StoryCircleProps> = ({ image, label, status =
   // Ring Styles based on Status
   const getRingStyle = () => {
     switch (status) {
+      case 'fiery': // NEW: Onboarding/Hype - Animated Fire Effect
+        return "bg-gradient-to-t from-orange-500 via-red-500 to-yellow-400 animate-pulse ring-4 ring-orange-500/30";
       case 'urgent': // HIGH PRIORITY (Red/Pulse)
         return "bg-gradient-to-tr from-red-600 via-red-500 to-orange-500 animate-pulse ring-4 ring-red-500/20";
       case 'mandatory': // NORMAL MANDATORY (Gold/Orange)
@@ -31,7 +33,15 @@ export const StoryCircle: React.FC<StoryCircleProps> = ({ image, label, status =
   };
 
   return (
-    <div className="flex flex-col items-center gap-2 min-w-[72px] cursor-pointer group" onClick={onClick}>
+    <div className="flex flex-col items-center gap-2 min-w-[72px] cursor-pointer group relative" onClick={onClick}>
+      
+      {/* Special Particle Effect for Fiery status */}
+      {status === 'fiery' && (
+          <div className="absolute -top-1 -right-1 z-10">
+              <Sparkles className="w-4 h-4 text-yellow-300 fill-yellow-300 animate-bounce" />
+          </div>
+      )}
+
       <div className={`relative p-[3px] rounded-full ${getRingStyle()} transition-all duration-300 group-hover:scale-105`}>
         
         {/* White gap between ring and image */}
@@ -46,7 +56,7 @@ export const StoryCircle: React.FC<StoryCircleProps> = ({ image, label, status =
                 )}
                 
                 {/* Play Overlay for Unread */}
-                {(status === 'urgent' || status === 'mandatory' || status === 'progress') && (
+                {(status === 'urgent' || status === 'mandatory' || status === 'progress' || status === 'fiery') && (
                     <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <Play className="w-6 h-6 text-white fill-white" />
                     </div>
