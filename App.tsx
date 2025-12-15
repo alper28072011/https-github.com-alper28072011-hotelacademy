@@ -7,6 +7,7 @@ import { useAuthStore } from './stores/useAuthStore';
 import { useOrganizationStore } from './stores/useOrganizationStore';
 import { LoginPage } from './features/auth/LoginPage';
 import { OrganizationLobby } from './features/organization/OrganizationLobby';
+import { HotelPublicPage } from './features/organization/HotelPublicPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ProfilePage } from './features/profile/ProfilePage';
 import { PublicProfilePage } from './features/profile/PublicProfilePage';
@@ -21,6 +22,7 @@ import { JourneyMap } from './features/career/JourneyMap';
 // Admin Imports
 import { AdminLayout } from './features/admin/AdminLayout';
 import { StaffManager } from './features/admin/StaffManager';
+import { TeamRequests } from './features/admin/TeamRequests'; // New
 import { ContentStudio } from './features/admin/ContentStudio';
 import { CareerBuilder } from './features/admin/CareerBuilder';
 import { TalentRadar } from './features/admin/TalentRadar';
@@ -76,6 +78,9 @@ const App: React.FC = () => {
         {/* Protected Routes */}
         {isAuthenticated ? (
            <>
+              {/* PUBLIC HOTEL PAGE (Accessible if authed but not joined) */}
+              <Route path="/hotel/:orgId" element={<HotelPublicPage />} />
+
               {/* LEVEL 1: ORGANIZATION CHECK */}
               {/* If no active organization, show Lobby */}
               {!currentOrganization && !currentUser?.currentOrganizationId ? (
@@ -89,7 +94,8 @@ const App: React.FC = () => {
                       {/* ADMIN ROUTES (Protected by Role) */}
                       {isAdminOrManager && (
                           <Route path="/admin" element={<AdminLayout />}>
-                              <Route index element={<Navigate to="staff" replace />} />
+                              <Route index element={<Navigate to="requests" replace />} />
+                              <Route path="requests" element={<TeamRequests />} />
                               <Route path="staff" element={<StaffManager />} />
                               <Route path="career" element={<CareerBuilder />} />
                               <Route path="content" element={<ContentStudio />} />

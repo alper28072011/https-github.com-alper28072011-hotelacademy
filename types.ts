@@ -19,7 +19,12 @@ export interface Organization {
   id: string;
   name: string;
   logoUrl: string;
-  bannerUrl?: string;
+  // Brand Assets & Info
+  coverUrl?: string; // Large Hero Image
+  description?: string; // "About Us"
+  location?: string; // City, Country
+  website?: string;
+  
   ownerId: string; // The GM or Creator
   code: string; // Unique Invite Code (e.g. "RUBI-2024")
   createdAt: number;
@@ -44,8 +49,12 @@ export interface JoinRequest {
   type: RequestType;
   userId: string;
   organizationId: string;
+  
+  // Application Details
   targetDepartment: DepartmentType;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  requestedRoleTitle?: string; // e.g. "Demi Chef" (Optional input from user)
+  
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
 }
 
