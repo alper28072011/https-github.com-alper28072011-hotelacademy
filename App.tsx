@@ -9,6 +9,7 @@ import { LoginPage } from './features/auth/LoginPage';
 import { OrganizationLobby } from './features/organization/OrganizationLobby';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ProfilePage } from './features/profile/ProfilePage';
+import { PublicProfilePage } from './features/profile/PublicProfilePage';
 import { OperationsPage } from './features/operations/OperationsPage';
 import { ReportPage } from './features/issues/ReportPage';
 import { ExplorePage } from './features/explore/ExplorePage'; 
@@ -108,6 +109,7 @@ const App: React.FC = () => {
                                     <Route path="/" element={<DashboardPage />} />
                                     <Route path="/journey" element={<JourneyMap />} />
                                     <Route path="/profile" element={<ProfilePage />} />
+                                    <Route path="/user/:userId" element={<PublicProfilePage />} />
                                     <Route path="/operations" element={<OperationsPage />} />
                                     <Route path="/report" element={<ReportPage />} />
                                     <Route path="/explore" element={<ExplorePage />} />

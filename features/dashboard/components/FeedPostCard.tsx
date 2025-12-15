@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Heart, MessageCircle, Share2, MoreHorizontal, Star, Users, Zap } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { FeedPost, KudosType } from '../../../types';
 import { togglePostLike } from '../../../services/db';
 import { useAuthStore } from '../../../stores/useAuthStore';
@@ -12,6 +13,7 @@ interface FeedPostCardProps {
 
 export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
   const { currentUser } = useAuthStore();
+  const navigate = useNavigate();
   
   const isLikedByMe = post.likedBy?.includes(currentUser?.id || '');
   const [liked, setLiked] = useState(isLikedByMe);
@@ -28,6 +30,10 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
       
       // Update DB
       await togglePostLike(post.id, currentUser.id, !newStatus);
+  };
+
+  const handleProfileClick = () => {
+      navigate(`/user/${post.authorId}`);
   };
 
   const formatTime = (timestamp: number) => {
@@ -93,9 +99,11 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
 
                   <h2 className="text-xl font-bold text-gray-800 mb-1">{config.label}</h2>
                   <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-6">
-                      <span className="font-bold">{post.authorName}</span>
+                      <span className="font-bold cursor-pointer hover:underline" onClick={handleProfileClick}>{post.authorName}</span>
                       <span className="text-gray-400">➔</span>
-                      <span className="font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded">{post.kudosData.recipientName}</span>
+                      <span className="font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded cursor-pointer hover:underline" onClick={() => navigate(`/user/${post.kudosData?.recipientId}`)}>
+                          {post.kudosData.recipientName}
+                      </span>
                   </div>
 
                   <div className="bg-gray-50 p-4 rounded-2xl text-sm italic text-gray-600 border border-gray-100 relative mx-4">
@@ -135,7 +143,7 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
     <div className="bg-white border-b border-gray-100 md:rounded-3xl md:border md:shadow-sm md:mb-6 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-3 md:p-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 cursor-pointer" onClick={handleProfileClick}>
                 <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden">
                     <img src={post.authorAvatar} alt={post.authorName} className="w-full h-full object-cover" />
                 </div>
@@ -198,7 +206,7 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
             </div>
 
             <div className="text-sm text-gray-800 mb-1">
-                <span className="font-bold mr-2">{post.authorName}</span>
+                <span className="font-bold mr-2 cursor-pointer hover:underline" onClick={handleProfileClick}>{post.authorName}</span>
                 {post.caption}
             </div>
 

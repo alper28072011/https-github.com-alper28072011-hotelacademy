@@ -72,6 +72,12 @@ export interface User {
   instagramHandle?: string;
   organizationHistory: string[]; // List of Org IDs they worked at
   
+  // Social Graph (NEW)
+  followers?: string[]; // List of User IDs
+  following?: string[]; // List of User IDs
+  followersCount?: number;
+  followingCount?: number;
+
   // Progress
   completedCourses: string[];
   startedCourses?: string[]; 

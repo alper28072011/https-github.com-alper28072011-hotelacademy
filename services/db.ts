@@ -32,6 +32,85 @@ const tasksRef = collection(db, 'tasks');
 const issuesRef = collection(db, 'issues');
 const careerPathsRef = collection(db, 'careerPaths');
 
+// --- FOLLOW SYSTEM FUNCTIONS ---
+
+export const followUser = async (currentUserId: string, targetUserId: string): Promise<boolean> => {
+    try {
+        await runTransaction(db, async (transaction) => {
+            const currentUserRef = doc(db, 'users', currentUserId);
+            const targetUserRef = doc(db, 'users', targetUserId);
+
+            // Optimistic checks usually happen in UI, but strictly:
+            // Add target to current's 'following'
+            transaction.update(currentUserRef, {
+                following: arrayUnion(targetUserId),
+                followingCount: increment(1)
+            });
+
+            // Add current to target's 'followers'
+            transaction.update(targetUserRef, {
+                followers: arrayUnion(currentUserId),
+                followersCount: increment(1)
+            });
+        });
+        return true;
+    } catch (e) {
+        console.error("Follow error:", e);
+        return false;
+    }
+};
+
+export const unfollowUser = async (currentUserId: string, targetUserId: string): Promise<boolean> => {
+    try {
+        await runTransaction(db, async (transaction) => {
+            const currentUserRef = doc(db, 'users', currentUserId);
+            const targetUserRef = doc(db, 'users', targetUserId);
+
+            transaction.update(currentUserRef, {
+                following: arrayRemove(targetUserId),
+                followingCount: increment(-1)
+            });
+
+            transaction.update(targetUserRef, {
+                followers: arrayRemove(currentUserId),
+                followersCount: increment(-1)
+            });
+        });
+        return true;
+    } catch (e) {
+        console.error("Unfollow error:", e);
+        return false;
+    }
+};
+
+export const getUserById = async (userId: string): Promise<User | null> => {
+    try {
+        const userDoc = await getDoc(doc(db, 'users', userId));
+        if (userDoc.exists()) {
+            return { id: userDoc.id, ...userDoc.data() } as User;
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+};
+
+export const getUserPosts = async (userId: string): Promise<FeedPost[]> => {
+    try {
+        const q = query(
+            postsRef, 
+            where('authorId', '==', userId), 
+            orderBy('createdAt', 'desc'),
+            limit(20)
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
+    } catch (e) {
+        console.warn("Could not fetch user posts (indexing might be required):", e);
+        return [];
+    }
+};
+
 // --- ORGANIZATION & MEMBERSHIP FUNCTIONS ---
 
 export const createOrganization = async (name: string, owner: User, logoUrl: string): Promise<Organization | null> => {
