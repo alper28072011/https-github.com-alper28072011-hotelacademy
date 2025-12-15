@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Building2, ArrowRight, Loader2, LogOut, Globe, MapPin } from 'lucide-react';
+import { Plus, Search, Building2, ArrowRight, Loader2, LogOut, MapPin } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { createOrganization, searchOrganizations, updateUserProfile } from '../../services/db';
@@ -19,7 +19,8 @@ export const OrganizationLobby: React.FC = () => {
   const [searchResults, setSearchResults] = useState<Organization[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Create State
+  // Loading States
+  const [switchingOrgId, setSwitchingOrgId] = useState<string | null>(null);
   const [newOrgName, setNewOrgName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
@@ -51,14 +52,22 @@ export const OrganizationLobby: React.FC = () => {
       const org = await createOrganization(newOrgName, currentUser, '');
       if (org) {
           await switchOrganization(org.id);
+          navigate('/');
       }
       setIsCreating(false);
   };
 
   const handleSelectMembership = async (orgId: string) => {
-      await switchOrganization(orgId);
-      if(currentUser) {
-          await updateUserProfile(currentUser.id, { currentOrganizationId: orgId });
+      if (switchingOrgId) return; // Prevent double click
+      setSwitchingOrgId(orgId);
+      
+      const success = await switchOrganization(orgId);
+      if (success) {
+          // Add a small delay for visual effect
+          setTimeout(() => navigate('/'), 500);
+      } else {
+          setSwitchingOrgId(null);
+          alert("Giriş yapılamadı.");
       }
   };
 
@@ -75,7 +84,7 @@ export const OrganizationLobby: React.FC = () => {
         <motion.div 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            className="relative z-10 w-full max-w-4xl bg-white rounded-[2.5rem] shadow-2xl border border-white/20 overflow-hidden min-h-[600px] flex flex-col md:flex-row"
+            className={`relative z-10 w-full max-w-4xl bg-white rounded-[2.5rem] shadow-2xl border border-white/20 overflow-hidden min-h-[600px] flex flex-col md:flex-row transition-all duration-300 ${switchingOrgId ? 'scale-95 opacity-80 blur-[1px]' : ''}`}
         >
             {/* Sidebar */}
             <div className="md:w-1/3 bg-gray-50 border-r border-gray-100 p-6 flex flex-col">
@@ -93,16 +102,21 @@ export const OrganizationLobby: React.FC = () => {
                         <button 
                             key={mem.id}
                             onClick={() => handleSelectMembership(mem.organizationId)}
-                            className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white border border-gray-100 shadow-sm hover:border-accent hover:shadow-md transition-all group"
+                            disabled={!!switchingOrgId}
+                            className={`w-full flex items-center gap-3 p-3 rounded-2xl border shadow-sm transition-all group relative overflow-hidden ${
+                                switchingOrgId === mem.organizationId 
+                                ? 'bg-green-50 border-green-500 shadow-green-200 ring-2 ring-green-200' 
+                                : 'bg-white border-gray-100 hover:border-accent hover:shadow-md'
+                            }`}
                         >
-                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center group-hover:bg-accent group-hover:text-primary transition-colors">
-                                <Building2 className="w-5 h-5" />
+                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
+                                {switchingOrgId === mem.organizationId ? <Loader2 className="w-5 h-5 animate-spin text-green-600" /> : <Building2 className="w-5 h-5 text-gray-500" />}
                             </div>
                             <div className="text-left flex-1 min-w-0">
                                 <div className="font-bold text-gray-800 truncate text-sm">Hotel {mem.organizationId.substring(0,4)}...</div>
                                 <div className="text-xs text-gray-500 capitalize">{mem.role}</div>
                             </div>
-                            <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-accent" />
+                            {switchingOrgId !== mem.organizationId && <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-accent" />}
                         </button>
                     ))}
                     {myMemberships.length === 0 && <div className="text-center py-10 text-gray-400 text-sm">Henüz bir otele üye değilsiniz.</div>}

@@ -35,6 +35,19 @@ const careerPathsRef = collection(db, 'careerPaths');
 
 // --- ORGANIZATION MANAGEMENT ---
 
+export const switchUserActiveOrganization = async (userId: string, orgId: string): Promise<boolean> => {
+    try {
+        const userRef = doc(db, 'users', userId);
+        // We also need to fetch the membership to get the correct role/department for this context
+        // But for speed, we assume the UI store handles the context switch, DB just persists the ID.
+        await updateDoc(userRef, { currentOrganizationId: orgId });
+        return true;
+    } catch (e) {
+        console.error("Switch Org Failed:", e);
+        return false;
+    }
+};
+
 export const searchOrganizations = async (searchTerm: string): Promise<Organization[]> => {
     if (!searchTerm || searchTerm.length < 2) return [];
     try {
@@ -127,15 +140,12 @@ export const updateOrganization = async (orgId: string, data: Partial<Organizati
 
 // --- DATA FETCHING WITH ISOLATION ---
 
-/**
- * Fetch Posts ONLY for specific Organization
- */
 export const getFeedPosts = async (userDept: DepartmentType, orgId: string): Promise<FeedPost[]> => {
     if (!orgId) return [];
     try {
         const q = query(
             postsRef, 
-            where('organizationId', '==', orgId), // STRICT ISOLATION
+            where('organizationId', '==', orgId), 
             limit(50) 
         );
         const snapshot = await getDocs(q);
@@ -150,15 +160,12 @@ export const getFeedPosts = async (userDept: DepartmentType, orgId: string): Pro
     }
 };
 
-/**
- * Fetch Users ONLY for specific Organization
- */
 export const getUsersByDepartment = async (dept: DepartmentType, orgId: string): Promise<User[]> => {
   if (!orgId) return [];
   try {
     const q = query(
         membershipsRef, 
-        where('organizationId', '==', orgId), // STRICT ISOLATION
+        where('organizationId', '==', orgId), 
         where('department', '==', dept),
         where('status', '==', 'ACTIVE')
     );
@@ -174,15 +181,12 @@ export const getUsersByDepartment = async (dept: DepartmentType, orgId: string):
   } catch (error) { return []; }
 };
 
-/**
- * Fetch Tasks ONLY for specific Organization
- */
 export const getDailyTasks = async (dept: DepartmentType, orgId: string): Promise<Task[]> => {
   if (!orgId) return [];
   try {
     const q = query(
         tasksRef, 
-        where('organizationId', '==', orgId), // STRICT ISOLATION
+        where('organizationId', '==', orgId),
         where('department', '==', dept)
     );
     const snapshot = await getDocs(q);
@@ -190,27 +194,20 @@ export const getDailyTasks = async (dept: DepartmentType, orgId: string): Promis
   } catch (error) { return []; }
 };
 
-/**
- * Fetch Courses (Global + Org Specific)
- */
 export const getCourses = async (orgId?: string): Promise<Course[]> => {
   try {
     const snapshot = await getDocs(coursesRef);
     const allCourses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
-    // Filter: Show Global Courses (no orgId) OR Org Specific Courses (matching orgId)
     return allCourses.filter(c => !c.organizationId || (orgId && c.organizationId === orgId));
   } catch (error) { return []; }
 };
 
-/**
- * Fetch Career Paths ONLY for specific Organization
- */
 export const getCareerPathByDepartment = async (dept: DepartmentType, orgId: string): Promise<CareerPath | null> => {
     if (!orgId) return null;
     try {
         const q = query(
             careerPathsRef, 
-            where('organizationId', '==', orgId), // STRICT ISOLATION
+            where('organizationId', '==', orgId),
             where('department', '==', dept)
         );
         const snapshot = await getDocs(q);
@@ -232,11 +229,21 @@ export const getCareerPaths = async (orgId: string): Promise<CareerPath[]> => {
 
 // --- GENERIC FUNCTIONS ---
 
-export const sendJoinRequest = async (userId: string, orgId: string, dept: DepartmentType, roleTitle?: string): Promise<boolean> => {
+export const sendJoinRequest = async (userId: string, orgId: string, dept: DepartmentType, roleTitle?: string): Promise<{success: boolean, message?: string}> => {
     try {
+        // 1. SINGLE TENANCY CHECK: Check if user is already a STAFF in another organization
+        // We allow 'manager' or 'admin' to have multiple, but 'staff' should be single tenant effectively for this version.
+        const memberships = await getMyMemberships(userId);
+        const hasActiveStaffRole = memberships.some(m => m.role === 'staff' && m.status === 'ACTIVE');
+        
+        if (hasActiveStaffRole) {
+            return { success: false, message: "Zaten bir işletmede aktif personel kaydınız var." };
+        }
+
+        // 2. Check duplicate request
         const q = query(requestsRef, where('userId', '==', userId), where('organizationId', '==', orgId), where('status', '==', 'PENDING'));
         const snap = await getDocs(q);
-        if (!snap.empty) return true; 
+        if (!snap.empty) return { success: true, message: "İstek zaten gönderilmiş." };
 
         await addDoc(requestsRef, {
             type: 'REQUEST_TO_JOIN',
@@ -247,8 +254,11 @@ export const sendJoinRequest = async (userId: string, orgId: string, dept: Depar
             status: 'PENDING',
             createdAt: Date.now()
         });
-        return true;
-    } catch (e) { return false; }
+        return { success: true };
+    } catch (e) { 
+        console.error(e);
+        return { success: false, message: "Bir hata oluştu." }; 
+    }
 };
 
 export const getJoinRequests = async (orgId: string, department?: DepartmentType): Promise<(JoinRequest & { user?: User })[]> => {
@@ -455,13 +465,7 @@ export const inviteUserToOrg = async (user: User, orgId: string, dept: Departmen
             joinedAt: Date.now()
         };
         await setDoc(doc(db, 'memberships', membershipId), newMembership);
-        if (!user.currentOrganizationId) {
-            await updateDoc(doc(db, 'users', user.id), {
-                currentOrganizationId: orgId,
-                department: dept,
-                organizationHistory: arrayUnion(orgId)
-            });
-        }
+        // Note: We don't automatically switch their org here, they must do it themselves or via notification
         return true;
     } catch (e) { return false; }
 };

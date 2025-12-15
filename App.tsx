@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LanguageSelector } from './components/ui/LanguageSelector';
 import { useAppStore } from './stores/useAppStore';
@@ -19,6 +19,7 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 import { CoursePlayerPage } from './features/player/CoursePlayerPage';
 import { CourseIntroPage } from './features/course/CourseIntroPage'; 
 import { JourneyMap } from './features/career/JourneyMap';
+import { Loader2 } from 'lucide-react';
 
 // Admin Imports
 import { AdminLayout } from './features/admin/AdminLayout';
@@ -58,20 +59,37 @@ const App: React.FC = () => {
   const { currentLanguage } = useAppStore();
   const { isAuthenticated, currentUser } = useAuthStore();
   const { currentOrganization, switchOrganization } = useOrganizationStore();
+  const [isHydrating, setIsHydrating] = useState(true);
 
   useEffect(() => {
     document.documentElement.dir = currentLanguage === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = currentLanguage;
   }, [currentLanguage]);
 
-  // Sync Org State: If user is logged in and has an org ID but store is empty, load it
+  // Sync Org State & Handle Hydration
   useEffect(() => {
-      if (isAuthenticated && currentUser?.currentOrganizationId && !currentOrganization) {
-          switchOrganization(currentUser.currentOrganizationId);
-      }
-  }, [isAuthenticated, currentUser, currentOrganization, switchOrganization]);
+      const sync = async () => {
+          if (isAuthenticated && currentUser?.currentOrganizationId && !currentOrganization) {
+              await switchOrganization(currentUser.currentOrganizationId);
+          }
+          setIsHydrating(false);
+      };
+      sync();
+  }, [isAuthenticated, currentUser, currentOrganization]); // Only dependencies that change naturally
 
   const isAdminOrManager = ['manager', 'admin', 'super_admin'].includes(currentUser?.role || '');
+
+  // 1. Loading Shield
+  if (isHydrating && isAuthenticated) {
+      return (
+          <div className="h-screen flex items-center justify-center bg-primary">
+              <div className="text-center">
+                  <Loader2 className="w-12 h-12 text-accent animate-spin mx-auto mb-4" />
+                  <p className="text-white/60 font-medium">İşletme yükleniyor...</p>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <HashRouter>

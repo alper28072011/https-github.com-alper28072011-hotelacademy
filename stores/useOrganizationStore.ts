@@ -1,8 +1,9 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Organization, Membership } from '../types';
-import { getOrganizationDetails, getMyMemberships } from '../services/db';
+import { Organization, Membership, User } from '../types';
+import { getOrganizationDetails, getMyMemberships, switchUserActiveOrganization } from '../services/db';
+import { useAuthStore } from './useAuthStore'; // Import Auth Store for cross-store update
 
 interface OrganizationState {
   currentOrganization: Organization | null;
@@ -11,7 +12,7 @@ interface OrganizationState {
 
   // Actions
   fetchMemberships: (userId: string) => Promise<void>;
-  switchOrganization: (orgId: string) => Promise<void>;
+  switchOrganization: (orgId: string) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -28,13 +29,46 @@ export const useOrganizationStore = create<OrganizationState>()(
         set({ myMemberships: memberships, isLoading: false });
       },
 
-      switchOrganization: async (orgId: string) => {
+      switchOrganization: async (orgId: string): Promise<boolean> => {
         set({ isLoading: true });
-        const org = await getOrganizationDetails(orgId);
-        if (org) {
-            set({ currentOrganization: org });
+        const authStore = useAuthStore.getState();
+        const currentUser = authStore.currentUser;
+
+        if (!currentUser) {
+            set({ isLoading: false });
+            return false;
         }
-        set({ isLoading: false });
+
+        try {
+            // 1. Fetch Org Details
+            const org = await getOrganizationDetails(orgId);
+            if (!org) {
+                set({ isLoading: false });
+                return false;
+            }
+
+            // 2. Persist to DB (User Profile)
+            await switchUserActiveOrganization(currentUser.id, orgId);
+
+            // 3. Update Auth Store User (Important for Routing!)
+            const membership = get().myMemberships.find(m => m.organizationId === orgId);
+            const updatedUser: User = { 
+                ...currentUser, 
+                currentOrganizationId: orgId,
+                role: membership?.role || 'staff',
+                department: membership?.department || 'housekeeping'
+            };
+            authStore.loginSuccess(updatedUser);
+
+            // 4. Update Org Store
+            set({ currentOrganization: org, isLoading: false });
+            return true;
+
+        } catch (e) {
+            console.error(e);
+            set({ isLoading: false });
+            return false;
+        }
       },
 
       reset: () => set({ currentOrganization: null, myMemberships: [] })

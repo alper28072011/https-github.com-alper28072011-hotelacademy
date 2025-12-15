@@ -43,14 +43,17 @@ export const HotelPublicPage: React.FC = () => {
   const handleJoin = async () => {
       if (!currentUser || !org || !selectedDept) return;
       setIsSubmitting(true);
-      const success = await sendJoinRequest(currentUser.id, org.id, selectedDept, roleTitle);
+      const result = await sendJoinRequest(currentUser.id, org.id, selectedDept, roleTitle);
       setIsSubmitting(false);
       
-      if (success) {
+      if (result.success) {
           setShowWizard(false);
           confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
           alert("Başvuru gönderildi! Yönetici onayı bekleniyor.");
           navigate('/lobby');
+      } else {
+          alert(result.message || "Başvuru yapılamadı.");
+          setShowWizard(false);
       }
   };
 
