@@ -1,5 +1,6 @@
+
 import * as firebaseApp from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
@@ -21,5 +22,8 @@ const app = (firebaseApp as any).initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// Export Auth Classes explicitly for use in Components
+export { RecaptchaVerifier, signInWithPhoneNumber };
 
 export default app;

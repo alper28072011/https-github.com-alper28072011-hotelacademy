@@ -1,153 +1,64 @@
+
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { User, DepartmentType } from '../types';
-import { getUsersByDepartment } from '../services/db';
-import { loginWithEmail, logoutUser } from '../services/authService';
+import { logoutUser } from '../services/authService';
 
-export type AuthStage = 'DEPARTMENT_SELECT' | 'USER_SELECT' | 'PIN_ENTRY' | 'SUCCESS';
+export type AuthStep = 'PHONE' | 'OTP' | 'PROFILE_SETUP' | 'SUCCESS';
 
 interface AuthState {
   // Session State
   isAuthenticated: boolean;
   currentUser: User | null;
 
-  // Login Process State
-  stage: AuthStage;
-  selectedDepartment: DepartmentType | null;
-  departmentUsers: User[]; // Users fetched from DB
-  selectedUser: User | null;
-  enteredPin: string;
-  error: boolean;
+  // Login Flow State
+  step: AuthStep;
+  phoneNumber: string;
+  verificationId: string | null; // From Firebase
   isLoading: boolean;
+  error: string | null;
   
   // Actions
-  setDepartment: (dept: DepartmentType) => void;
-  setUser: (user: User) => void;
-  appendPin: (digit: string) => void;
-  deletePin: () => void;
-  resetFlow: () => void;
-  goBack: () => void;
+  setStep: (step: AuthStep) => void;
+  setPhoneNumber: (phone: string) => void;
+  setVerificationId: (id: string) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (msg: string | null) => void;
+  loginSuccess: (user: User) => void;
   logout: () => void;
-  
-  // Admin Actions
-  loginAsAdmin: (email: string, pass: string) => Promise<boolean>;
+  resetFlow: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       isAuthenticated: false,
       currentUser: null,
       
-      stage: 'DEPARTMENT_SELECT',
-      selectedDepartment: null,
-      departmentUsers: [],
-      selectedUser: null,
-      enteredPin: '',
-      error: false,
+      step: 'PHONE',
+      phoneNumber: '',
+      verificationId: null,
       isLoading: false,
+      error: null,
 
-      setDepartment: async (dept) => {
-        set({ isLoading: true, error: false });
-        
-        // Fetch users from Firestore
-        const users = await getUsersByDepartment(dept);
-        
-        set({ 
-          selectedDepartment: dept, 
-          departmentUsers: users,
-          stage: 'USER_SELECT',
-          isLoading: false
-        });
-      },
+      setStep: (step) => set({ step, error: null }),
+      
+      setPhoneNumber: (phoneNumber) => set({ phoneNumber, error: null }),
+      
+      setVerificationId: (verificationId) => set({ verificationId }),
+      
+      setLoading: (isLoading) => set({ isLoading }),
+      
+      setError: (error) => set({ error, isLoading: false }),
 
-      setUser: (user) => set({ 
-        selectedUser: user, 
-        stage: 'PIN_ENTRY', 
-        enteredPin: '',
-        error: false 
-      }),
-
-      appendPin: (digit) => {
-        const { enteredPin, selectedUser } = get();
-        if (enteredPin.length >= 4) return;
-
-        const newPin = enteredPin + digit;
-        set({ enteredPin: newPin, error: false });
-
-        // Check PIN immediately when length is 4
-        if (newPin.length === 4) {
-            // In this Kiosk-mode, we check against the loaded user object
-            // for instant feedback without network latency.
-            if (newPin === selectedUser?.pin) {
-                // Success
-                set({ stage: 'SUCCESS' });
-                
-                // Transition to Authenticated State after animation
-                setTimeout(() => {
-                  set({ 
-                    isAuthenticated: true, 
-                    currentUser: selectedUser,
-                    // Reset login flow for next time
-                    stage: 'DEPARTMENT_SELECT',
-                    selectedDepartment: null,
-                    departmentUsers: [],
-                    selectedUser: null,
-                    enteredPin: ''
-                  });
-                }, 1500); // Wait for the checkmark animation
-            } else {
-                // Error handling with small delay for UX
-                setTimeout(() => {
-                    set({ error: true, enteredPin: '' });
-                }, 300);
-            }
-        }
-      },
-
-      deletePin: () => set((state) => ({ 
-        enteredPin: state.enteredPin.slice(0, -1),
-        error: false 
-      })),
-
-      resetFlow: () => set({ 
-        stage: 'DEPARTMENT_SELECT', 
-        selectedDepartment: null, 
-        selectedUser: null, 
-        enteredPin: '',
-        error: false
-      }),
-
-      goBack: () => {
-        const { stage } = get();
-        if (stage === 'USER_SELECT') {
-          set({ stage: 'DEPARTMENT_SELECT', selectedDepartment: null, departmentUsers: [] });
-        } else if (stage === 'PIN_ENTRY') {
-          set({ stage: 'USER_SELECT', selectedUser: null, enteredPin: '' });
-        }
-      },
-
-      loginAsAdmin: async (email, password) => {
-          set({ isLoading: true, error: false });
-          try {
-              const user = await loginWithEmail(email, password);
-              
-              if (user.role === 'manager' || user.role === 'admin') {
-                  set({ 
-                      isAuthenticated: true, 
-                      currentUser: user,
-                      isLoading: false 
-                  });
-                  return true;
-              } else {
-                  console.error("Role mismatch. User is:", user.role);
-                  throw new Error("Unauthorized access: User is not an admin/manager.");
-              }
-          } catch (e: any) {
-              console.error("Login Failed in Store:", e.message);
-              set({ error: true, isLoading: false });
-              return false;
-          }
+      loginSuccess: (user) => {
+          set({ 
+              isAuthenticated: true, 
+              currentUser: user,
+              step: 'SUCCESS',
+              isLoading: false,
+              error: null
+          });
       },
 
       logout: () => {
@@ -155,15 +66,22 @@ export const useAuthStore = create<AuthState>()(
         set({
             isAuthenticated: false,
             currentUser: null,
-            stage: 'DEPARTMENT_SELECT',
-            selectedDepartment: null,
-            selectedUser: null,
-            enteredPin: ''
+            step: 'PHONE',
+            phoneNumber: '',
+            verificationId: null
         });
-      }
+      },
+
+      resetFlow: () => set({
+          step: 'PHONE',
+          phoneNumber: '',
+          verificationId: null,
+          error: null,
+          isLoading: false
+      })
     }),
     {
-      name: 'hotel-academy-auth',
+      name: 'hotel-academy-auth-v2', // Versioned to clear old cache
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ 
         isAuthenticated: state.isAuthenticated, 

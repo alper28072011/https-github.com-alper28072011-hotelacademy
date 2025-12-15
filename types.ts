@@ -23,20 +23,21 @@ export interface Badge {
 
 export interface User {
   id: string;
-  email?: string; // Added for Admin/Manager Login
+  email?: string; 
+  phoneNumber: string; // NEW: Global ID
   name: string;
   avatar: string; // Initials or URL
   department: DepartmentType;
   role: UserRole; 
-  pin: string; 
+  pin: string; // Restored: Used for access control
   xp: number;
   completedCourses: string[];
-  startedCourses?: string[]; // NEW: Tracks courses that have been opened/started
-  completedTasks?: string[]; // IDs of daily operational tasks completed
-  badges?: Badge[]; // NEW: Array of earned badges
+  startedCourses?: string[]; 
+  completedTasks?: string[]; 
+  badges?: Badge[]; 
   
   // Career Module
-  assignedPathId?: string; // ID of the CareerPath assigned to this user
+  assignedPathId?: string; 
 }
 
 export type StepType = 'video' | 'quiz';

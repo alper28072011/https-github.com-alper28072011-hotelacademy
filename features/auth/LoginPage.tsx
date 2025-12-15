@@ -1,227 +1,323 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Loader2, Phone, ShieldCheck, User as UserIcon, Building2, Smartphone, CheckCircle } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { AccessCard } from './components/AccessCard';
-import { DepartmentGrid } from './components/DepartmentGrid';
-import { Keypad } from './components/Keypad';
-import { AdminLoginForm } from './components/AdminLoginForm';
-import { CheckCircle2, Loader2, Database, Shield, Lock } from 'lucide-react';
-import { seedDatabase } from '../../utils/seedDatabase';
-import { motion } from 'framer-motion';
+import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../../services/firebase';
+import { checkUserExists, registerUser } from '../../services/authService';
+import { DepartmentType, User } from '../../types';
+
+// Admin "Backdoor" Number
+const ADMIN_PHONE = '+905417726743';
 
 export const LoginPage: React.FC = () => {
   const { t } = useTranslation();
   const { 
-    stage, 
-    selectedDepartment, 
-    selectedUser, 
-    setUser, 
-    resetFlow,
-    departmentUsers,
-    isLoading: isAuthLoading
+    step, setStep, 
+    phoneNumber, setPhoneNumber, 
+    verificationId, setVerificationId,
+    isLoading, setLoading,
+    error, setError,
+    loginSuccess
   } = useAuthStore();
 
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [isManagerMode, setIsManagerMode] = useState(false);
+  // Profile Setup State
+  const [name, setName] = useState('');
+  const [department, setDepartment] = useState<DepartmentType | null>(null);
+  const [otpCode, setOtpCode] = useState('');
 
-  // Helper to handle seeding
-  const handleInitializeSystem = async () => {
-    setIsSeeding(true);
-    const success = await seedDatabase();
-    setIsSeeding(false);
-    
-    if (success) {
-        window.location.reload();
+  // Recaptcha Ref
+  const recaptchaVerifierRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Initialize invisible recaptcha
+    if (!(window as any).recaptchaVerifier && step === 'PHONE') {
+        try {
+            (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                'size': 'invisible',
+                'callback': () => {
+                    // reCAPTCHA solved, allow signInWithPhoneNumber.
+                }
+            });
+            recaptchaVerifierRef.current = (window as any).recaptchaVerifier;
+        } catch (e) {
+            console.error("Recaptcha Init Error:", e);
+        }
     }
+  }, [step]);
+
+  // --- HANDLERS ---
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+      e.preventDefault();
+      
+      // Basic validation
+      if (phoneNumber.length < 10) {
+          setError("Lütfen geçerli bir numara girin.");
+          return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      // Clean number (ensure +90 prefix if missing for TR)
+      let cleanNumber = phoneNumber.replace(/\s/g, '');
+      if (!cleanNumber.startsWith('+')) {
+          cleanNumber = '+90' + cleanNumber; // Default to TR
+      }
+
+      try {
+          const appVerifier = (window as any).recaptchaVerifier;
+          const confirmationResult = await signInWithPhoneNumber(auth, cleanNumber, appVerifier);
+          
+          // Store ID and Number
+          setVerificationId(confirmationResult.verificationId);
+          setPhoneNumber(cleanNumber);
+          
+          // Move to next step
+          setLoading(false);
+          setStep('OTP');
+          
+          // Attach confirmation result to window for access in next step (or use a ref/store)
+          (window as any).confirmationResult = confirmationResult;
+
+      } catch (err: any) {
+          console.error("SMS Error:", err);
+          setLoading(false);
+          setError("SMS gönderilemedi. Lütfen numarayı kontrol edin.");
+          // Reset recaptcha
+          if((window as any).recaptchaVerifier) (window as any).recaptchaVerifier.render().then((widgetId: any) => {
+              (window as any).grecaptcha.reset(widgetId);
+          });
+      }
   };
 
-  const toggleManagerMode = () => {
-      setIsManagerMode(!isManagerMode);
-      resetFlow(); // Reset any partial staff login state
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (otpCode.length !== 6) return;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+          const confirmationResult = (window as any).confirmationResult;
+          if (!confirmationResult) throw new Error("Session expired");
+
+          await confirmationResult.confirm(otpCode);
+          
+          // Auth Successful - Check if User Exists in DB
+          const existingUser = await checkUserExists(phoneNumber);
+
+          if (existingUser) {
+              loginSuccess(existingUser);
+          } else {
+              // New User -> Profile Setup
+              setStep('PROFILE_SETUP');
+              setLoading(false);
+          }
+
+      } catch (err: any) {
+          console.error("OTP Error:", err);
+          setLoading(false);
+          setError("Hatalı kod. Tekrar deneyin.");
+      }
   };
 
-  // Title logic based on stage
-  let title = t('login_title');
-  if (isManagerMode) title = "Manager Studio";
-  else if (stage === 'DEPARTMENT_SELECT') title = t('select_department');
-  else if (stage === 'USER_SELECT') title = t('select_your_profile');
-  else if (stage === 'PIN_ENTRY') title = t('enter_pin');
-  else if (stage === 'SUCCESS') title = t('access_granted');
+  const handleRegister = async () => {
+      if (!name || !department) {
+          setError("Lütfen tüm alanları doldurun.");
+          return;
+      }
+      setLoading(true);
 
-  const isLoading = isAuthLoading || isSeeding;
+      try {
+          // --- ADMIN BACKDOOR CHECK ---
+          const role = phoneNumber === ADMIN_PHONE ? 'admin' : 'staff';
+          const avatarInitials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+
+          const newUser = await registerUser({
+              phoneNumber,
+              name,
+              department,
+              role,
+              avatar: avatarInitials,
+              xp: 0,
+              completedCourses: [],
+              badges: [],
+              pin: '1234' // Default pin for new users
+          });
+
+          loginSuccess(newUser);
+
+      } catch (err) {
+          console.error("Registration Error:", err);
+          setLoading(false);
+          setError("Kayıt oluşturulamadı.");
+      }
+  };
+
+  // --- RENDER HELPERS ---
 
   return (
-    <div className="w-full flex flex-col justify-center items-center py-4 relative perspective-1000">
-      
-      {/* 3D Flip Container */}
-      <motion.div 
-        animate={{ rotateY: isManagerMode ? 180 : 0 }}
-        transition={{ duration: 0.6, type: "spring", stiffness: 260, damping: 20 }}
-        className="w-full max-w-md mx-auto relative preserve-3d"
-        style={{ transformStyle: 'preserve-3d' }}
-      >
-          {/* FRONT: STAFF LOGIN */}
-          <div className="backface-hidden w-full relative z-10">
-               <AccessCard title={title}>
-                    {/* Loading Overlay */}
-                    {isLoading && (
-                        <div className="absolute inset-0 bg-primary-dark/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
-                            <Loader2 className="w-12 h-12 text-accent animate-spin mb-4" />
-                            <span className="text-white font-medium animate-pulse">
-                                {isSeeding ? "Setting up Database..." : t('loading')}
-                            </span>
-                        </div>
-                    )}
+    <div className="w-full min-h-[80vh] flex flex-col items-center justify-center p-6 relative">
+        <div id="recaptcha-container"></div>
 
-                    {/* Stage 1: Department Selection */}
-                    {stage === 'DEPARTMENT_SELECT' && (
-                    <DepartmentGrid />
-                    )}
+        <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-sm"
+        >
+            {/* Logo / Header */}
+            <div className="text-center mb-10">
+                <div className="w-20 h-20 bg-primary text-white rounded-3xl mx-auto flex items-center justify-center shadow-xl shadow-primary/20 mb-4">
+                    <span className="text-4xl font-bold">H</span>
+                </div>
+                <h1 className="text-2xl font-bold text-primary tracking-tight">Hotel Academy</h1>
+                <p className="text-gray-400 text-sm mt-1">Global Staff Access</p>
+            </div>
 
-                    {/* Stage 2: User Selection */}
-                    {stage === 'USER_SELECT' && (
-                    <div className="grid grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar animate-in slide-in-from-right-8 fade-in duration-500">
-                        {departmentUsers.length === 0 && !isLoading && (
-                            <div className="col-span-2 flex flex-col items-center justify-center text-center text-white/50 py-12 gap-4 border-2 border-dashed border-white/10 rounded-2xl bg-white/5">
-                                <div className="w-16 h-16 rounded-full bg-yellow-500/20 flex items-center justify-center mb-2 border border-yellow-500/30">
-                                    <Database className="w-8 h-8 text-yellow-500" />
-                                </div>
-                                
-                                <div>
-                                    <h3 className="text-white font-bold text-lg">System Empty</h3>
-                                    <p className="text-sm opacity-70">No staff records found for {selectedDepartment}.</p>
-                                </div>
-
-                                <button 
-                                    onClick={handleInitializeSystem}
-                                    disabled={isSeeding}
-                                    className="mt-2 bg-accent hover:bg-accent-light text-primary font-bold py-3 px-8 rounded-full shadow-lg shadow-accent/20 flex items-center gap-2 transition-all active:scale-95 animate-pulse"
-                                >
-                                    {isSeeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-                                    Initialize System Data
-                                </button>
+            <AnimatePresence mode="wait">
+                {/* STEP 1: PHONE INPUT */}
+                {step === 'PHONE' && (
+                    <motion.form 
+                        key="phone"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        onSubmit={handleSendOtp}
+                        className="flex flex-col gap-6"
+                    >
+                        <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Telefon Numaranız</label>
+                            <div className="relative group">
+                                <Phone className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-accent transition-colors" />
+                                <input 
+                                    type="tel" 
+                                    placeholder="5XX XXX XX XX"
+                                    className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-lg font-bold text-gray-800 placeholder-gray-300 focus:outline-none focus:border-accent transition-all"
+                                    value={phoneNumber}
+                                    onChange={(e) => setPhoneNumber(e.target.value)}
+                                    autoFocus
+                                />
                             </div>
-                        )}
-                        {departmentUsers.map((user) => (
-                        <button
-                            key={user.id}
-                            onClick={() => setUser(user)}
-                            className="flex flex-col items-center p-4 rounded-xl bg-white/5 border border-white/10 hover:border-accent hover:bg-white/10 transition-all active:scale-95"
-                        >
-                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center text-white font-bold text-xl border-2 border-accent/50 mb-3 shadow-lg overflow-hidden">
-                                {user.avatar.length > 4 ? (
-                                    <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
-                                ) : (
-                                    user.avatar
-                                )}
-                            </div>
-                            <span className="text-white text-center font-medium leading-tight">
-                            {user.name}
-                            </span>
-                        </button>
-                        ))}
-                    </div>
-                    )}
+                            <p className="text-xs text-gray-400 mt-2 ml-1">SMS ile doğrulama kodu gönderilecektir.</p>
+                        </div>
 
-                    {/* Stage 3: PIN Entry */}
-                    {stage === 'PIN_ENTRY' && selectedUser && (
-                    <div className="flex flex-col items-center h-full">
-                        <div className="flex items-center gap-3 mb-6 bg-white/5 px-4 py-2 rounded-full border border-white/10">
-                        <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-primary font-bold text-xs overflow-hidden">
-                            {selectedUser.avatar.length > 4 ? (
-                                <img src={selectedUser.avatar} alt={selectedUser.name} className="w-full h-full object-cover" />
-                            ) : (
-                                selectedUser.avatar
-                            )}
-                        </div>
-                        <span className="text-white/80">{selectedUser.name}</span>
-                        </div>
-                        <Keypad />
-                    </div>
-                    )}
-
-                    {/* Stage 4: Success */}
-                    {stage === 'SUCCESS' && selectedUser && (
-                    <div className="flex flex-col items-center justify-center h-full animate-in zoom-in duration-500">
-                        <div className="relative mb-6">
-                            <div className="absolute inset-0 bg-accent blur-xl opacity-50 animate-pulse"></div>
-                            <div className="relative w-24 h-24 bg-accent rounded-full flex items-center justify-center shadow-2xl shadow-accent/50">
-                                <CheckCircle2 className="w-12 h-12 text-primary" />
-                            </div>
-                        </div>
-                        
-                        <h3 className="text-2xl font-bold text-white mb-2 text-center">
-                            {t('welcome_back')}
-                        </h3>
-                        <p className="text-accent text-xl font-medium text-center">
-                            {selectedUser.name}
-                        </p>
+                        {error && <div className="text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded-xl">{error}</div>}
 
                         <button 
-                            className="mt-12 bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-full text-sm font-medium transition-colors"
+                            type="submit" 
+                            disabled={isLoading || phoneNumber.length < 10}
+                            className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-lg font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                         >
-                            Loading Dashboard...
+                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Devam Et <ArrowRight className="w-5 h-5" /></>}
                         </button>
-                    </div>
-                    )}
-               </AccessCard>
-          </div>
+                    </motion.form>
+                )}
 
-          {/* BACK: ADMIN LOGIN (Rotated) */}
-          <div 
-             className="absolute inset-0 backface-hidden w-full h-full"
-             style={{ transform: 'rotateY(180deg)' }}
-          >
-              {/* Custom Dark Card for Admin */}
-              <div className="w-full h-full bg-zinc-900 rounded-[2.2rem] p-6 md:p-8 shadow-2xl border border-zinc-700 flex flex-col overflow-hidden relative">
-                  {/* Metal/Vault Texture */}
-                  <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-gray-500 via-gray-900 to-black"></div>
-                  
-                  {/* Content */}
-                  <div className="relative z-10 flex flex-col h-full justify-center">
-                      <AdminLoginForm />
-                      
-                      <button 
-                        onClick={toggleManagerMode}
-                        className="mt-auto mx-auto text-zinc-500 hover:text-white text-sm flex items-center gap-2 transition-colors py-4"
-                      >
-                         <Shield className="w-4 h-4" /> Return to Staff Access
-                      </button>
-                  </div>
-              </div>
-          </div>
-      </motion.div>
+                {/* STEP 2: OTP INPUT */}
+                {step === 'OTP' && (
+                    <motion.form 
+                        key="otp"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        onSubmit={handleVerifyOtp}
+                        className="flex flex-col gap-6"
+                    >
+                        <div className="text-center mb-2">
+                            <Smartphone className="w-12 h-12 text-accent mx-auto mb-2 opacity-50" />
+                            <h2 className="text-xl font-bold text-gray-800">Kodu Doğrula</h2>
+                            <p className="text-gray-500 text-sm">{phoneNumber} numarasına gönderilen 6 haneli kodu girin.</p>
+                        </div>
 
-      {/* FOOTER TOGGLE (Only visible if not in Manager Mode for UX) */}
-      {!isManagerMode && !isLoading && stage === 'DEPARTMENT_SELECT' && (
-          <button 
-            onClick={toggleManagerMode}
-            className="fixed bottom-6 right-6 p-3 bg-black/20 hover:bg-black/40 backdrop-blur-md rounded-full text-white/30 hover:text-white transition-all border border-white/5 hover:border-white/20 z-0"
-          >
-              <Lock className="w-4 h-4" />
-          </button>
-      )}
+                        <input 
+                            type="text" 
+                            maxLength={6}
+                            placeholder="000000"
+                            className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 text-center text-3xl tracking-[0.5em] font-bold text-gray-800 placeholder-gray-200 focus:outline-none focus:border-accent transition-all"
+                            value={otpCode}
+                            onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                            autoFocus
+                        />
 
-      <style>{`
-        .perspective-1000 {
-            perspective: 1000px;
-        }
-        .preserve-3d {
-            transform-style: preserve-3d;
-        }
-        .backface-hidden {
-            backface-visibility: hidden;
-        }
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-5px); }
-          75% { transform: translateX(5px); }
-        }
-        .animate-shake {
-          animation: shake 0.3s ease-in-out;
-        }
-      `}</style>
+                        {error && <div className="text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded-xl">{error}</div>}
+
+                        <button 
+                            type="submit" 
+                            disabled={isLoading || otpCode.length !== 6}
+                            className="w-full bg-accent hover:bg-accent-dark disabled:bg-gray-300 text-primary font-bold py-4 rounded-2xl shadow-xl shadow-accent/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                        >
+                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Doğrula <ShieldCheck className="w-5 h-5" /></>}
+                        </button>
+                        
+                        <button type="button" onClick={() => setStep('PHONE')} className="text-gray-400 text-sm font-medium hover:text-gray-600">
+                            Numarayı Değiştir
+                        </button>
+                    </motion.form>
+                )}
+
+                {/* STEP 3: PROFILE SETUP */}
+                {step === 'PROFILE_SETUP' && (
+                    <motion.div 
+                        key="profile"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex flex-col gap-6"
+                    >
+                        <div className="text-center mb-2">
+                            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 text-green-600">
+                                <CheckCircle className="w-8 h-8" />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-800">Aramıza Hoş Geldin!</h2>
+                            <p className="text-gray-500 text-sm">Seni daha yakından tanıyalım.</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Adın Soyadın</label>
+                                <div className="relative group">
+                                    <UserIcon className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-accent transition-colors" />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Örn: Ayşe Yılmaz"
+                                        className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-lg font-bold text-gray-800 placeholder-gray-300 focus:outline-none focus:border-accent transition-all"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Departman</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {['housekeeping', 'kitchen', 'front_office', 'management'].map(dept => (
+                                        <button
+                                            key={dept}
+                                            onClick={() => setDepartment(dept as any)}
+                                            className={`p-3 rounded-xl border-2 text-sm font-bold transition-all ${department === dept ? 'border-primary bg-primary text-white' : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`}
+                                        >
+                                            {dept.toUpperCase().replace('_', ' ')}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {error && <div className="text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded-xl">{error}</div>}
+
+                        <button 
+                            onClick={handleRegister}
+                            disabled={isLoading}
+                            className="w-full bg-primary hover:bg-primary-light text-white text-lg font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4"
+                        >
+                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Kaydı Tamamla"}
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.div>
     </div>
   );
 };
