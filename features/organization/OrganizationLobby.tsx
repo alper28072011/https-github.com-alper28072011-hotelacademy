@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Building2, ArrowRight, Loader2, LogOut, MapPin } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { createOrganization, searchOrganizations, updateUserProfile } from '../../services/db';
+import { createOrganization, searchOrganizations } from '../../services/db';
 import { Organization } from '../../types';
 
 export const OrganizationLobby: React.FC = () => {
@@ -51,6 +51,7 @@ export const OrganizationLobby: React.FC = () => {
       setIsCreating(true);
       const org = await createOrganization(newOrgName, currentUser, '');
       if (org) {
+          // Explicit await to ensure state is synced before navigation
           await switchOrganization(org.id);
           navigate('/');
       }
@@ -61,13 +62,20 @@ export const OrganizationLobby: React.FC = () => {
       if (switchingOrgId) return; // Prevent double click
       setSwitchingOrgId(orgId);
       
-      const success = await switchOrganization(orgId);
-      if (success) {
-          // Add a small delay for visual effect
-          setTimeout(() => navigate('/'), 500);
-      } else {
+      try {
+          // Critical: Wait for this to complete. It updates DB and Local User State.
+          const success = await switchOrganization(orgId);
+          if (success) {
+              // Only navigate if successful
+              navigate('/');
+          } else {
+              setSwitchingOrgId(null);
+              alert("Giriş yapılamadı. Lütfen tekrar deneyin.");
+          }
+      } catch (error) {
+          console.error("Lobby Selection Error:", error);
           setSwitchingOrgId(null);
-          alert("Giriş yapılamadı.");
+          alert("Bir hata oluştu.");
       }
   };
 

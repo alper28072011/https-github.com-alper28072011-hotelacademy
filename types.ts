@@ -81,6 +81,7 @@ export interface User {
   currentOrganizationId: string | null; 
   department: DepartmentType; // Active Dept in Current Org
   role: UserRole; // Active Role in Current Org
+  isSuperAdmin?: boolean; // GLOBAL FLAG for System Admin
   
   pin: string; 
   xp: number; // Global XP or Org Specific? Let's keep it Global for Career Profile

@@ -1,9 +1,11 @@
+
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { 
     Settings, Grid, FileText, Bookmark, Download, ExternalLink, 
-    Star, Users, Heart, Zap, Award 
+    Star, Users, Heart, Zap, Award, Building2, ShieldCheck, ChevronRight
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useProfileStore } from '../../stores/useProfileStore';
@@ -14,6 +16,7 @@ import { Course, KudosType } from '../../types';
 
 export const ProfilePage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   const { userProfile, initializeListeners } = useProfileStore();
   const { courses } = useContentStore(); // To resolve IDs
@@ -55,6 +58,9 @@ export const ProfilePage: React.FC = () => {
       'GUEST_HERO': { icon: Heart, color: 'text-red-500', bg: 'bg-red-50', label: 'Misafir Kahramanı' },
       'FAST_LEARNER': { icon: Zap, color: 'text-purple-500', bg: 'bg-purple-50', label: 'Hızlı Öğrenen' },
   };
+
+  const isManager = ['manager', 'admin', 'super_admin'].includes(activeUser.role);
+  const isSuperAdmin = activeUser.isSuperAdmin;
 
   return (
     <div className="min-h-screen bg-white pb-24">
@@ -124,6 +130,45 @@ export const ProfilePage: React.FC = () => {
                 )}
             </div>
 
+            {/* MANAGEMENT SWITCH (Instagram Style) */}
+            <div className="space-y-2 mb-4">
+                {isManager && (
+                    <div 
+                        onClick={() => navigate('/admin')}
+                        className="bg-gray-50 border-t border-b border-gray-100 py-3 px-2 flex items-center justify-between cursor-pointer active:bg-gray-100 transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-1.5 bg-gray-200 rounded-full">
+                                <Building2 className="w-4 h-4 text-gray-700" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-gray-800">İşletme Paneli</span>
+                                <span className="text-[10px] text-gray-500">Personel, içerik ve raporlar</span>
+                            </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </div>
+                )}
+
+                {isSuperAdmin && (
+                    <div 
+                        onClick={() => navigate('/super-admin')}
+                        className="bg-gray-50 border-b border-gray-100 py-3 px-2 flex items-center justify-between cursor-pointer active:bg-gray-100 transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-1.5 bg-yellow-100 rounded-full">
+                                <ShieldCheck className="w-4 h-4 text-yellow-700" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-gray-800">Sistem Paneli (Super Admin)</span>
+                                <span className="text-[10px] text-gray-500">Global ayarlar ve faturalandırma</span>
+                            </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </div>
+                )}
+            </div>
+
             {/* Action Buttons */}
             <div className="flex gap-2 mb-2">
                 <button 
@@ -178,7 +223,6 @@ export const ProfilePage: React.FC = () => {
                         if (!config) return null;
                         const BIcon = config.icon;
                         
-                        // Render badge multiple times if count > 1? No, just render once with counter.
                         return (
                             <div key={idx} className={`aspect-square ${config.bg} flex flex-col items-center justify-center p-2 relative group cursor-pointer`}>
                                 <BIcon className={`w-8 h-8 ${config.color} mb-2`} />

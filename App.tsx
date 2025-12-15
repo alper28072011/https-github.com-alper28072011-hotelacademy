@@ -28,6 +28,7 @@ import { TeamRequests } from './features/admin/TeamRequests';
 import { ContentStudio } from './features/admin/ContentStudio';
 import { CareerBuilder } from './features/admin/CareerBuilder';
 import { TalentRadar } from './features/admin/TalentRadar';
+import { SuperAdminDashboard } from './features/superadmin/SuperAdminDashboard';
 
 // Simple Layout Wrapper for Login
 const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -75,9 +76,11 @@ const App: React.FC = () => {
           setIsHydrating(false);
       };
       sync();
-  }, [isAuthenticated, currentUser, currentOrganization]); // Only dependencies that change naturally
+  }, [isAuthenticated, currentUser, currentOrganization]); 
 
-  const isAdminOrManager = ['manager', 'admin', 'super_admin'].includes(currentUser?.role || '');
+  // Role Checks
+  const canAccessHotelAdmin = ['manager', 'admin', 'super_admin'].includes(currentUser?.role || '');
+  const isSuperAdmin = currentUser?.isSuperAdmin || false;
 
   // 1. Loading Shield
   if (isHydrating && isAuthenticated) {
@@ -101,7 +104,7 @@ const App: React.FC = () => {
               <Route path="/hotel/:orgId" element={<HotelPublicPage />} />
 
               {/* LEVEL 1: ORGANIZATION CHECK */}
-              {/* If no active organization, show Lobby */}
+              {/* If no active organization, show Lobby. BUT allow super admin to browse dashboard if they want (mock org?) */}
               {!currentOrganization && !currentUser?.currentOrganizationId ? (
                   <Route path="*" element={<OrganizationLobby />} />
               ) : (
@@ -110,8 +113,8 @@ const App: React.FC = () => {
                       <Route path="/course/:courseId" element={<CourseIntroPage />} />
                       <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
                       
-                      {/* ADMIN ROUTES (Protected by Role) */}
-                      {isAdminOrManager && (
+                      {/* HOTEL ADMIN ROUTES (On-Demand Access) */}
+                      {canAccessHotelAdmin && (
                           <Route path="/admin" element={<AdminLayout />}>
                               <Route index element={<Navigate to="requests" replace />} />
                               <Route path="requests" element={<TeamRequests />} />
@@ -123,30 +126,31 @@ const App: React.FC = () => {
                           </Route>
                       )}
 
-                      {/* Main Dashboard (With Navigation) */}
-                      {isAdminOrManager ? (
-                         <Route path="*" element={<Navigate to="/admin" replace />} />
-                      ) : (
-                         <Route 
-                            path="/*" 
-                            element={
-                            <DashboardLayout>
-                                <Routes>
-                                    <Route path="/" element={<DashboardPage />} />
-                                    <Route path="/journey" element={<JourneyMap />} />
-                                    <Route path="/profile" element={<ProfilePage />} />
-                                    <Route path="/user/:userId" element={<PublicProfilePage />} />
-                                    <Route path="/operations" element={<OperationsPage />} />
-                                    <Route path="/report" element={<ReportPage />} />
-                                    <Route path="/explore" element={<ExplorePage />} />
-                                    {/* Fallback to lobby to switch orgs if needed */}
-                                    <Route path="/lobby" element={<OrganizationLobby />} /> 
-                                    <Route path="*" element={<Navigate to="/" replace />} />
-                                </Routes>
-                            </DashboardLayout>
-                            } 
-                        />
+                      {/* SUPER ADMIN ROUTES (On-Demand Access) */}
+                      {isSuperAdmin && (
+                          <Route path="/super-admin" element={<SuperAdminDashboard />} />
                       )}
+
+                      {/* DEFAULT USER INTERFACE (Everyone starts here) */}
+                      <Route 
+                        path="/*" 
+                        element={
+                        <DashboardLayout>
+                            <Routes>
+                                <Route path="/" element={<DashboardPage />} />
+                                <Route path="/journey" element={<JourneyMap />} />
+                                <Route path="/profile" element={<ProfilePage />} />
+                                <Route path="/user/:userId" element={<PublicProfilePage />} />
+                                <Route path="/operations" element={<OperationsPage />} />
+                                <Route path="/report" element={<ReportPage />} />
+                                <Route path="/explore" element={<ExplorePage />} />
+                                {/* Fallback to lobby to switch orgs if needed */}
+                                <Route path="/lobby" element={<OrganizationLobby />} /> 
+                                <Route path="*" element={<Navigate to="/" replace />} />
+                            </Routes>
+                        </DashboardLayout>
+                        } 
+                    />
                   </>
               )}
            </>

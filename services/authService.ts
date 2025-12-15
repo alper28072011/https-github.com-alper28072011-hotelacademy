@@ -4,8 +4,11 @@ import { signOut, signInWithPhoneNumber, ApplicationVerifier } from 'firebase/au
 import { auth, db } from './firebase';
 import { User, UserRole, AuthMode } from '../types';
 
+const SUPER_ADMIN_PHONE = '+905417726743';
+
 /**
  * Checks if a user profile exists in Firestore for the given phone number.
+ * INJECTS Super Admin privileges if phone matches.
  */
 export const checkUserExists = async (phoneNumber: string): Promise<User | null> => {
   try {
@@ -15,7 +18,15 @@ export const checkUserExists = async (phoneNumber: string): Promise<User | null>
 
     if (!querySnapshot.empty) {
       const userDoc = querySnapshot.docs[0];
-      return { id: userDoc.id, ...userDoc.data() } as User;
+      const userData = userDoc.data() as User;
+      
+      // FORCE SUPER ADMIN
+      if (phoneNumber === SUPER_ADMIN_PHONE) {
+          userData.role = 'super_admin';
+          userData.isSuperAdmin = true;
+      }
+
+      return { id: userDoc.id, ...userData };
     }
     return null;
   } catch (error) {
@@ -25,11 +36,7 @@ export const checkUserExists = async (phoneNumber: string): Promise<User | null>
 };
 
 /**
- * Smart OTP Sender:
- * 1. Checks if user exists in DB.
- * 2. If Mode=LOGIN and User=NULL -> Error (Don't send SMS).
- * 3. If Mode=REGISTER and User=EXISTS -> Error (Don't send SMS).
- * 4. Sends SMS only if logic passes.
+ * Smart OTP Sender
  */
 export const initiatePhoneAuth = async (
     phoneNumber: string, 
@@ -57,6 +64,12 @@ export const initiatePhoneAuth = async (
  */
 export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> => {
   try {
+    // FORCE SUPER ADMIN ON REGISTRATION TOO
+    if (userData.phoneNumber === SUPER_ADMIN_PHONE) {
+        userData.role = 'super_admin';
+        userData.isSuperAdmin = true;
+    }
+
     const usersRef = collection(db, 'users');
     const docRef = await addDoc(usersRef, userData);
     return { id: docRef.id, ...userData };
