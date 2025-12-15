@@ -13,6 +13,15 @@ export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'mana
 export type UserRole = 'staff' | 'manager' | 'admin' | 'super_admin'; // Added super_admin
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
+// --- USER LIFECYCLE TYPES ---
+export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
+
+export interface UserMetadata {
+    lastLoginAt?: number;
+    loginCount?: number;
+    deviceInfo?: string;
+}
+
 // --- MULTI-TENANCY TYPES ---
 
 export interface OrganizationSettings {
@@ -83,6 +92,10 @@ export interface User {
   role: UserRole; // Active Role in Current Org
   isSuperAdmin?: boolean; // GLOBAL FLAG for System Admin
   
+  // Lifecycle & Security
+  status?: UserStatus; // Default: 'ACTIVE'
+  metadata?: UserMetadata;
+
   pin: string; 
   xp: number; // Global XP or Org Specific? Let's keep it Global for Career Profile
   
