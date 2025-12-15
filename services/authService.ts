@@ -1,5 +1,5 @@
 
-import { collection, query, where, getDocs, addDoc, doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { signOut, signInWithPhoneNumber, ApplicationVerifier } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { User, UserRole, AuthMode } from '../types';
@@ -7,8 +7,8 @@ import { User, UserRole, AuthMode } from '../types';
 const SUPER_ADMIN_PHONE = '+905417726743';
 
 /**
- * Checks if a user profile exists in Firestore for the given phone number.
- * INJECTS Super Admin privileges if phone matches.
+ * Checks if a user profile exists in Firestore.
+ * GATEKEEPER LOGIC: Enforces Super Admin privileges for specific phone number.
  */
 export const checkUserExists = async (phoneNumber: string): Promise<User | null> => {
   try {
@@ -19,14 +19,21 @@ export const checkUserExists = async (phoneNumber: string): Promise<User | null>
     if (!querySnapshot.empty) {
       const userDoc = querySnapshot.docs[0];
       const userData = userDoc.data() as User;
-      
-      // FORCE SUPER ADMIN
-      if (phoneNumber === SUPER_ADMIN_PHONE) {
+      const userId = userDoc.id;
+
+      // --- GATEKEEPER PROTOCOL ---
+      // If this is the Master Number, FORCE super_admin role locally and update DB if needed.
+      if (phoneNumber.replace(/\s/g, '') === SUPER_ADMIN_PHONE) {
           userData.role = 'super_admin';
           userData.isSuperAdmin = true;
+          
+          // Background sync to ensure DB stays correct
+          if (userDoc.data().role !== 'super_admin') {
+              updateDoc(doc(db, 'users', userId), { role: 'super_admin', isSuperAdmin: true });
+          }
       }
 
-      return { id: userDoc.id, ...userData };
+      return { id: userId, ...userData };
     }
     return null;
   } catch (error) {
@@ -64,8 +71,8 @@ export const initiatePhoneAuth = async (
  */
 export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> => {
   try {
-    // FORCE SUPER ADMIN ON REGISTRATION TOO
-    if (userData.phoneNumber === SUPER_ADMIN_PHONE) {
+    // --- GATEKEEPER PROTOCOL FOR REGISTRATION ---
+    if (userData.phoneNumber.replace(/\s/g, '') === SUPER_ADMIN_PHONE) {
         userData.role = 'super_admin';
         userData.isSuperAdmin = true;
     }

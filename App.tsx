@@ -80,7 +80,9 @@ const App: React.FC = () => {
 
   // Role Checks
   const canAccessHotelAdmin = ['manager', 'admin', 'super_admin'].includes(currentUser?.role || '');
-  const isSuperAdmin = currentUser?.isSuperAdmin || false;
+  
+  // Strict Super Admin Check (Double Verification)
+  const isSuperAdmin = currentUser?.role === 'super_admin' && currentUser?.phoneNumber.replace(/\s/g, '') === '+905417726743';
 
   // 1. Loading Shield
   if (isHydrating && isAuthenticated) {
@@ -126,10 +128,10 @@ const App: React.FC = () => {
                           </Route>
                       )}
 
-                      {/* SUPER ADMIN ROUTES (On-Demand Access) */}
-                      {isSuperAdmin && (
-                          <Route path="/super-admin" element={<SuperAdminDashboard />} />
-                      )}
+                      {/* SUPER ADMIN ROUTES (Strictly Protected) */}
+                      <Route path="/super-admin" element={
+                          isSuperAdmin ? <SuperAdminDashboard /> : <Navigate to="/" replace />
+                      } />
 
                       {/* DEFAULT USER INTERFACE (Everyone starts here) */}
                       <Route 

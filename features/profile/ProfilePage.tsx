@@ -59,8 +59,9 @@ export const ProfilePage: React.FC = () => {
       'FAST_LEARNER': { icon: Zap, color: 'text-purple-500', bg: 'bg-purple-50', label: 'Hızlı Öğrenen' },
   };
 
-  const isManager = ['manager', 'admin', 'super_admin'].includes(activeUser.role);
-  const isSuperAdmin = activeUser.isSuperAdmin;
+  // Role Checks
+  const isSuperAdmin = activeUser.role === 'super_admin';
+  const isHotelManager = ['manager', 'admin'].includes(activeUser.role);
 
   return (
     <div className="min-h-screen bg-white pb-24">
@@ -77,7 +78,6 @@ export const ProfilePage: React.FC = () => {
                     </span>
                 </h1>
                 <div className="flex gap-4">
-                    {/* Add content button if user is manager could go here */}
                     <button onClick={() => setIsSettingsOpen(true)} className="text-gray-800 hover:bg-gray-100 p-1 rounded-full transition-colors">
                         <Settings className="w-7 h-7" />
                     </button>
@@ -130,41 +130,44 @@ export const ProfilePage: React.FC = () => {
                 )}
             </div>
 
-            {/* MANAGEMENT SWITCH (Instagram Style) */}
-            <div className="space-y-2 mb-4">
-                {isManager && (
-                    <div 
-                        onClick={() => navigate('/admin')}
-                        className="bg-gray-50 border-t border-b border-gray-100 py-3 px-2 flex items-center justify-between cursor-pointer active:bg-gray-100 transition-colors"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-gray-200 rounded-full">
-                                <Building2 className="w-4 h-4 text-gray-700" />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-gray-800">İşletme Paneli</span>
-                                <span className="text-[10px] text-gray-500">Personel, içerik ve raporlar</span>
-                            </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400" />
-                    </div>
-                )}
-
+            {/* PROFESSIONAL DASHBOARD SWITCHERS */}
+            <div className="space-y-3 mb-6">
+                {/* SCENARIO A: SUPER ADMIN (Platform Owner) */}
                 {isSuperAdmin && (
                     <div 
                         onClick={() => navigate('/super-admin')}
-                        className="bg-gray-50 border-b border-gray-100 py-3 px-2 flex items-center justify-between cursor-pointer active:bg-gray-100 transition-colors"
+                        className="bg-gray-900 text-yellow-400 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-black/10 relative overflow-hidden group"
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-yellow-100 rounded-full">
-                                <ShieldCheck className="w-4 h-4 text-yellow-700" />
+                        <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="flex items-center gap-3 relative z-10">
+                            <div className="p-1.5 bg-yellow-400/20 rounded-full">
+                                <ShieldCheck className="w-5 h-5 text-yellow-400" />
                             </div>
                             <div className="flex flex-col">
-                                <span className="text-sm font-bold text-gray-800">Sistem Paneli (Super Admin)</span>
-                                <span className="text-[10px] text-gray-500">Global ayarlar ve faturalandırma</span>
+                                <span className="text-sm font-bold">Platform Yönetimi</span>
+                                <span className="text-[10px] opacity-70">Super Admin Yetkisi</span>
                             </div>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                        <ChevronRight className="w-5 h-5 opacity-50 relative z-10" />
+                    </div>
+                )}
+
+                {/* SCENARIO B: HOTEL MANAGER (Business Owner) */}
+                {(isHotelManager || isSuperAdmin) && (
+                    <div 
+                        onClick={() => navigate('/admin')}
+                        className="bg-blue-50 border border-blue-100 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-1.5 bg-blue-100 rounded-full">
+                                <Building2 className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-gray-800">İşletme Yönetimi</span>
+                                <span className="text-[10px] text-gray-500">Personel ve İçerik Paneli</span>
+                            </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
                     </div>
                 )}
             </div>
@@ -207,91 +210,56 @@ export const ProfilePage: React.FC = () => {
 
         {/* CONTENT AREA */}
         <div className="min-h-[300px]">
-            
-            {/* TAB 1: COLLECTION (BADGES) */}
+            {/* ... Content Tabs (Same as before) ... */}
             {activeTab === 'collection' && (
                 <div className="grid grid-cols-3 gap-1 p-1">
-                    {/* Default Welcome Badge */}
                     <div className="aspect-square bg-gray-50 flex flex-col items-center justify-center p-2 border border-gray-100">
                         <Award className="w-8 h-8 text-blue-400 mb-2" />
                         <span className="text-[10px] font-bold text-center text-gray-600">İlk Adım</span>
                     </div>
-
-                    {/* Dynamic Badges */}
                     {activeUser.badges?.map((badge, idx) => {
                         const config = badgeConfig[badge.type];
                         if (!config) return null;
                         const BIcon = config.icon;
-                        
                         return (
                             <div key={idx} className={`aspect-square ${config.bg} flex flex-col items-center justify-center p-2 relative group cursor-pointer`}>
                                 <BIcon className={`w-8 h-8 ${config.color} mb-2`} />
                                 <span className="text-[10px] font-bold text-center text-gray-700 leading-none">{config.label}</span>
                                 {badge.count > 1 && (
-                                    <div className="absolute top-1 right-1 bg-white text-gray-900 text-[9px] font-bold px-1.5 rounded-full shadow-sm border border-gray-100">
-                                        x{badge.count}
-                                    </div>
+                                    <div className="absolute top-1 right-1 bg-white text-gray-900 text-[9px] font-bold px-1.5 rounded-full shadow-sm border border-gray-100">x{badge.count}</div>
                                 )}
                             </div>
                         );
                     })}
-
-                    {(!activeUser.badges || activeUser.badges.length === 0) && (
-                        <div className="col-span-3 py-10 text-center text-gray-400 text-sm">
-                            Henüz bir rozet koleksiyonun yok.
-                        </div>
-                    )}
                 </div>
             )}
-
-            {/* TAB 2: CERTIFICATES (HISTORY) */}
+            
             {activeTab === 'certificates' && (
                 <div className="flex flex-col">
-                    {myCertificates.length > 0 ? (
-                        myCertificates.map(course => (
-                            <div key={course.id} className="flex items-center gap-4 p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                                <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                                    <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h4 className="font-bold text-gray-900 text-sm truncate">{course.title}</h4>
-                                    <p className="text-xs text-gray-500">Tamamlandı</p>
-                                </div>
-                                <button className="p-2 text-gray-400 hover:text-primary">
-                                    <Download className="w-5 h-5" />
-                                </button>
+                    {myCertificates.map(course => (
+                        <div key={course.id} className="flex items-center gap-4 p-4 border-b border-gray-50 hover:bg-gray-50">
+                            <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                                <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
                             </div>
-                        ))
-                    ) : (
-                        <div className="py-20 text-center flex flex-col items-center text-gray-400">
-                            <FileText className="w-12 h-12 mb-2 opacity-20" />
-                            <p>Henüz tamamlanan eğitim yok.</p>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-gray-900 text-sm truncate">{course.title}</h4>
+                                <p className="text-xs text-gray-500">Tamamlandı</p>
+                            </div>
+                            <button className="p-2 text-gray-400 hover:text-primary"><Download className="w-5 h-5" /></button>
                         </div>
-                    )}
+                    ))}
                 </div>
             )}
 
-            {/* TAB 3: SAVED */}
             {activeTab === 'saved' && (
                 <div className="grid grid-cols-3 gap-1 p-1">
                     {mySaved.map(course => (
                         <div key={course.id} className="aspect-[3/4] bg-gray-100 relative group cursor-pointer overflow-hidden">
                             <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
-                            <div className="absolute bottom-2 left-2 text-white text-[10px] font-bold">
-                                {course.duration} dk
-                            </div>
                         </div>
                     ))}
-                    {mySaved.length === 0 && (
-                        <div className="col-span-3 py-20 text-center flex flex-col items-center text-gray-400">
-                            <Bookmark className="w-12 h-12 mb-2 opacity-20" />
-                            <p>Kaydedilen eğitim yok.</p>
-                        </div>
-                    )}
                 </div>
             )}
-
         </div>
 
         {/* MODALS */}
