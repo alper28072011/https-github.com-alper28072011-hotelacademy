@@ -1,3 +1,4 @@
+
 import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { User, Course, DepartmentType, Task, Category, CareerPath } from '../types';
@@ -41,6 +42,7 @@ const MOCK_CATEGORIES: Category[] = [
 const MOCK_COURSES: Course[] = [
   {
       id: '001',
+      organizationId: SEED_ORG_ID,
       categoryId: 'cat_onboarding',
       title: 'Aileye Hoş Geldin',
       description: 'Otelimizin kültürünü, değerlerini ve senin buradaki rolünü keşfet. Bu yolculukta yalnız değilsin.',
@@ -59,6 +61,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
       id: '002',
+      organizationId: SEED_ORG_ID,
       categoryId: 'cat_onboarding',
       title: 'Yaşam Rehberi',
       description: 'Yemek saatleri, servis güzergahları ve üniforma kuralları hakkında bilmen gereken her şey.',
@@ -74,6 +77,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
       id: '003',
+      organizationId: SEED_ORG_ID,
       categoryId: 'cat_onboarding',
       title: 'Görgü & Nezaket',
       description: '5 Yıldızlı hizmetin altın kuralı: Asla "Bilmiyorum" deme.',
@@ -89,6 +93,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
     id: '101',
+    organizationId: SEED_ORG_ID,
     categoryId: 'cat_guest',
     title: 'Zor Misafir Yönetimi',
     description: 'Şikayet eden misafiri sadık bir müşteriye dönüştürme sanatı.',
@@ -104,6 +109,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
     id: '102',
+    organizationId: SEED_ORG_ID,
     categoryId: 'cat_kitchen',
     title: 'Tabak Sunum Teknikleri',
     description: 'Michelin yıldızlı sunumlar için temel kurallar.',
@@ -120,6 +126,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
     id: '103',
+    organizationId: SEED_ORG_ID,
     categoryId: 'cat_kitchen',
     title: 'Barista 101: Latte Art',
     description: 'Mükemmel süt köpüğü ve kalp çizme teknikleri.',
@@ -133,6 +140,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
     id: '201',
+    organizationId: SEED_ORG_ID,
     categoryId: 'cat_safety',
     title: 'Yangın Güvenliği',
     description: 'Acil durumlarda tahliye planı ve yangın tüpü kullanımı.',
@@ -147,6 +155,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
     id: '202',
+    organizationId: SEED_ORG_ID,
     categoryId: 'cat_safety',
     title: 'İlk Yardım Temelleri',
     description: 'Bayılma ve kesiklerde ilk müdahale.',
@@ -161,6 +170,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
     id: '301',
+    organizationId: SEED_ORG_ID,
     categoryId: 'cat_lang',
     title: 'Resepsiyon İngilizcesi',
     description: 'Check-in ve Check-out sırasında kullanılan kalıplar.',
@@ -176,6 +186,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
     id: '401',
+    organizationId: SEED_ORG_ID,
     categoryId: 'cat_hk',
     title: '5 Yıldızlı Yatak Yapımı',
     description: 'Jilet gibi çarşaflar için katlama teknikleri.',
@@ -191,6 +202,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
     id: '402',
+    organizationId: SEED_ORG_ID,
     categoryId: 'cat_hk',
     title: 'Mermer Yüzey Bakımı',
     description: 'Leke çıkarma ve parlatma sırları.',
@@ -206,6 +218,7 @@ const MOCK_COURSES: Course[] = [
   },
   {
     id: '501',
+    organizationId: SEED_ORG_ID,
     categoryId: 'cat_kitchen',
     title: 'Şarap Eşleşmesi 101',
     description: 'Hangi yemekle hangi şarap gider? Temel kurallar.',

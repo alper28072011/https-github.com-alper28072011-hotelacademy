@@ -1,11 +1,14 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Loader2, ShieldCheck, User as UserIcon, Building2, CheckCircle2, AlertTriangle, Lock } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { auth, RecaptchaVerifier } from '../../services/firebase';
 import { checkUserExists, registerUser, initiatePhoneAuth } from '../../services/authService';
-import { DepartmentType } from '../../types';
+import { getMyMemberships, updateUserProfile } from '../../services/db';
+import { DepartmentType, User } from '../../types';
 import { PhoneInput } from './components/PhoneInput';
 
 // Admin "Backdoor" Number
@@ -23,6 +26,7 @@ export const LoginPage: React.FC = () => {
     authMode, setAuthMode,
     recordSmsAttempt, cooldownUntil
   } = useAuthStore();
+  const { switchOrganization } = useOrganizationStore();
 
   // Profile Setup State
   const [name, setName] = useState('');
@@ -84,6 +88,42 @@ export const LoginPage: React.FC = () => {
         }
     };
   }, [step]);
+
+  // --- HELPER FOR SMART LOGIN ---
+  const handleSmartLogin = async (user: User) => {
+      // Check Memberships
+      const memberships = await getMyMemberships(user.id);
+      
+      // Auto-Select Logic:
+      // 1. If user already has a 'currentOrganizationId' set in profile, use it.
+      // 2. If user has exactly 1 membership, select it automatically.
+      // 3. Otherwise, let them go to lobby (which happens automatically if currentOrganizationId is null).
+
+      if (user.currentOrganizationId) {
+          // Has last active session
+          await switchOrganization(user.currentOrganizationId);
+          loginSuccess(user);
+      } else if (memberships.length === 1) {
+          // Single membership -> Auto-select
+          const orgId = memberships[0].organizationId;
+          const role = memberships[0].role;
+          const dept = memberships[0].department;
+          
+          await updateUserProfile(user.id, { 
+              currentOrganizationId: orgId,
+              role: role,
+              department: dept
+          });
+          
+          // Update local user object before finishing login
+          const updatedUser = { ...user, currentOrganizationId: orgId, role, department };
+          await switchOrganization(orgId);
+          loginSuccess(updatedUser);
+      } else {
+          // Multiple or Zero -> Go to Lobby (default flow)
+          loginSuccess(user);
+      }
+  };
 
   // --- HANDLERS ---
 
@@ -175,7 +215,7 @@ export const LoginPage: React.FC = () => {
           const existingUser = await checkUserExists(phoneNumber);
 
           if (existingUser) {
-              loginSuccess(existingUser);
+              await handleSmartLogin(existingUser);
           } else {
               // Only if in Register mode should we reach here ideally
               setStep('PROFILE_SETUP');
@@ -214,6 +254,7 @@ export const LoginPage: React.FC = () => {
               organizationHistory: []
           });
 
+          // Registration successful - go to Lobby
           loginSuccess(newUser);
 
       } catch (err) {

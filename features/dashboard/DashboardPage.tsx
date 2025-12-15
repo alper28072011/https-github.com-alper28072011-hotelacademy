@@ -7,7 +7,7 @@ import { useContentStore } from '../../stores/useContentStore';
 import { getFeedPosts } from '../../services/db';
 import { StoryCircle, StoryStatus } from './components/StoryCircle';
 import { FeedPostCard } from './components/FeedPostCard';
-import { X, Quote, Map, RefreshCw } from 'lucide-react';
+import { X, Quote, Map, RefreshCw, Settings, Building } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Course, FeedPost } from '../../types';
 
@@ -22,7 +22,14 @@ export const DashboardPage: React.FC = () => {
   const [showGmModal, setShowGmModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // 1. Fetch Content
+  // 1. Guard: Redirect to Lobby if no Org is active
+  useEffect(() => {
+      if (!currentUser?.currentOrganizationId) {
+          navigate('/lobby');
+      }
+  }, [currentUser, navigate]);
+
+  // 2. Fetch Content
   useEffect(() => {
     if (currentUser && currentUser.currentOrganizationId) {
         fetchContent(currentUser.currentOrganizationId);
@@ -85,11 +92,10 @@ export const DashboardPage: React.FC = () => {
       return 'mandatory'; 
   };
 
-  // If no Org selected, redirect to Lobby (Safety check)
-  if (!currentUser?.currentOrganizationId) {
-      navigate('/lobby');
-      return null;
-  }
+  // Safe Guard Render
+  if (!currentUser?.currentOrganizationId) return null;
+
+  const isOwner = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'super_admin';
 
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen">
@@ -103,6 +109,18 @@ export const DashboardPage: React.FC = () => {
             <span className="text-primary font-bold text-xl tracking-tight">Hotelgram</span>
          </div>
          <div className="flex items-center gap-4">
+            
+            {/* OWNER UI BUTTON */}
+            {isOwner && (
+                <button 
+                    onClick={() => navigate('/admin/settings')}
+                    className="p-2 bg-gray-100 rounded-full text-gray-600 hover:bg-primary hover:text-white transition-all shadow-sm"
+                    aria-label="Manage Hotel"
+                >
+                    <Settings className="w-5 h-5" />
+                </button>
+            )}
+
             <button onClick={handleRefresh} className={`${isRefreshing ? 'animate-spin' : ''}`}>
                 <RefreshCw className="w-6 h-6 text-gray-700" />
             </button>

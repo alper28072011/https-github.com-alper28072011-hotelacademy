@@ -39,7 +39,6 @@ export const searchOrganizations = async (searchTerm: string): Promise<Organizat
     if (!searchTerm || searchTerm.length < 2) return [];
     try {
         const term = searchTerm.toLowerCase();
-        // Prototype: Fetch latest 50 and filter manually (No full-text search engine available)
         const q = query(orgsRef, limit(50));
         const snap = await getDocs(q);
         
@@ -65,7 +64,7 @@ export const getAllPublicOrganizations = async (): Promise<Organization[]> => {
 export const createOrganization = async (name: string, owner: User, logoUrl: string): Promise<Organization | null> => {
     try {
         const orgId = name.toLowerCase().replace(/\s/g, '_') + '_' + Math.floor(Math.random() * 1000);
-        const code = name.substring(0, 3).toUpperCase() + Math.floor(1000 + Math.random() * 9000); // Ex: RUB1234
+        const code = name.substring(0, 3).toUpperCase() + Math.floor(1000 + Math.random() * 9000); 
 
         const newOrg: Organization = {
             id: orgId,
@@ -86,7 +85,6 @@ export const createOrganization = async (name: string, owner: User, logoUrl: str
 
         await setDoc(doc(db, 'organizations', orgId), newOrg);
 
-        // Auto-create membership
         const membershipId = `${owner.id}_${orgId}`;
         const newMembership: Membership = {
             id: membershipId,
@@ -99,7 +97,6 @@ export const createOrganization = async (name: string, owner: User, logoUrl: str
         };
         await setDoc(doc(db, 'memberships', membershipId), newMembership);
 
-        // Update User Profile
         await updateDoc(doc(db, 'users', owner.id), {
             currentOrganizationId: orgId,
             role: 'manager',
@@ -134,6 +131,7 @@ export const updateOrganization = async (orgId: string, data: Partial<Organizati
  * Fetch Posts ONLY for specific Organization
  */
 export const getFeedPosts = async (userDept: DepartmentType, orgId: string): Promise<FeedPost[]> => {
+    if (!orgId) return [];
     try {
         const q = query(
             postsRef, 
@@ -143,7 +141,6 @@ export const getFeedPosts = async (userDept: DepartmentType, orgId: string): Pro
         const snapshot = await getDocs(q);
         const posts = snapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as FeedPost))
-            // Client-side filtering for departments (Firestone limitations on multiple array-contains)
             .filter(p => p.assignmentType === 'GLOBAL' || p.targetDepartments?.includes(userDept));
         
         return posts.sort((a,b) => b.createdAt - a.createdAt);
@@ -157,6 +154,7 @@ export const getFeedPosts = async (userDept: DepartmentType, orgId: string): Pro
  * Fetch Users ONLY for specific Organization
  */
 export const getUsersByDepartment = async (dept: DepartmentType, orgId: string): Promise<User[]> => {
+  if (!orgId) return [];
   try {
     const q = query(
         membershipsRef, 
@@ -180,6 +178,7 @@ export const getUsersByDepartment = async (dept: DepartmentType, orgId: string):
  * Fetch Tasks ONLY for specific Organization
  */
 export const getDailyTasks = async (dept: DepartmentType, orgId: string): Promise<Task[]> => {
+  if (!orgId) return [];
   try {
     const q = query(
         tasksRef, 
@@ -198,8 +197,8 @@ export const getCourses = async (orgId?: string): Promise<Course[]> => {
   try {
     const snapshot = await getDocs(coursesRef);
     const allCourses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
-    // Filter: Show Global Courses + Org Specific Courses
-    return allCourses.filter(c => !c.organizationId || c.organizationId === orgId);
+    // Filter: Show Global Courses (no orgId) OR Org Specific Courses (matching orgId)
+    return allCourses.filter(c => !c.organizationId || (orgId && c.organizationId === orgId));
   } catch (error) { return []; }
 };
 
@@ -207,6 +206,7 @@ export const getCourses = async (orgId?: string): Promise<Course[]> => {
  * Fetch Career Paths ONLY for specific Organization
  */
 export const getCareerPathByDepartment = async (dept: DepartmentType, orgId: string): Promise<CareerPath | null> => {
+    if (!orgId) return null;
     try {
         const q = query(
             careerPathsRef, 
@@ -222,6 +222,7 @@ export const getCareerPathByDepartment = async (dept: DepartmentType, orgId: str
 };
 
 export const getCareerPaths = async (orgId: string): Promise<CareerPath[]> => {
+    if (!orgId) return [];
     try {
         const q = query(careerPathsRef, where('organizationId', '==', orgId));
         const snapshot = await getDocs(q);
