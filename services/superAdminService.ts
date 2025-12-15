@@ -13,8 +13,7 @@ import {
     writeBatch,
     QueryDocumentSnapshot,
     DocumentData,
-    getDoc,
-    QueryConstraint
+    getDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { User, UserStatus, Organization } from '../types';
@@ -120,48 +119,32 @@ export const getAllUsers = async (
     filter: 'ALL' | 'BANNED' | 'MANAGERS' = 'ALL'
 ): Promise<PaginatedUsers> => {
     try {
-        let constraints: QueryConstraint[] = [];
+        let q = query(usersRef);
 
-        // 1. Search Logic (Simple Prefix Search)
-        // Note: Using 'orderBy' with a different 'where' field usually requires a composite index.
-        // To avoid index hell in this prototype, we split logic:
-        // If Searching -> No OrderBy joinDate (Results ordered by match field implicitly)
-        // If Browsing -> OrderBy joinDate Desc
-        
+        // 1. Search Logic
         if (searchTerm) {
-            // Determine if search by phone or name
             if (searchTerm.startsWith('+') || !isNaN(Number(searchTerm[0]))) {
-                 constraints.push(where('phoneNumber', '>=', searchTerm));
-                 constraints.push(where('phoneNumber', '<=', searchTerm + '\uf8ff'));
+                 q = query(usersRef, where('phoneNumber', '>=', searchTerm), where('phoneNumber', '<=', searchTerm + '\uf8ff'));
             } else {
-                 constraints.push(where('name', '>=', searchTerm));
-                 constraints.push(where('name', '<=', searchTerm + '\uf8ff'));
+                 q = query(usersRef, where('name', '>=', searchTerm), where('name', '<=', searchTerm + '\uf8ff'));
             }
-            
-            // Note: We skip 'filter' logic during search to keep query simple and index-free for now.
-            // In production, use Algolia/Typesense for multi-faceted search.
         } else {
-            // 2. Filter Logic (Browsing Mode)
+            // 2. Filter Logic
             if (filter === 'BANNED') {
-                constraints.push(where('status', '==', 'BANNED'));
+                q = query(usersRef, where('status', '==', 'BANNED'));
             } else if (filter === 'MANAGERS') {
-                constraints.push(where('role', 'in', ['manager', 'admin']));
+                q = query(usersRef, where('role', 'in', ['manager', 'admin']));
             }
-
-            // 3. Ordering (Default: JoinDate Descending)
-            // Only apply if NOT searching to avoid inequality field conflict
-            constraints.push(orderBy('joinDate', 'desc')); 
+            q = query(q, orderBy('joinDate', 'desc')); 
         }
 
-        // 4. Pagination
-        constraints.push(limit(pageSize));
+        // 3. Pagination
+        q = query(q, limit(pageSize));
         if (lastDoc) {
-            constraints.push(startAfter(lastDoc));
+            q = query(q, startAfter(lastDoc));
         }
 
-        const q = query(usersRef, ...constraints);
         const snapshot = await getDocs(q);
-        
         const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as User));
         const newLastDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
 

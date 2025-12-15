@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShieldCheck, Activity, Users, DollarSign, Database, Building2, Search, Power, Trash2, Loader2, List, Grid, RotateCcw } from 'lucide-react';
