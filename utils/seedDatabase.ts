@@ -7,10 +7,76 @@ const SEED_ORG_ID = 'demo_hotel_1';
 
 // Explicitly type the mock users
 const MOCK_USERS: Omit<User, 'id'>[] = [
-  { name: 'Ayşe Yılmaz', phoneNumber: '+905550000001', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: ['401'], startedCourses: [], completedTasks: [], assignedPathId: 'path_hk_manager', badges: [], currentOrganizationId: SEED_ORG_ID, organizationHistory: [SEED_ORG_ID] },
-  { name: 'Fatma Demir', phoneNumber: '+905550000002', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], startedCourses: [], completedTasks: [], badges: [], currentOrganizationId: SEED_ORG_ID, organizationHistory: [SEED_ORG_ID] },
-  { name: 'Mehmet Öztürk', phoneNumber: '+905550000003', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: ['102'], startedCourses: [], completedTasks: [], badges: [], currentOrganizationId: SEED_ORG_ID, organizationHistory: [SEED_ORG_ID] },
-  { name: 'Canan Kaya', phoneNumber: '+905550000004', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: ['301', '101'], startedCourses: [], completedTasks: [], assignedPathId: 'path_fo_manager', badges: [], currentOrganizationId: SEED_ORG_ID, organizationHistory: [SEED_ORG_ID] },
+  { 
+      name: 'Ayşe Yılmaz', 
+      phoneNumber: '+905550000001', 
+      avatar: 'AY', 
+      department: 'housekeeping', 
+      role: 'staff', 
+      pin: '1234', 
+      xp: 120, 
+      completedCourses: ['401'], 
+      startedCourses: [], 
+      completedTasks: [], 
+      assignedPathId: 'path_hk_manager', 
+      badges: [], 
+      currentOrganizationId: SEED_ORG_ID, 
+      organizationHistory: [SEED_ORG_ID],
+      joinDate: Date.now(), // Added
+      status: 'ACTIVE' // Added
+  },
+  { 
+      name: 'Fatma Demir', 
+      phoneNumber: '+905550000002', 
+      avatar: 'FD', 
+      department: 'housekeeping', 
+      role: 'staff', 
+      pin: '1234', 
+      xp: 50, 
+      completedCourses: [], 
+      startedCourses: [], 
+      completedTasks: [], 
+      badges: [], 
+      currentOrganizationId: SEED_ORG_ID, 
+      organizationHistory: [SEED_ORG_ID],
+      joinDate: Date.now() - 10000000, // Slightly older
+      status: 'ACTIVE'
+  },
+  { 
+      name: 'Mehmet Öztürk', 
+      phoneNumber: '+905550000003', 
+      avatar: 'MÖ', 
+      department: 'kitchen', 
+      role: 'staff', 
+      pin: '1234', 
+      xp: 300, 
+      completedCourses: ['102'], 
+      startedCourses: [], 
+      completedTasks: [], 
+      badges: [], 
+      currentOrganizationId: SEED_ORG_ID, 
+      organizationHistory: [SEED_ORG_ID],
+      joinDate: Date.now() - 20000000,
+      status: 'ACTIVE'
+  },
+  { 
+      name: 'Canan Kaya', 
+      phoneNumber: '+905550000004', 
+      avatar: 'CK', 
+      department: 'front_office', 
+      role: 'staff', 
+      pin: '1234', 
+      xp: 450, 
+      completedCourses: ['301', '101'], 
+      startedCourses: [], 
+      completedTasks: [], 
+      assignedPathId: 'path_fo_manager', 
+      badges: [], 
+      currentOrganizationId: SEED_ORG_ID, 
+      organizationHistory: [SEED_ORG_ID],
+      joinDate: Date.now() - 5000000,
+      status: 'ACTIVE'
+  },
   // Admin User
   { 
       name: 'System Admin', 
@@ -26,7 +92,9 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       completedTasks: [],
       badges: [],
       currentOrganizationId: SEED_ORG_ID, 
-      organizationHistory: [SEED_ORG_ID]
+      organizationHistory: [SEED_ORG_ID],
+      joinDate: Date.now() - 30000000,
+      status: 'ACTIVE'
   },
 ];
 
