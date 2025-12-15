@@ -8,7 +8,7 @@ interface ProfileState {
   loading: boolean;
   
   // Actions
-  initializeListeners: (userId: string, department: DepartmentType) => () => void;
+  initializeListeners: (userId: string, department: DepartmentType, orgId: string) => () => void;
 }
 
 export const useProfileStore = create<ProfileState>((set) => ({
@@ -16,7 +16,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
   leaderboard: [],
   loading: true,
 
-  initializeListeners: (userId, department) => {
+  initializeListeners: (userId, department, orgId) => {
     set({ loading: true });
 
     // 1. Subscribe to User Data (for XP updates)
@@ -25,7 +25,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
     });
 
     // 2. Subscribe to Leaderboard
-    const unsubscribeLeaderboard = subscribeToLeaderboard(department, (users) => {
+    const unsubscribeLeaderboard = subscribeToLeaderboard(department, orgId, (users) => {
       set({ leaderboard: users, loading: false });
     });
 

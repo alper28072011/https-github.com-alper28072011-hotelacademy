@@ -2,11 +2,12 @@
 import { create } from 'zustand';
 import { Course, Category, User } from '../types';
 import { getCourses, getCategories } from '../services/db';
+import { useOrganizationStore } from './useOrganizationStore';
 
 interface ExploreFeed {
-    priority: Course[]; // Pool A: Mandatory & Dept specific
-    trending: Course[]; // Pool B: High popularity
-    discovery: Course[]; // Pool C: Everything else
+    priority: Course[]; 
+    trending: Course[]; 
+    discovery: Course[]; 
 }
 
 interface ContentState {
@@ -16,7 +17,7 @@ interface ContentState {
   searchQuery: string;
 
   // Actions
-  fetchContent: () => Promise<void>;
+  fetchContent: (orgId: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
   
   // Computed
@@ -31,10 +32,10 @@ export const useContentStore = create<ContentState>((set, get) => ({
   isLoading: false,
   searchQuery: '',
 
-  fetchContent: async () => {
+  fetchContent: async (orgId: string) => {
     set({ isLoading: true });
-    // Fetch in parallel
-    const [courses, categories] = await Promise.all([getCourses(), getCategories()]);
+    // Pass orgId to getCourses to fetch Global + Org Specific courses
+    const [courses, categories] = await Promise.all([getCourses(orgId), getCategories()]);
     set({ courses, categories, isLoading: false });
   },
 
@@ -51,24 +52,19 @@ export const useContentStore = create<ContentState>((set, get) => ({
   getExploreFeed: (user: User) => {
       const allCourses = get().courses;
       
-      // POOL A: PRIORITY (Department & Not Completed & (Assignment=Dept OR Global))
       const priority = allCourses.filter(c => {
           const isAssigned = c.assignmentType === 'GLOBAL' || (c.assignmentType === 'DEPARTMENT' && c.targetDepartments?.includes(user.department));
           const isNotCompleted = !user.completedCourses.includes(c.id);
-          // Onboarding always priority if not done
           const isOnboarding = c.categoryId === 'cat_onboarding';
-          
           return (isAssigned && isNotCompleted) || (isOnboarding && isNotCompleted);
-      }).sort((a, b) => (b.priority === 'HIGH' ? 1 : 0) - (a.priority === 'HIGH' ? 1 : 0)); // High priority first
+      }).sort((a, b) => (b.priority === 'HIGH' ? 1 : 0) - (a.priority === 'HIGH' ? 1 : 0)); 
 
-      // POOL B: TRENDING (High Popularity, Not in Priority)
       const trending = allCourses.filter(c => {
           const inPriority = priority.find(p => p.id === c.id);
           const isPopular = (c.popularityScore || 0) > 70;
           return !inPriority && isPopular;
       }).sort((a, b) => (b.popularityScore || 0) - (a.popularityScore || 0));
 
-      // POOL C: DISCOVERY (Everything else, shuffle or sort by newness)
       const discovery = allCourses.filter(c => {
           const inPriority = priority.find(p => p.id === c.id);
           const inTrending = trending.find(t => t.id === c.id);

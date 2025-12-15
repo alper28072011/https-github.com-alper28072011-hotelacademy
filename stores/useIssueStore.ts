@@ -33,11 +33,12 @@ export const useIssueStore = create<IssueState>((set, get) => ({
   submitIssue: async (user) => {
     const { selectedType, selectedLocation, photoPreview } = get();
     
-    if (!selectedType || !selectedLocation) return false;
+    if (!selectedType || !selectedLocation || !user.currentOrganizationId) return false;
 
     set({ isSubmitting: true });
 
     const success = await createIssue({
+        organizationId: user.currentOrganizationId,
         userId: user.id,
         userName: user.name,
         department: user.department,

@@ -1,15 +1,16 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Save, GripVertical, Trash2, Milestone, Loader2, ArrowRight } from 'lucide-react';
 import { Course, DepartmentType, CareerPath } from '../../types';
 import { getCourses, createCareerPath, getCareerPaths } from '../../services/db';
+import { useOrganizationStore } from '../../stores/useOrganizationStore';
 
 export const CareerBuilder: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [existingPaths, setExistingPaths] = useState<CareerPath[]>([]);
   const [loading, setLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const { currentOrganization } = useOrganizationStore();
 
   // Form State
   const [title, setTitle] = useState('');
@@ -20,11 +21,12 @@ export const CareerBuilder: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [currentOrganization]);
 
   const fetchData = async () => {
+    if (!currentOrganization) return;
     setLoading(true);
-    const [c, p] = await Promise.all([getCourses(), getCareerPaths()]);
+    const [c, p] = await Promise.all([getCourses(currentOrganization.id), getCareerPaths(currentOrganization.id)]);
     setCourses(c);
     setExistingPaths(p);
     setLoading(false);
@@ -44,10 +46,11 @@ export const CareerBuilder: React.FC = () => {
   };
 
   const handleSave = async () => {
-      if (!title || !targetRole || selectedCourses.length === 0) return;
+      if (!title || !targetRole || selectedCourses.length === 0 || !currentOrganization) return;
       setLoading(true);
       
       const newPath: Omit<CareerPath, 'id'> = {
+          organizationId: currentOrganization.id,
           title,
           description,
           targetRole,

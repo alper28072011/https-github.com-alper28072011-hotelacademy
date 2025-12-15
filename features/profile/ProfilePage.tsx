@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -29,8 +28,8 @@ export const ProfilePage: React.FC = () => {
 
   // Listen for real-time updates
   useEffect(() => {
-    if (currentUser) {
-      const cleanup = initializeListeners(currentUser.id, currentUser.department);
+    if (currentUser && currentUser.currentOrganizationId) {
+      const cleanup = initializeListeners(currentUser.id, currentUser.department, currentUser.currentOrganizationId);
       return cleanup;
     }
   }, [currentUser, initializeListeners]);

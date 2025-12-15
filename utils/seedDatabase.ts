@@ -1,14 +1,15 @@
-
 import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { User, Course, DepartmentType, Task, Category, CareerPath } from '../types';
 
+const SEED_ORG_ID = 'demo_hotel_1';
+
 // Explicitly type the mock users
 const MOCK_USERS: Omit<User, 'id'>[] = [
-  { name: 'Ayşe Yılmaz', phoneNumber: '+905550000001', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: ['401'], startedCourses: [], completedTasks: [], assignedPathId: 'path_hk_manager', badges: [] },
-  { name: 'Fatma Demir', phoneNumber: '+905550000002', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], startedCourses: [], completedTasks: [], badges: [] },
-  { name: 'Mehmet Öztürk', phoneNumber: '+905550000003', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: ['102'], startedCourses: [], completedTasks: [], badges: [] },
-  { name: 'Canan Kaya', phoneNumber: '+905550000004', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: ['301', '101'], startedCourses: [], completedTasks: [], assignedPathId: 'path_fo_manager', badges: [] },
+  { name: 'Ayşe Yılmaz', phoneNumber: '+905550000001', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: ['401'], startedCourses: [], completedTasks: [], assignedPathId: 'path_hk_manager', badges: [], currentOrganizationId: SEED_ORG_ID, organizationHistory: [SEED_ORG_ID] },
+  { name: 'Fatma Demir', phoneNumber: '+905550000002', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], startedCourses: [], completedTasks: [], badges: [], currentOrganizationId: SEED_ORG_ID, organizationHistory: [SEED_ORG_ID] },
+  { name: 'Mehmet Öztürk', phoneNumber: '+905550000003', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: ['102'], startedCourses: [], completedTasks: [], badges: [], currentOrganizationId: SEED_ORG_ID, organizationHistory: [SEED_ORG_ID] },
+  { name: 'Canan Kaya', phoneNumber: '+905550000004', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: ['301', '101'], startedCourses: [], completedTasks: [], assignedPathId: 'path_fo_manager', badges: [], currentOrganizationId: SEED_ORG_ID, organizationHistory: [SEED_ORG_ID] },
   // Admin User
   { 
       name: 'System Admin', 
@@ -22,7 +23,9 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       completedCourses: [], 
       startedCourses: [],
       completedTasks: [],
-      badges: [] 
+      badges: [],
+      currentOrganizationId: SEED_ORG_ID, 
+      organizationHistory: [SEED_ORG_ID]
   },
 ];
 
@@ -218,10 +221,10 @@ const MOCK_COURSES: Course[] = [
 ];
 
 const MOCK_TASKS: Task[] = [
-    { id: 'hk_1', department: 'housekeeping', title: 'Koridor Halı Kontrolü', xpReward: 50, type: 'checklist' },
-    { id: 'hk_2', department: 'housekeeping', title: 'Kat Arabası Düzeni', xpReward: 75, type: 'photo' },
-    { id: 'kt_1', department: 'kitchen', title: 'Dolap Sıcaklık Kontrolü', xpReward: 100, type: 'photo' },
-    { id: 'fo_1', department: 'front_office', title: 'VIP Giriş Listesi', xpReward: 60, type: 'checklist' },
+    { id: 'hk_1', department: 'housekeeping', title: 'Koridor Halı Kontrolü', xpReward: 50, type: 'checklist', organizationId: SEED_ORG_ID },
+    { id: 'hk_2', department: 'housekeeping', title: 'Kat Arabası Düzeni', xpReward: 75, type: 'photo', organizationId: SEED_ORG_ID },
+    { id: 'kt_1', department: 'kitchen', title: 'Dolap Sıcaklık Kontrolü', xpReward: 100, type: 'photo', organizationId: SEED_ORG_ID },
+    { id: 'fo_1', department: 'front_office', title: 'VIP Giriş Listesi', xpReward: 60, type: 'checklist', organizationId: SEED_ORG_ID },
 ];
 
 const MOCK_PATHS: CareerPath[] = [
@@ -231,7 +234,8 @@ const MOCK_PATHS: CareerPath[] = [
         description: 'Kat görevlisinden Kat Şefliğine uzanan mükemmellik yolu.',
         targetRole: 'Kat Şefi',
         department: 'housekeeping',
-        courseIds: ['401', '402', '201', '202']
+        courseIds: ['401', '402', '201', '202'],
+        organizationId: SEED_ORG_ID
     },
     {
         id: 'path_fo_manager',
@@ -239,7 +243,8 @@ const MOCK_PATHS: CareerPath[] = [
         description: 'Resepsiyondan Ön Büro Müdürlüğüne kariyer adımları.',
         targetRole: 'Ön Büro Şefi',
         department: 'front_office',
-        courseIds: ['301', '101', '201', '302']
+        courseIds: ['301', '101', '201', '302'],
+        organizationId: SEED_ORG_ID
     }
 ];
 

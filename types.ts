@@ -11,7 +11,77 @@ export interface Language {
 
 export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management';
 export type UserRole = 'staff' | 'manager' | 'admin';
-export type AuthMode = 'LOGIN' | 'REGISTER'; // NEW
+export type AuthMode = 'LOGIN' | 'REGISTER';
+
+// --- MULTI-TENANCY TYPES ---
+
+export interface Organization {
+  id: string;
+  name: string;
+  logoUrl: string;
+  bannerUrl?: string;
+  ownerId: string; // The GM or Creator
+  code: string; // Unique Invite Code (e.g. "RUBI-2024")
+  createdAt: number;
+}
+
+export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'REJECTED';
+
+export interface Membership {
+  id: string;
+  userId: string;
+  organizationId: string;
+  role: UserRole;
+  department: DepartmentType;
+  status: MembershipStatus;
+  joinedAt: number;
+}
+
+export type RequestType = 'INVITE_TO_JOIN' | 'REQUEST_TO_JOIN';
+
+export interface JoinRequest {
+  id: string;
+  type: RequestType;
+  userId: string;
+  organizationId: string;
+  targetDepartment: DepartmentType;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  createdAt: number;
+}
+
+// --- USER TYPE UPDATE ---
+
+export interface User {
+  id: string;
+  email?: string; 
+  phoneNumber: string; // Global ID
+  name: string;
+  avatar: string; 
+  
+  // Contextual Data (Derived from Active Membership usually, but kept here for cache/display)
+  currentOrganizationId: string | null; 
+  department: DepartmentType; // Active Dept in Current Org
+  role: UserRole; // Active Role in Current Org
+  
+  pin: string; 
+  xp: number; // Global XP or Org Specific? Let's keep it Global for Career Profile
+  
+  // Profile & Career
+  bio?: string; 
+  joinDate?: number; 
+  instagramHandle?: string;
+  organizationHistory: string[]; // List of Org IDs they worked at
+  
+  // Progress
+  completedCourses: string[];
+  startedCourses?: string[]; 
+  savedCourses?: string[]; 
+  completedTasks?: string[]; 
+  badges?: Badge[]; 
+  
+  // Career Module
+  assignedPathId?: string; 
+}
 
 // --- KUDOS / GAMIFICATION TYPES ---
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
@@ -22,36 +92,9 @@ export interface Badge {
     lastReceivedAt: number;
 }
 
-export interface User {
-  id: string;
-  email?: string; 
-  phoneNumber: string; // NEW: Global ID
-  name: string;
-  avatar: string; // Initials or URL
-  department: DepartmentType;
-  role: UserRole; 
-  pin: string; // Restored: Used for access control
-  xp: number;
-  
-  // Profile & Career
-  bio?: string; // Short resume/motto
-  joinDate?: number; // Timestamp
-  instagramHandle?: string; // Optional social link
-  
-  // Progress
-  completedCourses: string[];
-  startedCourses?: string[]; 
-  savedCourses?: string[]; // "Watch Later" list
-  completedTasks?: string[]; 
-  badges?: Badge[]; 
-  
-  // Career Module
-  assignedPathId?: string; 
-}
-
 export type StepType = 'video' | 'quiz';
 
-// --- INTERACTION TYPES (NEW) ---
+// --- INTERACTION TYPES ---
 export type InteractionType = 'POLL' | 'QUIZ' | 'LINK' | 'XP_BOOST';
 
 export interface Interaction {
@@ -60,14 +103,14 @@ export interface Interaction {
   data: {
     question?: string;
     options?: string[];
-    correctOptionIndex?: number; // For Quiz
-    url?: string; // For Link
-    label?: string; // For Link button text
-    xpAmount?: number; // For XP Boost
+    correctOptionIndex?: number;
+    url?: string;
+    label?: string;
+    xpAmount?: number;
   };
   style?: {
-    x: number; // Percentage position X
-    y: number; // Percentage position Y
+    x: number;
+    y: number;
     scale: number;
   };
 }
@@ -77,21 +120,18 @@ export interface CourseStep {
   type: StepType;
   title: string;
   description?: string;
-  // Video Props
   videoUrl?: string;
   posterUrl?: string;
-  // Quiz Props
   question?: string;
   options?: { id: string; label: string; isCorrect: boolean }[];
-  // NEW: Story Interactions
   interactions?: Interaction[]; 
 }
 
 export interface Category {
   id: string;
   title: string;
-  icon?: string; // Lucide icon name reference
-  color?: string; // Tailwind color class e.g. "bg-blue-500"
+  icon?: string;
+  color?: string;
 }
 
 // --- NEW TARGETING TYPES ---
@@ -100,70 +140,57 @@ export type ContentPriority = 'HIGH' | 'NORMAL';
 
 export interface Course {
   id: string;
+  organizationId?: string; // Optional: Some courses can be system-wide (Global Marketplace), others Org specific
   categoryId: string;
   title: string;
   description: string;
-  thumbnailUrl: string; // Portrait Poster URL
-  videoUrl?: string; // Trailer or Intro URL
-  duration: number; // Minutes
+  thumbnailUrl: string;
+  videoUrl?: string; 
+  duration: number; 
   xpReward: number;
   isFeatured?: boolean;
-  
-  // NEW: Hype Content
-  coverQuote?: string; // Inspirational quote for the intro page
-  tags?: string[]; // e.g., #Onboarding, #Culture
-  
-  // NEW: Explore Algorithm Props
-  popularityScore?: number; // 0-100
+  coverQuote?: string; 
+  tags?: string[]; 
+  popularityScore?: number; 
   isNew?: boolean;
-
-  // TARGETING & PRIORITY
   assignmentType?: AssignmentType; 
   targetDepartments?: DepartmentType[]; 
   priority?: ContentPriority; 
-  
   steps: CourseStep[];
 }
 
-// --- HOTELGRAM FEED TYPES ---
-
 export interface FeedPost {
   id: string;
+  organizationId: string; // Tenant Scoped
   authorId: string;
   authorName: string;
   authorAvatar: string;
-  
-  // TARGETING
-  assignmentType?: AssignmentType; // NEW
-  targetDepartments: DepartmentType[]; // Who sees this?
-  priority?: ContentPriority; // NEW
-  
-  type: 'image' | 'video' | 'kudos'; // NEW: 'kudos' type
-  mediaUrl?: string; // Optional for kudos
+  assignmentType?: AssignmentType; 
+  targetDepartments: DepartmentType[]; 
+  priority?: ContentPriority; 
+  type: 'image' | 'video' | 'kudos'; 
+  mediaUrl?: string; 
   caption: string;
   likes: number;
   createdAt: number;
-  likedBy?: string[]; // Array of user IDs who liked
-  
-  // NEW: Kudos Data
+  likedBy?: string[]; 
   kudosData?: {
       recipientId: string;
       recipientName: string;
       recipientAvatar: string;
       badgeType: KudosType;
   };
-  
-  // NEW: Interactive Content
   interactions?: Interaction[];
-  scheduledFor?: number; // Timestamp for future publishing
+  scheduledFor?: number; 
 }
 
 export interface CareerPath {
   id: string;
+  organizationId: string; // Tenant Scoped
   title: string;
   description: string;
-  targetRole: string; // e.g. "Senior Housekeeper"
-  courseIds: string[]; // Ordered list of course IDs
+  targetRole: string; 
+  courseIds: string[]; 
   department: DepartmentType;
 }
 
@@ -171,26 +198,26 @@ export type TaskType = 'checklist' | 'photo';
 
 export interface Task {
   id: string;
+  organizationId: string; // Tenant Scoped
   department: DepartmentType;
   title: string;
   xpReward: number;
   type: TaskType;
-  icon?: string; // Icon name reference
+  icon?: string; 
 }
-
-// --- REPORTING MODULE TYPES ---
 
 export type IssueType = 'maintenance' | 'housekeeping' | 'security';
 export type IssueStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
 
 export interface Issue {
   id?: string;
+  organizationId: string; // Tenant Scoped
   userId: string;
-  userName: string; // Denormalized for easy display
+  userName: string; 
   department: DepartmentType;
   type: IssueType;
   location: string;
-  photoUrl?: string; // Base64 or Storage URL
+  photoUrl?: string; 
   status: IssueStatus;
-  createdAt: number; // Timestamp
+  createdAt: number; 
 }

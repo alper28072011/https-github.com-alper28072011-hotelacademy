@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -92,10 +91,10 @@ export const ContentStudio: React.FC = () => {
 
   // Load users when department changes in Kudos mode
   useEffect(() => {
-      if (activeTab === 'kudos') {
-          getUsersByDepartment(kudosDept).then(setDeptUsers);
+      if (activeTab === 'kudos' && currentUser && currentUser.currentOrganizationId) {
+          getUsersByDepartment(kudosDept, currentUser.currentOrganizationId).then(setDeptUsers);
       }
-  }, [kudosDept, activeTab]);
+  }, [kudosDept, activeTab, currentUser]);
 
   // Handlers
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,13 +178,14 @@ export const ContentStudio: React.FC = () => {
   };
 
   const handlePublish = async () => {
-      if (!file || !currentUser) return;
+      if (!file || !currentUser || !currentUser.currentOrganizationId) return;
       setIsPublishing(true);
 
       try {
           const url = await uploadFile(file, 'feed_posts');
           
           const newPost: Omit<FeedPost, 'id'> = {
+              organizationId: currentUser.currentOrganizationId,
               authorId: currentUser.id,
               authorName: currentUser.name,
               authorAvatar: currentUser.avatar,

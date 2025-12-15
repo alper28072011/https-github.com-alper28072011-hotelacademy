@@ -1,27 +1,29 @@
-
 import React, { useEffect, useState } from 'react';
 import { User, CareerPath, DepartmentType, Course } from '../../types';
 import { getUsersByDepartment, getCareerPaths, getCourses } from '../../services/db';
 import { Loader2, TrendingUp, AlertCircle, Award, Briefcase, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useOrganizationStore } from '../../stores/useOrganizationStore';
 
 export const TalentRadar: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [paths, setPaths] = useState<CareerPath[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const { currentOrganization } = useOrganizationStore();
 
   useEffect(() => {
     const init = async () => {
+        if (!currentOrganization) return;
         setLoading(true);
         // Fetch all data
         const depts: DepartmentType[] = ['housekeeping', 'kitchen', 'front_office', 'management'];
         let allUsers: User[] = [];
         for (const d of depts) {
-            const u = await getUsersByDepartment(d);
+            const u = await getUsersByDepartment(d, currentOrganization.id);
             allUsers = [...allUsers, ...u];
         }
-        const [p, c] = await Promise.all([getCareerPaths(), getCourses()]);
+        const [p, c] = await Promise.all([getCareerPaths(currentOrganization.id), getCourses(currentOrganization.id)]);
         
         setUsers(allUsers);
         setPaths(p);
@@ -29,7 +31,7 @@ export const TalentRadar: React.FC = () => {
         setLoading(false);
     };
     init();
-  }, []);
+  }, [currentOrganization]);
 
   if (loading) return <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
 

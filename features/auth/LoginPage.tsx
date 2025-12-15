@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Loader2, ShieldCheck, User as UserIcon, Building2, CheckCircle, AlertTriangle, Lock } from 'lucide-react';
+import { ArrowRight, Loader2, ShieldCheck, User as UserIcon, Building2, CheckCircle2, AlertTriangle, Lock } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { auth, RecaptchaVerifier } from '../../services/firebase';
 import { checkUserExists, registerUser, initiatePhoneAuth } from '../../services/authService';
@@ -210,7 +209,9 @@ export const LoginPage: React.FC = () => {
               xp: 0,
               completedCourses: [],
               badges: [],
-              pin: '1234' // Default pin
+              pin: '1234', // Default pin
+              currentOrganizationId: null,
+              organizationHistory: []
           });
 
           loginSuccess(newUser);
@@ -365,7 +366,7 @@ export const LoginPage: React.FC = () => {
                     >
                         <div className="text-center mb-2">
                             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 text-green-600">
-                                <CheckCircle className="w-8 h-8" />
+                                <CheckCircle2 className="w-8 h-8" />
                             </div>
                             <h2 className="text-xl font-bold text-gray-800">Hoş Geldin!</h2>
                             <p className="text-gray-500 text-sm">Hesabını tamamlayalım.</p>

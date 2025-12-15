@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -29,7 +28,7 @@ export const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
-        if (!currentUser) return;
+        if (!currentUser || !currentUser.currentOrganizationId) return;
         
         // --- SMART SORTING ALGORITHM FOR STORIES ---
         
@@ -75,7 +74,7 @@ export const DashboardPage: React.FC = () => {
         setStoryCourses(sortedCourses.slice(0, 15)); // Show up to 15 stories
 
         // --- LOAD FEED POSTS ---
-        const posts = await getFeedPosts(currentUser.department);
+        const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId);
         setFeedPosts(posts);
     };
 
@@ -85,9 +84,9 @@ export const DashboardPage: React.FC = () => {
   }, [currentUser, courses]);
 
   const handleRefresh = async () => {
-      if(!currentUser) return;
+      if(!currentUser || !currentUser.currentOrganizationId) return;
       setIsRefreshing(true);
-      const posts = await getFeedPosts(currentUser.department);
+      const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId);
       setFeedPosts(posts);
       setTimeout(() => setIsRefreshing(false), 500);
   };

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -16,7 +15,7 @@ export const JourneyMap: React.FC = () => {
 
   useEffect(() => {
     const loadJourney = async () => {
-        if (!currentUser) return;
+        if (!currentUser || !currentUser.currentOrganizationId) return;
         setLoading(true);
 
         let activePath: CareerPath | null = null;
@@ -28,7 +27,7 @@ export const JourneyMap: React.FC = () => {
 
         // 2. If no assigned path (or failed to fetch), auto-discover for department
         if (!activePath) {
-            activePath = await getCareerPathByDepartment(currentUser.department);
+            activePath = await getCareerPathByDepartment(currentUser.department, currentUser.currentOrganizationId);
         }
 
         if (activePath) {
