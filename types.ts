@@ -31,8 +31,16 @@ export interface User {
   role: UserRole; 
   pin: string; // Restored: Used for access control
   xp: number;
+  
+  // Profile & Career
+  bio?: string; // Short resume/motto
+  joinDate?: number; // Timestamp
+  instagramHandle?: string; // Optional social link
+  
+  // Progress
   completedCourses: string[];
   startedCourses?: string[]; 
+  savedCourses?: string[]; // "Watch Later" list
   completedTasks?: string[]; 
   badges?: Badge[]; 
   

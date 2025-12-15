@@ -54,6 +54,20 @@ export const getUsersByDepartment = async (dept: DepartmentType): Promise<User[]
 };
 
 /**
+ * Update general user profile information.
+ */
+export const updateUserProfile = async (userId: string, data: Partial<User>) => {
+    try {
+        const userRef = doc(db, 'users', userId);
+        await updateDoc(userRef, data);
+        return true;
+    } catch (e) {
+        console.error("Error updating profile", e);
+        return false;
+    }
+};
+
+/**
  * Fetches all available courses.
  */
 export const getCourses = async (): Promise<Course[]> => {
