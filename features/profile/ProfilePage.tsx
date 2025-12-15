@@ -2,10 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Star, Shield, Zap, Award } from 'lucide-react';
+import { Star, Shield, Zap, Award, Heart, Users } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useProfileStore } from '../../stores/useProfileStore';
 import { TopPerformers } from './components/TopPerformers';
+import { KudosType } from '../../types';
 
 export const ProfilePage: React.FC = () => {
   const { t } = useTranslation();
@@ -58,6 +59,14 @@ export const ProfilePage: React.FC = () => {
         return () => clearInterval(timer);
     }, [value]);
     return <span>{count}</span>;
+  };
+
+  // --- BADGE MAP ---
+  const badgeConfig: Record<KudosType, { icon: any, color: string, bg: string, label: string }> = {
+      'STAR_PERFORMER': { icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-100', label: 'Yıldız Performans' },
+      'TEAM_PLAYER': { icon: Users, color: 'text-blue-500', bg: 'bg-blue-100', label: 'Takım Oyuncusu' },
+      'GUEST_HERO': { icon: Heart, color: 'text-red-500', bg: 'bg-red-100', label: 'Misafir Kahramanı' },
+      'FAST_LEARNER': { icon: Zap, color: 'text-purple-500', bg: 'bg-purple-100', label: 'Hızlı Öğrenen' },
   };
 
   return (
@@ -126,34 +135,50 @@ export const ProfilePage: React.FC = () => {
          </div>
       </div>
 
-      {/* 3. BADGES SECTION */}
+      {/* 3. BADGES SECTION (DYNAMIC) */}
       <div>
-         <h3 className="font-bold text-primary text-lg mb-4 pl-2">{t('profile_badges')}</h3>
-         <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2 pl-2">
+         <h3 className="font-bold text-primary text-lg mb-4 pl-2 flex items-center gap-2">
+             {t('profile_badges')} 
+             <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{activeUser.badges?.length || 0}</span>
+         </h3>
+         
+         <div className="grid grid-cols-2 gap-3 pl-2">
             
-            {/* Badge 1: First Step (XP > 0) */}
-            <div className={`flex flex-col items-center gap-2 min-w-[80px] ${xp > 0 ? 'opacity-100' : 'opacity-40 grayscale'}`}>
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 border-2 border-blue-200 flex items-center justify-center shadow-sm">
-                    <Star className="w-8 h-8 text-blue-500 fill-blue-500" />
+            {/* Standard "System" Badges (Legacy) */}
+            <div className={`flex items-center gap-3 p-3 rounded-xl border ${xp > 0 ? 'bg-white border-blue-200' : 'bg-gray-50 border-gray-100 opacity-50'}`}>
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-500">
+                    <Star className="w-5 h-5 fill-current" />
                 </div>
-                <span className="text-[10px] font-bold text-center text-primary leading-tight max-w-[80px]">{t('badge_first_step')}</span>
+                <div>
+                    <div className="text-xs font-bold text-gray-800">{t('badge_first_step')}</div>
+                    <div className="text-[10px] text-gray-400">Otomatik</div>
+                </div>
             </div>
 
-             {/* Badge 2: Fast Learner (Completed > 0) */}
-             <div className={`flex flex-col items-center gap-2 min-w-[80px] ${(activeUser.completedCourses?.length || 0) > 0 ? 'opacity-100' : 'opacity-40 grayscale'}`}>
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-100 to-purple-50 border-2 border-purple-200 flex items-center justify-center shadow-sm">
-                    <Zap className="w-8 h-8 text-purple-500 fill-purple-500" />
-                </div>
-                <span className="text-[10px] font-bold text-center text-primary leading-tight max-w-[80px]">{t('badge_fast_learner')}</span>
-            </div>
+            {/* DYNAMIC KUDOS BADGES */}
+            {activeUser.badges?.map((badge, idx) => {
+                const config = badgeConfig[badge.type];
+                if (!config) return null;
+                const BIcon = config.icon;
 
-            {/* Badge 3: Expert (Level >= 3) */}
-            <div className={`flex flex-col items-center gap-2 min-w-[80px] ${level >= 3 ? 'opacity-100' : 'opacity-40 grayscale'}`}>
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-100 to-amber-50 border-2 border-amber-200 flex items-center justify-center shadow-sm">
-                    <Shield className="w-8 h-8 text-amber-500 fill-amber-500" />
+                return (
+                    <div key={idx} className={`flex items-center gap-3 p-3 rounded-xl border bg-white border-${config.color.split('-')[1]}-200 relative overflow-hidden group`}>
+                        <div className={`w-10 h-10 rounded-full ${config.bg} flex items-center justify-center ${config.color}`}>
+                            <BIcon className="w-5 h-5 fill-current" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-xs font-bold text-gray-800 truncate">{config.label}</div>
+                            <div className="text-[10px] text-gray-400">x{badge.count} Kez</div>
+                        </div>
+                    </div>
+                );
+            })}
+
+            {(!activeUser.badges || activeUser.badges.length === 0) && (
+                <div className="col-span-2 text-center py-6 text-gray-400 text-sm italic border-2 border-dashed border-gray-100 rounded-xl">
+                    Henüz özel bir rozet kazanılmadı.
                 </div>
-                <span className="text-[10px] font-bold text-center text-primary leading-tight max-w-[80px]">{t('badge_expert')}</span>
-            </div>
+            )}
 
          </div>
       </div>

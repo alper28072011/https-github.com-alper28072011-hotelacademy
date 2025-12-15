@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, MoreHorizontal } from 'lucide-react';
-import { FeedPost } from '../../../types';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Star, Users, Zap } from 'lucide-react';
+import { FeedPost, KudosType } from '../../../types';
 import { togglePostLike } from '../../../services/db';
 import { useAuthStore } from '../../../stores/useAuthStore';
 
@@ -39,6 +39,98 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
       return new Date(timestamp).toLocaleDateString();
   };
 
+  // --- KUDOS RENDER LOGIC ---
+  if (post.type === 'kudos' && post.kudosData) {
+      const badgeConfig: Record<KudosType, { icon: any, gradient: string, label: string }> = {
+          'STAR_PERFORMER': { icon: Star, gradient: 'from-yellow-400 to-orange-500', label: 'Yıldız Performans' },
+          'TEAM_PLAYER': { icon: Users, gradient: 'from-blue-400 to-indigo-500', label: 'Takım Oyuncusu' },
+          'GUEST_HERO': { icon: Heart, gradient: 'from-red-400 to-pink-500', label: 'Misafir Kahramanı' },
+          'FAST_LEARNER': { icon: Zap, gradient: 'from-purple-400 to-violet-500', label: 'Hızlı Öğrenen' },
+      };
+      
+      const config = badgeConfig[post.kudosData.badgeType];
+      const BadgeIcon = config.icon;
+
+      return (
+          <div className="bg-white border-b border-gray-100 md:rounded-3xl md:border md:shadow-sm md:mb-6 overflow-hidden relative">
+              {/* Animated Background Mesh */}
+              <div className={`absolute inset-0 bg-gradient-to-br ${config.gradient} opacity-5`} />
+              
+              {/* Header */}
+              <div className="flex items-center justify-between p-3 md:p-4 relative z-10">
+                  <div className="flex items-center gap-2">
+                      <div className="bg-gradient-to-r from-accent to-accent-light text-primary text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                          <Star className="w-3 h-3 fill-primary" /> Takdir
+                      </div>
+                  </div>
+                  <div className="text-[10px] text-gray-400">{formatTime(post.createdAt)}</div>
+              </div>
+
+              {/* Kudos Content */}
+              <div className="px-4 pb-6 pt-2 text-center relative z-10" onDoubleClick={handleLike}>
+                  
+                  {/* Badge Animation */}
+                  <div className="relative w-32 h-32 mx-auto mb-6">
+                      <motion.div 
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                        className="absolute inset-0 rounded-full border-2 border-dashed border-gray-300 opacity-50"
+                      />
+                      <motion.div 
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        whileInView={{ scale: 1, opacity: 1 }}
+                        className={`w-full h-full rounded-full bg-gradient-to-br ${config.gradient} flex items-center justify-center shadow-2xl shadow-gray-200`}
+                      >
+                          <BadgeIcon className="w-16 h-16 text-white fill-white/20 drop-shadow-md" />
+                      </motion.div>
+                      {/* Floating Particles */}
+                      <motion.div 
+                         animate={{ y: [0, -10, 0] }}
+                         transition={{ duration: 2, repeat: Infinity }}
+                         className="absolute -top-2 -right-2 text-2xl"
+                      >✨</motion.div>
+                  </div>
+
+                  <h2 className="text-xl font-bold text-gray-800 mb-1">{config.label}</h2>
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-6">
+                      <span className="font-bold">{post.authorName}</span>
+                      <span className="text-gray-400">➔</span>
+                      <span className="font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded">{post.kudosData.recipientName}</span>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-2xl text-sm italic text-gray-600 border border-gray-100 relative mx-4">
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-gray-50 border-t border-l border-gray-100 transform rotate-45" />
+                      "{post.caption}"
+                  </div>
+              </div>
+
+              {/* Action Bar */}
+              <div className="p-3 md:p-4 flex items-center justify-between border-t border-gray-50 bg-white/50 relative z-10">
+                  <div className="flex items-center gap-4">
+                      <button onClick={handleLike} className="flex items-center gap-1 active:scale-95 transition-transform">
+                          <Heart className={`w-6 h-6 ${liked ? 'text-red-500 fill-red-500' : 'text-gray-400'}`} />
+                          {likeCount > 0 && <span className="text-sm font-bold text-gray-600">{likeCount}</span>}
+                      </button>
+                  </div>
+                  <div className="text-xs font-bold text-accent">+250 XP Awarded</div>
+              </div>
+              
+              {/* Like Animation */}
+              {isLikeAnimating && liked && (
+                <motion.div 
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1.5, opacity: 1 }}
+                    onAnimationComplete={() => setIsLikeAnimating(false)}
+                    className="absolute inset-0 flex items-center justify-center pointer-events-none z-50"
+                >
+                    <Heart className="w-32 h-32 text-red-500 fill-red-500 drop-shadow-2xl" />
+                </motion.div>
+            )}
+          </div>
+      );
+  }
+
+  // --- STANDARD POST RENDER ---
   return (
     <div className="bg-white border-b border-gray-100 md:rounded-3xl md:border md:shadow-sm md:mb-6 overflow-hidden">
         {/* Header */}

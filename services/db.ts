@@ -13,10 +13,11 @@ import {
   addDoc, 
   onSnapshot, 
   orderBy, 
-  limit 
+  limit,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost } from '../types';
+import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -80,6 +81,98 @@ export const createPost = async (post: Omit<FeedPost, 'id'>) => {
 };
 
 /**
+ * Sends Kudos to a user.
+ * 1. Creates a FeedPost.
+ * 2. Updates the Recipient's XP (+250) and Badges array atomically.
+ */
+export const sendKudos = async (
+    sender: User,
+    recipientId: string,
+    recipientName: string,
+    recipientAvatar: string,
+    badgeType: KudosType,
+    message: string
+): Promise<boolean> => {
+    try {
+        const xpReward = 250;
+
+        await runTransaction(db, async (transaction) => {
+            // 1. Get Recipient User Ref
+            const recipientRef = doc(db, 'users', recipientId);
+            const recipientDoc = await transaction.get(recipientRef);
+            
+            if (!recipientDoc.exists()) {
+                throw new Error("Recipient user does not exist!");
+            }
+
+            const recipientData = recipientDoc.data() as User;
+            const currentBadges = recipientData.badges || [];
+            
+            // 2. Update Badges Logic
+            const badgeIndex = currentBadges.findIndex(b => b.type === badgeType);
+            let newBadges = [...currentBadges];
+            
+            if (badgeIndex > -1) {
+                // Increment count
+                newBadges[badgeIndex] = {
+                    ...newBadges[badgeIndex],
+                    count: newBadges[badgeIndex].count + 1,
+                    lastReceivedAt: Date.now()
+                };
+            } else {
+                // Add new badge
+                newBadges.push({
+                    type: badgeType,
+                    count: 1,
+                    lastReceivedAt: Date.now()
+                });
+            }
+
+            // 3. Update User Doc
+            transaction.update(recipientRef, {
+                xp: increment(xpReward),
+                badges: newBadges
+            });
+
+            // 4. Create Feed Post (Note: Transaction mainly for user data consistency, 
+            // but we can create the post reference here too, though addDoc is cleaner outside.
+            // For simplicity in this demo, we'll do the post creation after transaction or separate, 
+            // but strictly atomic would mean creating a doc ref and setting it in transaction.)
+            
+            const newPostRef = doc(collection(db, 'posts'));
+            const newPost: Omit<FeedPost, 'id'> = {
+                authorId: sender.id,
+                authorName: sender.name,
+                authorAvatar: sender.avatar,
+                assignmentType: 'GLOBAL', // Kudos are public celebrations!
+                targetDepartments: ['housekeeping', 'kitchen', 'front_office', 'management'],
+                priority: 'NORMAL',
+                type: 'kudos',
+                caption: message,
+                likes: 0,
+                createdAt: Date.now(),
+                likedBy: [],
+                kudosData: {
+                    recipientId,
+                    recipientName,
+                    recipientAvatar,
+                    badgeType
+                }
+            };
+            
+            transaction.set(newPostRef, newPost);
+        });
+
+        console.log(`Kudos sent from ${sender.name} to ${recipientName}`);
+        return true;
+
+    } catch (e) {
+        console.error("Error sending kudos:", e);
+        return false;
+    }
+};
+
+/**
  * Alias for createPost to support legacy calls if any, or specific interactive logic
  */
 export const createInteractivePost = async (post: Omit<FeedPost, 'id'>) => {
@@ -88,18 +181,20 @@ export const createInteractivePost = async (post: Omit<FeedPost, 'id'>) => {
 
 export const getFeedPosts = async (userDept: DepartmentType): Promise<FeedPost[]> => {
     try {
-        // TEMPORARY FIX: Avoid "Missing Index" error by removing orderBy('createdAt') from Firestore query.
-        // We fetch posts for the department and sort them client-side.
-        // To re-enable server-side sorting, create a composite index in Firebase Console: 
-        // Collection: posts, Fields: targetDepartments (Arrays), createdAt (Descending)
+        // Fetch posts for department OR global
+        // Simple implementation: Client side filtering for demo if composite indexes missing
+        // In prod: array-contains-any ['GLOBAL', userDept]
         
         const q = query(
             postsRef, 
-            where('targetDepartments', 'array-contains', userDept)
+            // We fetch slightly more to filter client side for better 'mixed' results in this demo structure
+            limit(50) 
         );
         
         const snapshot = await getDocs(q);
-        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
+        const posts = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as FeedPost))
+            .filter(p => p.assignmentType === 'GLOBAL' || p.targetDepartments?.includes(userDept));
         
         // Client-side sort: Newest first
         return posts.sort((a,b) => b.createdAt - a.createdAt);

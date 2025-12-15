@@ -12,6 +12,15 @@ export interface Language {
 export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management';
 export type UserRole = 'staff' | 'manager' | 'admin';
 
+// --- KUDOS / GAMIFICATION TYPES ---
+export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
+
+export interface Badge {
+    type: KudosType;
+    count: number;
+    lastReceivedAt: number;
+}
+
 export interface User {
   id: string;
   email?: string; // Added for Admin/Manager Login
@@ -24,6 +33,7 @@ export interface User {
   completedCourses: string[];
   startedCourses?: string[]; // NEW: Tracks courses that have been opened/started
   completedTasks?: string[]; // IDs of daily operational tasks completed
+  badges?: Badge[]; // NEW: Array of earned badges
   
   // Career Module
   assignedPathId?: string; // ID of the CareerPath assigned to this user
@@ -70,6 +80,8 @@ export interface CourseStep {
 export interface Category {
   id: string;
   title: string;
+  icon?: string; // Lucide icon name reference
+  color?: string; // Tailwind color class e.g. "bg-blue-500"
 }
 
 // --- NEW TARGETING TYPES ---
@@ -91,6 +103,10 @@ export interface Course {
   coverQuote?: string; // Inspirational quote for the intro page
   tags?: string[]; // e.g., #Onboarding, #Culture
   
+  // NEW: Explore Algorithm Props
+  popularityScore?: number; // 0-100
+  isNew?: boolean;
+
   // TARGETING & PRIORITY
   assignmentType?: AssignmentType; 
   targetDepartments?: DepartmentType[]; 
@@ -112,12 +128,20 @@ export interface FeedPost {
   targetDepartments: DepartmentType[]; // Who sees this?
   priority?: ContentPriority; // NEW
   
-  type: 'image' | 'video';
-  mediaUrl: string;
+  type: 'image' | 'video' | 'kudos'; // NEW: 'kudos' type
+  mediaUrl?: string; // Optional for kudos
   caption: string;
   likes: number;
   createdAt: number;
   likedBy?: string[]; // Array of user IDs who liked
+  
+  // NEW: Kudos Data
+  kudosData?: {
+      recipientId: string;
+      recipientName: string;
+      recipientAvatar: string;
+      badgeType: KudosType;
+  };
   
   // NEW: Interactive Content
   interactions?: Interaction[];

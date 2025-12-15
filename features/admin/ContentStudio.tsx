@@ -1,15 +1,15 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Upload, Image as ImageIcon, CheckCircle2, Loader2, Sparkles, 
     Smartphone, Send, Plus, Trash2, Link as LinkIcon, HelpCircle, 
     BarChart2, Zap, MoreHorizontal, Heart, MessageCircle, Share2,
-    Users, Globe, AlertCircle, Clock
+    Users, Globe, AlertCircle, Clock, Award, Star, Shield, Trophy
 } from 'lucide-react';
-import { DepartmentType, FeedPost, Interaction, InteractionType, AssignmentType, ContentPriority } from '../../types';
+import { DepartmentType, FeedPost, Interaction, InteractionType, AssignmentType, ContentPriority, KudosType, User } from '../../types';
 import { uploadFile } from '../../services/storage';
-import { createInteractivePost } from '../../services/db';
+import { createInteractivePost, getUsersByDepartment, sendKudos } from '../../services/db';
 import { useAuthStore } from '../../stores/useAuthStore';
 
 // --- STICKER CONFIGURATION COMPONENTS ---
@@ -65,7 +65,9 @@ export const ContentStudio: React.FC = () => {
   const { currentUser } = useAuthStore();
   
   // State
-  const [activeTab, setActiveTab] = useState<'feed' | 'story'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'story' | 'kudos'>('feed');
+  
+  // Feed/Story State
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
@@ -77,10 +79,23 @@ export const ContentStudio: React.FC = () => {
   const [targetDepts, setTargetDepts] = useState<DepartmentType[]>(['housekeeping']);
   const [priority, setPriority] = useState<ContentPriority>('NORMAL');
   
+  // Kudos State
+  const [kudosDept, setKudosDept] = useState<DepartmentType>('housekeeping');
+  const [deptUsers, setDeptUsers] = useState<User[]>([]);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedBadge, setSelectedBadge] = useState<KudosType>('STAR_PERFORMER');
+  
   // UI State
   const [isPublishing, setIsPublishing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [activeInteractionId, setActiveInteractionId] = useState<string | null>(null);
+
+  // Load users when department changes in Kudos mode
+  useEffect(() => {
+      if (activeTab === 'kudos') {
+          getUsersByDepartment(kudosDept).then(setDeptUsers);
+      }
+  }, [kudosDept, activeTab]);
 
   // Handlers
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,8 +146,36 @@ export const ContentStudio: React.FC = () => {
   };
 
   const initiatePublish = () => {
-      if (!file) return;
-      setShowWizard(true);
+      if (activeTab === 'kudos') {
+          handlePublishKudos();
+      } else {
+          if (!file) return;
+          setShowWizard(true);
+      }
+  };
+
+  const handlePublishKudos = async () => {
+      if (!selectedUser || !currentUser) return;
+      setIsPublishing(true);
+      
+      const success = await sendKudos(
+          currentUser,
+          selectedUser.id,
+          selectedUser.name,
+          selectedUser.avatar,
+          selectedBadge,
+          caption || `Tebrikler ${selectedUser.name}! Harika iş çıkardın.`
+      );
+
+      if (success) {
+          setIsSuccess(true);
+          setTimeout(() => {
+              setIsSuccess(false);
+              setCaption('');
+              setSelectedUser(null);
+          }, 2000);
+      }
+      setIsPublishing(false);
   };
 
   const handlePublish = async () => {
@@ -184,6 +227,14 @@ export const ContentStudio: React.FC = () => {
       }
   };
 
+  // --- BADGE CONFIG ---
+  const badges = [
+      { id: 'STAR_PERFORMER', icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-100', label: 'Yıldız Performans' },
+      { id: 'TEAM_PLAYER', icon: Users, color: 'text-blue-500', bg: 'bg-blue-100', label: 'Takım Oyuncusu' },
+      { id: 'GUEST_HERO', icon: Heart, color: 'text-red-500', bg: 'bg-red-100', label: 'Misafir Kahramanı' },
+      { id: 'FAST_LEARNER', icon: Zap, color: 'text-purple-500', bg: 'bg-purple-100', label: 'Hızlı Öğrenen' },
+  ];
+
   // --- RENDER HELPERS ---
   const activeInteraction = interactions.find(i => i.id === activeInteractionId);
 
@@ -218,134 +269,200 @@ export const ContentStudio: React.FC = () => {
                     onClick={() => setActiveTab('feed')}
                     className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'feed' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                    Haber Akışı (Feed)
+                    Haber Akışı
                 </button>
                 <button 
-                    onClick={() => setActiveTab('story')}
-                    disabled 
-                    className="px-6 py-2 rounded-lg text-sm font-bold text-gray-400 cursor-not-allowed flex items-center gap-2"
+                    onClick={() => setActiveTab('kudos')}
+                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'kudos' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                    Hikaye (Yakında) <Sparkles className="w-3 h-3" />
+                    <Award className="w-4 h-4" /> Takdir (Kudos)
+                </button>
+                <button disabled className="px-6 py-2 rounded-lg text-sm font-bold text-gray-400 cursor-not-allowed">
+                    Hikaye
                 </button>
             </div>
 
-            {/* Upload Area */}
-            {!previewUrl ? (
-                <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:bg-gray-50 transition-colors group">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                            <Upload className="w-6 h-6" />
+            {/* KUDOS MODE EDITOR */}
+            {activeTab === 'kudos' ? (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                    {/* Step 1: Select Person */}
+                    <div className="bg-white p-4 rounded-2xl border border-gray-200">
+                        <h3 className="font-bold text-gray-800 mb-3 text-sm">1. Kimi Takdir Ediyorsun?</h3>
+                        
+                        {/* Dept Selector */}
+                        <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
+                            {['housekeeping', 'kitchen', 'front_office', 'management'].map(d => (
+                                <button
+                                    key={d}
+                                    onClick={() => setKudosDept(d as any)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${kudosDept === d ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'}`}
+                                >
+                                    {d.replace('_', ' ').toUpperCase()}
+                                </button>
+                            ))}
                         </div>
-                        <p className="mb-1 text-sm text-gray-500 font-medium">Medyayı buraya sürükle veya seç</p>
-                        <p className="text-xs text-gray-400">MP4, JPG, PNG (Max 50MB)</p>
+
+                        {/* User List */}
+                        <div className="flex gap-4 overflow-x-auto pb-2 snap-x">
+                            {deptUsers.map(user => (
+                                <div 
+                                    key={user.id} 
+                                    onClick={() => setSelectedUser(user)}
+                                    className={`flex flex-col items-center gap-2 min-w-[80px] cursor-pointer group snap-start p-2 rounded-xl transition-all ${selectedUser?.id === user.id ? 'bg-accent/20 ring-2 ring-accent' : 'hover:bg-gray-50'}`}
+                                >
+                                    <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden border border-gray-300">
+                                        {user.avatar.length > 4 ? <img src={user.avatar} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center font-bold text-gray-500">{user.avatar}</div>}
+                                    </div>
+                                    <span className="text-xs font-medium text-center truncate w-full">{user.name.split(' ')[0]}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileSelect} />
-                </label>
-            ) : (
-                <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
-                    <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                         {file?.type.startsWith('video') ? (
-                             <video src={previewUrl} className="w-full h-full object-cover" />
-                         ) : (
-                             <img src={previewUrl} className="w-full h-full object-cover" alt="preview" />
-                         )}
+
+                    {/* Step 2: Select Badge */}
+                    <div className="bg-white p-4 rounded-2xl border border-gray-200">
+                        <h3 className="font-bold text-gray-800 mb-3 text-sm">2. Hangi Rozeti Veriyorsun?</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                            {badges.map(badge => (
+                                <button
+                                    key={badge.id}
+                                    onClick={() => setSelectedBadge(badge.id as any)}
+                                    className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
+                                        selectedBadge === badge.id 
+                                        ? `border-${badge.color.split('-')[1]}-500 bg-${badge.color.split('-')[1]}-50` 
+                                        : 'border-gray-100 hover:border-gray-300'
+                                    }`}
+                                >
+                                    <div className={`p-2 rounded-full ${badge.bg} ${badge.color}`}>
+                                        <badge.icon className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-xs font-bold text-gray-700">{badge.label}</span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-800 truncate">{file?.name}</p>
-                        <p className="text-xs text-gray-500">Hazır</p>
-                    </div>
-                    <button onClick={() => { setFile(null); setPreviewUrl(null); }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
-                        <Trash2 className="w-5 h-5" />
-                    </button>
                 </div>
+            ) : (
+                /* FEED MODE EDITOR (Existing) */
+                <>
+                    {/* Upload Area */}
+                    {!previewUrl ? (
+                        <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-2xl cursor-pointer hover:bg-gray-50 transition-colors group">
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                                    <Upload className="w-6 h-6" />
+                                </div>
+                                <p className="mb-1 text-sm text-gray-500 font-medium">Medyayı buraya sürükle veya seç</p>
+                                <p className="text-xs text-gray-400">MP4, JPG, PNG (Max 50MB)</p>
+                            </div>
+                            <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileSelect} />
+                        </label>
+                    ) : (
+                        <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                            <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                                {file?.type.startsWith('video') ? (
+                                    <video src={previewUrl} className="w-full h-full object-cover" />
+                                ) : (
+                                    <img src={previewUrl} className="w-full h-full object-cover" alt="preview" />
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-gray-800 truncate">{file?.name}</p>
+                                <p className="text-xs text-gray-500">Hazır</p>
+                            </div>
+                            <button onClick={() => { setFile(null); setPreviewUrl(null); }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                                <Trash2 className="w-5 h-5" />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Sticker Tray */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <label className="text-xs font-bold text-gray-500 uppercase">Etkileşim Ekle</label>
+                            <span className="text-[10px] bg-accent/20 text-accent-dark px-2 py-0.5 rounded-full font-bold">Yeni</span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-3">
+                            <button onClick={() => addInteraction('POLL')} className="flex flex-col items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-md transition-all group">
+                                <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <BarChart2 className="w-5 h-5" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-600">Anket</span>
+                            </button>
+                            
+                            <button onClick={() => addInteraction('XP_BOOST')} className="flex flex-col items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl hover:border-yellow-400 hover:shadow-md transition-all group">
+                                <div className="w-10 h-10 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <Zap className="w-5 h-5" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-600">XP Ödül</span>
+                            </button>
+
+                            <button disabled className="flex flex-col items-center gap-2 p-3 bg-gray-50 border border-gray-100 rounded-xl opacity-50 cursor-not-allowed">
+                                <div className="w-10 h-10 bg-gray-200 text-gray-400 rounded-full flex items-center justify-center">
+                                    <HelpCircle className="w-5 h-5" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-400">Test</span>
+                            </button>
+
+                            <button disabled className="flex flex-col items-center gap-2 p-3 bg-gray-50 border border-gray-100 rounded-xl opacity-50 cursor-not-allowed">
+                                <div className="w-10 h-10 bg-gray-200 text-gray-400 rounded-full flex items-center justify-center">
+                                    <LinkIcon className="w-5 h-5" />
+                                </div>
+                                <span className="text-xs font-medium text-gray-400">Link</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Active Interaction Config */}
+                    {activeInteraction && (
+                        <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="border-t border-gray-100 pt-4"
+                        >
+                            <div className="flex justify-between items-center mb-3">
+                                <h3 className="font-bold text-gray-800 text-sm">
+                                    {activeInteraction.type === 'POLL' ? 'Anket Ayarları' : 'XP Ayarları'}
+                                </h3>
+                                <button onClick={() => removeInteraction(activeInteraction.id)} className="text-red-500 text-xs hover:underline">Kaldır</button>
+                            </div>
+
+                            {activeInteraction.type === 'POLL' && (
+                                <PollConfig 
+                                    data={activeInteraction.data} 
+                                    onChange={(d) => updateInteractionData(activeInteraction.id, d)} 
+                                />
+                            )}
+                            {activeInteraction.type === 'XP_BOOST' && (
+                                <XpConfig 
+                                    data={activeInteraction.data} 
+                                    onChange={(d) => updateInteractionData(activeInteraction.id, d)} 
+                                />
+                            )}
+                        </motion.div>
+                    )}
+                </>
             )}
 
-            {/* Caption */}
-            <div>
-                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Açıklama</label>
+            {/* Caption & Publish Button (Common) */}
+            <div className="mt-auto border-t border-gray-100 pt-4">
+                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">
+                    {activeTab === 'kudos' ? 'Takdir Notun' : 'Açıklama'}
+                </label>
                 <textarea 
                     value={caption}
                     onChange={(e) => setCaption(e.target.value)}
-                    className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 focus:border-primary focus:ring-0 outline-none resize-none h-24 text-sm"
-                    placeholder="Ekibe ne söylemek istersin?"
+                    className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 focus:border-primary focus:ring-0 outline-none resize-none h-24 text-sm mb-4"
+                    placeholder={activeTab === 'kudos' ? "Tebrikler, harika iş çıkardın!" : "Ekibe ne söylemek istersin?"}
                 />
-            </div>
 
-            {/* Sticker Tray */}
-            <div>
-                <div className="flex items-center justify-between mb-3">
-                    <label className="text-xs font-bold text-gray-500 uppercase">Etkileşim Ekle</label>
-                    <span className="text-[10px] bg-accent/20 text-accent-dark px-2 py-0.5 rounded-full font-bold">Yeni</span>
-                </div>
-                <div className="grid grid-cols-4 gap-3">
-                    <button onClick={() => addInteraction('POLL')} className="flex flex-col items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl hover:border-blue-400 hover:shadow-md transition-all group">
-                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <BarChart2 className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-600">Anket</span>
-                    </button>
-                    
-                    <button onClick={() => addInteraction('XP_BOOST')} className="flex flex-col items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl hover:border-yellow-400 hover:shadow-md transition-all group">
-                        <div className="w-10 h-10 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Zap className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-600">XP Ödül</span>
-                    </button>
-
-                    <button disabled className="flex flex-col items-center gap-2 p-3 bg-gray-50 border border-gray-100 rounded-xl opacity-50 cursor-not-allowed">
-                        <div className="w-10 h-10 bg-gray-200 text-gray-400 rounded-full flex items-center justify-center">
-                            <HelpCircle className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-400">Test</span>
-                    </button>
-
-                    <button disabled className="flex flex-col items-center gap-2 p-3 bg-gray-50 border border-gray-100 rounded-xl opacity-50 cursor-not-allowed">
-                        <div className="w-10 h-10 bg-gray-200 text-gray-400 rounded-full flex items-center justify-center">
-                            <LinkIcon className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-400">Link</span>
-                    </button>
-                </div>
-            </div>
-
-            {/* Active Interaction Config */}
-            {activeInteraction && (
-                <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="border-t border-gray-100 pt-4"
-                >
-                    <div className="flex justify-between items-center mb-3">
-                        <h3 className="font-bold text-gray-800 text-sm">
-                            {activeInteraction.type === 'POLL' ? 'Anket Ayarları' : 'XP Ayarları'}
-                        </h3>
-                        <button onClick={() => removeInteraction(activeInteraction.id)} className="text-red-500 text-xs hover:underline">Kaldır</button>
-                    </div>
-
-                    {activeInteraction.type === 'POLL' && (
-                        <PollConfig 
-                            data={activeInteraction.data} 
-                            onChange={(d) => updateInteractionData(activeInteraction.id, d)} 
-                        />
-                    )}
-                    {activeInteraction.type === 'XP_BOOST' && (
-                        <XpConfig 
-                            data={activeInteraction.data} 
-                            onChange={(d) => updateInteractionData(activeInteraction.id, d)} 
-                        />
-                    )}
-                </motion.div>
-            )}
-
-            {/* Publishing Button */}
-            <div className="mt-auto pt-4 border-t border-gray-100">
                 <button 
                     onClick={initiatePublish}
-                    disabled={!file}
+                    disabled={activeTab === 'feed' && !file || activeTab === 'kudos' && !selectedUser || isPublishing}
                     className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 transition-all active:scale-[0.98]"
                 >
-                    <Send className="w-5 h-5" />
-                    Devam Et
+                    {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                    {activeTab === 'kudos' ? 'Takdir Gönder & Yayınla' : 'Devam Et'}
                 </button>
             </div>
         </div>
@@ -370,93 +487,141 @@ export const ContentStudio: React.FC = () => {
 
                  {/* APP UI PREVIEW */}
                  <div className="flex-1 overflow-y-auto no-scrollbar bg-white">
-                     {/* Preview: Feed Post Style */}
-                     <div className="pb-4">
-                         {/* Header */}
-                         <div className="flex items-center justify-between p-3">
-                             <div className="flex items-center gap-2">
-                                 <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-primary text-xs border border-gray-300 overflow-hidden">
-                                     {currentUser?.avatar && currentUser.avatar.length > 4 ? (
-                                         <img src={currentUser.avatar} alt="Me" className="w-full h-full object-cover" />
-                                     ) : (
-                                        currentUser?.avatar || 'ME'
-                                     )}
-                                 </div>
-                                 <div>
-                                     <div className="text-xs font-bold text-gray-900">{currentUser?.name || 'Sen'}</div>
-                                     <div className="text-[10px] text-gray-500">Az önce</div>
-                                 </div>
-                             </div>
-                             <MoreHorizontal className="w-4 h-4 text-gray-400" />
-                         </div>
+                     {/* KUDOS PREVIEW */}
+                     {activeTab === 'kudos' ? (
+                         <div className="p-4 flex flex-col items-center justify-center h-full text-center">
+                             {selectedUser ? (
+                                 <motion.div 
+                                    key={selectedBadge}
+                                    initial={{ scale: 0.8, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    className="w-full bg-gradient-to-br from-primary via-primary-light to-primary-dark rounded-3xl p-6 text-white shadow-xl relative overflow-hidden"
+                                 >
+                                     {/* Confetti / Pattern */}
+                                     <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/confetti.png')]"></div>
+                                     
+                                     {/* Badge Icon */}
+                                     <div className="w-24 h-24 mx-auto mb-4 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg border border-white/30">
+                                         {(() => {
+                                             const B = badges.find(b => b.id === selectedBadge)?.icon || Star;
+                                             return <B className="w-12 h-12 text-accent fill-accent" />;
+                                         })()}
+                                     </div>
 
-                         {/* MEDIA AREA - THIS IS THE WYSIWYG CANVAS */}
-                         <div className="relative w-full bg-gray-100 aspect-[4/5] flex items-center justify-center overflow-hidden">
-                             {previewUrl ? (
-                                 file?.type.startsWith('video') ? (
-                                     <video src={previewUrl} className="w-full h-full object-cover" muted loop autoPlay />
-                                 ) : (
-                                     <img src={previewUrl} className="w-full h-full object-cover" alt="Preview" />
-                                 )
+                                     <h3 className="text-xl font-bold mb-1 text-accent">
+                                         {badges.find(b => b.id === selectedBadge)?.label}
+                                     </h3>
+                                     <p className="text-xs text-white/70 mb-6">Tarafından Ödüllendirildi: {currentUser?.name}</p>
+
+                                     {/* User Info */}
+                                     <div className="flex items-center gap-3 bg-white/10 p-3 rounded-xl backdrop-blur-sm border border-white/10">
+                                         <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden shrink-0 border border-white/50">
+                                             {selectedUser.avatar.length > 4 ? <img src={selectedUser.avatar} className="w-full h-full object-cover" /> : selectedUser.avatar}
+                                         </div>
+                                         <div className="text-left">
+                                             <div className="font-bold text-sm">{selectedUser.name}</div>
+                                             <div className="text-xs opacity-70">+{250} XP Kazandı</div>
+                                         </div>
+                                     </div>
+                                     
+                                     {caption && <div className="mt-4 text-sm font-medium italic">"{caption}"</div>}
+
+                                 </motion.div>
                              ) : (
                                  <div className="text-gray-400 flex flex-col items-center">
-                                     <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                                     <span className="text-xs">Medya Önizleme</span>
+                                     <Award className="w-12 h-12 mb-2 opacity-50" />
+                                     <p>Önizleme için personel seçin.</p>
                                  </div>
                              )}
+                         </div>
+                     ) : (
+                         /* FEED PREVIEW */
+                         <div className="pb-4">
+                             {/* Header */}
+                             <div className="flex items-center justify-between p-3">
+                                 <div className="flex items-center gap-2">
+                                     <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-primary text-xs border border-gray-300 overflow-hidden">
+                                         {currentUser?.avatar && currentUser.avatar.length > 4 ? (
+                                             <img src={currentUser.avatar} alt="Me" className="w-full h-full object-cover" />
+                                         ) : (
+                                            currentUser?.avatar || 'ME'
+                                         )}
+                                     </div>
+                                     <div>
+                                         <div className="text-xs font-bold text-gray-900">{currentUser?.name || 'Sen'}</div>
+                                         <div className="text-[10px] text-gray-500">Az önce</div>
+                                     </div>
+                                 </div>
+                                 <MoreHorizontal className="w-4 h-4 text-gray-400" />
+                             </div>
 
-                             {/* --- INTERACTION LAYER --- */}
-                             {/* This renders the stickers ON TOP of the image */}
-                             <div className="absolute inset-0 p-8 flex items-center justify-center pointer-events-none">
-                                 {interactions.map(interaction => (
-                                     <motion.div 
-                                        key={interaction.id}
-                                        initial={{ scale: 0.8, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        className="pointer-events-auto"
-                                     >
-                                         {interaction.type === 'POLL' && (
-                                             <div className="bg-white rounded-xl shadow-xl p-4 w-64 text-center">
-                                                 <h4 className="font-bold text-gray-800 mb-3 text-sm leading-tight">
-                                                     {interaction.data.question || "Soru..."}
-                                                 </h4>
-                                                 <div className="flex gap-2">
-                                                     <button className="flex-1 bg-gray-100 py-2 rounded-lg text-xs font-bold text-gray-600">
-                                                         {interaction.data.options?.[0] || 'Evet'}
-                                                     </button>
-                                                     <button className="flex-1 bg-gray-100 py-2 rounded-lg text-xs font-bold text-gray-600">
-                                                         {interaction.data.options?.[1] || 'Hayır'}
-                                                     </button>
+                             {/* MEDIA AREA */}
+                             <div className="relative w-full bg-gray-100 aspect-[4/5] flex items-center justify-center overflow-hidden">
+                                 {previewUrl ? (
+                                     file?.type.startsWith('video') ? (
+                                         <video src={previewUrl} className="w-full h-full object-cover" muted loop autoPlay />
+                                     ) : (
+                                         <img src={previewUrl} className="w-full h-full object-cover" alt="Preview" />
+                                     )
+                                 ) : (
+                                     <div className="text-gray-400 flex flex-col items-center">
+                                         <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
+                                         <span className="text-xs">Medya Önizleme</span>
+                                     </div>
+                                 )}
+
+                                 {/* --- INTERACTION LAYER --- */}
+                                 <div className="absolute inset-0 p-8 flex items-center justify-center pointer-events-none">
+                                     {interactions.map(interaction => (
+                                         <motion.div 
+                                            key={interaction.id}
+                                            initial={{ scale: 0.8, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            className="pointer-events-auto"
+                                         >
+                                             {interaction.type === 'POLL' && (
+                                                 <div className="bg-white rounded-xl shadow-xl p-4 w-64 text-center">
+                                                     <h4 className="font-bold text-gray-800 mb-3 text-sm leading-tight">
+                                                         {interaction.data.question || "Soru..."}
+                                                     </h4>
+                                                     <div className="flex gap-2">
+                                                         <button className="flex-1 bg-gray-100 py-2 rounded-lg text-xs font-bold text-gray-600">
+                                                             {interaction.data.options?.[0] || 'Evet'}
+                                                         </button>
+                                                         <button className="flex-1 bg-gray-100 py-2 rounded-lg text-xs font-bold text-gray-600">
+                                                             {interaction.data.options?.[1] || 'Hayır'}
+                                                         </button>
+                                                     </div>
                                                  </div>
-                                             </div>
-                                         )}
+                                             )}
 
-                                         {interaction.type === 'XP_BOOST' && (
-                                             <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-2 rounded-full font-bold shadow-lg shadow-orange-500/30 flex items-center gap-2 animate-pulse">
-                                                 <Zap className="w-4 h-4 fill-white" />
-                                                 +{interaction.data.xpAmount} XP
-                                             </div>
-                                         )}
-                                     </motion.div>
-                                 ))}
+                                             {interaction.type === 'XP_BOOST' && (
+                                                 <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-4 py-2 rounded-full font-bold shadow-lg shadow-orange-500/30 flex items-center gap-2 animate-pulse">
+                                                     <Zap className="w-4 h-4 fill-white" />
+                                                     +{interaction.data.xpAmount} XP
+                                                 </div>
+                                             )}
+                                         </motion.div>
+                                     ))}
+                                 </div>
+
                              </div>
 
+                             {/* Action Bar */}
+                             <div className="p-3">
+                                 <div className="flex items-center gap-4 mb-2">
+                                     <Heart className="w-6 h-6 text-gray-800" />
+                                     <MessageCircle className="w-6 h-6 text-gray-800" />
+                                     <Share2 className="w-6 h-6 text-gray-800 ml-auto" />
+                                 </div>
+                                 <div className="text-xs font-bold text-gray-900 mb-1">0 beğeni</div>
+                                 <div className="text-xs text-gray-800">
+                                     <span className="font-bold mr-1">{currentUser?.name || 'Sen'}</span>
+                                     {caption || <span className="text-gray-400 italic">Açıklama buraya gelecek...</span>}
+                                 </div>
+                             </div>
                          </div>
-
-                         {/* Action Bar */}
-                         <div className="p-3">
-                             <div className="flex items-center gap-4 mb-2">
-                                 <Heart className="w-6 h-6 text-gray-800" />
-                                 <MessageCircle className="w-6 h-6 text-gray-800" />
-                                 <Share2 className="w-6 h-6 text-gray-800 ml-auto" />
-                             </div>
-                             <div className="text-xs font-bold text-gray-900 mb-1">0 beğeni</div>
-                             <div className="text-xs text-gray-800">
-                                 <span className="font-bold mr-1">{currentUser?.name || 'Sen'}</span>
-                                 {caption || <span className="text-gray-400 italic">Açıklama buraya gelecek...</span>}
-                             </div>
-                         </div>
-                     </div>
+                     )}
                  </div>
 
                  {/* Home Bar */}

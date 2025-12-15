@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Home, GraduationCap, User } from 'lucide-react';
+import { Home, Compass, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -11,7 +12,7 @@ export const BottomNavigation: React.FC = () => {
 
   const tabs = [
     { id: '/', icon: Home, label: t('nav_home') },
-    { id: '/library', icon: GraduationCap, label: t('nav_learning') },
+    { id: '/explore', icon: Compass, label: 'Explore' },
     { id: '/profile', icon: User, label: t('nav_profile') },
   ];
 

@@ -9,10 +9,10 @@ import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ProfilePage } from './features/profile/ProfilePage';
 import { OperationsPage } from './features/operations/OperationsPage';
 import { ReportPage } from './features/issues/ReportPage';
-import { LibraryPage } from './features/library/LibraryPage';
+import { ExplorePage } from './features/explore/ExplorePage'; // CHANGED
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { CoursePlayerPage } from './features/player/CoursePlayerPage';
-import { CourseIntroPage } from './features/course/CourseIntroPage'; // NEW IMPORT
+import { CourseIntroPage } from './features/course/CourseIntroPage'; 
 import { JourneyMap } from './features/career/JourneyMap';
 
 // Admin Imports
@@ -107,7 +107,7 @@ const App: React.FC = () => {
                             <Route path="/profile" element={<ProfilePage />} />
                             <Route path="/operations" element={<OperationsPage />} />
                             <Route path="/report" element={<ReportPage />} />
-                            <Route path="/library" element={<LibraryPage />} />
+                            <Route path="/explore" element={<ExplorePage />} /> {/* CHANGED */}
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
                     </DashboardLayout>

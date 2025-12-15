@@ -5,10 +5,10 @@ import { User, Course, DepartmentType, Task, Category, CareerPath } from '../typ
 
 // Explicitly type the mock users
 const MOCK_USERS: Omit<User, 'id'>[] = [
-  { name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: ['401'], startedCourses: [], completedTasks: [], assignedPathId: 'path_hk_manager' },
-  { name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], startedCourses: [], completedTasks: [] },
-  { name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: ['102'], startedCourses: [], completedTasks: [] },
-  { name: 'Canan Kaya', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: ['301', '101'], startedCourses: [], completedTasks: [], assignedPathId: 'path_fo_manager' },
+  { name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: ['401'], startedCourses: [], completedTasks: [], assignedPathId: 'path_hk_manager', badges: [] },
+  { name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], startedCourses: [], completedTasks: [], badges: [] },
+  { name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: ['102'], startedCourses: [], completedTasks: [], badges: [] },
+  { name: 'Canan Kaya', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: ['301', '101'], startedCourses: [], completedTasks: [], assignedPathId: 'path_fo_manager', badges: [] },
   // Admin User
   { 
       name: 'System Admin', 
@@ -20,17 +20,18 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       xp: 9999, 
       completedCourses: [], 
       startedCourses: [],
-      completedTasks: [] 
+      completedTasks: [],
+      badges: [] 
   },
 ];
 
 const MOCK_CATEGORIES: Category[] = [
-    { id: 'cat_onboarding', title: 'Oryantasyon' }, // NEW
-    { id: 'cat_guest', title: 'Misafir İlişkileri' },
-    { id: 'cat_kitchen', title: 'Mutfak Sanatları' },
-    { id: 'cat_safety', title: 'Acil Durum & Güvenlik' },
-    { id: 'cat_lang', title: 'Dil Okulu' },
-    { id: 'cat_hk', title: 'Housekeeping Pro' },
+    { id: 'cat_onboarding', title: 'Oryantasyon', icon: 'Compass', color: 'from-purple-500 to-indigo-600' },
+    { id: 'cat_guest', title: 'Misafir İlişkileri', icon: 'Heart', color: 'from-pink-500 to-rose-600' },
+    { id: 'cat_kitchen', title: 'Mutfak Sanatları', icon: 'Utensils', color: 'from-orange-500 to-amber-600' },
+    { id: 'cat_safety', title: 'Acil Durum', icon: 'ShieldAlert', color: 'from-red-500 to-red-700' },
+    { id: 'cat_lang', title: 'Dil Okulu', icon: 'Languages', color: 'from-blue-400 to-cyan-600' },
+    { id: 'cat_hk', title: 'Housekeeping Pro', icon: 'Sparkles', color: 'from-emerald-500 to-teal-600' },
 ];
 
 const MOCK_COURSES: Course[] = [
@@ -46,6 +47,8 @@ const MOCK_COURSES: Course[] = [
       assignmentType: 'GLOBAL',
       priority: 'HIGH',
       tags: ['#YeniBaşlayan', '#Kültür'],
+      popularityScore: 100,
+      isNew: true,
       steps: [
           { id: 's1', type: 'video', title: 'Hoşgeldin', videoUrl: 'https://cdn.coverr.co/videos/coverr-hotel-lobby-4432/1080p.mp4' }
       ]
@@ -62,6 +65,7 @@ const MOCK_COURSES: Course[] = [
       assignmentType: 'GLOBAL',
       priority: 'NORMAL',
       tags: ['#Rehber', '#Kurallar'],
+      popularityScore: 90,
       steps: []
   },
   {
@@ -76,6 +80,7 @@ const MOCK_COURSES: Course[] = [
       assignmentType: 'GLOBAL',
       priority: 'HIGH',
       tags: ['#Hizmet', '#Kalite'],
+      popularityScore: 95,
       steps: []
   },
   {
@@ -89,6 +94,8 @@ const MOCK_COURSES: Course[] = [
     isFeatured: true,
     assignmentType: 'OPTIONAL',
     priority: 'NORMAL',
+    tags: ['#İletişim', '#Kriz'],
+    popularityScore: 88,
     steps: []
   },
   {
@@ -102,6 +109,9 @@ const MOCK_COURSES: Course[] = [
     assignmentType: 'DEPARTMENT',
     targetDepartments: ['kitchen'],
     priority: 'NORMAL',
+    tags: ['#Sanat', '#Mutfak'],
+    popularityScore: 75,
+    isNew: true,
     steps: []
   },
   {
@@ -113,6 +123,8 @@ const MOCK_COURSES: Course[] = [
     duration: 12,
     xpReward: 120,
     assignmentType: 'OPTIONAL',
+    tags: ['#Kahve', '#Hobi'],
+    popularityScore: 92,
     steps: []
   },
   {
@@ -123,8 +135,10 @@ const MOCK_COURSES: Course[] = [
     thumbnailUrl: 'https://images.unsplash.com/photo-1591501662705-045388048259?auto=format&fit=crop&q=80&w=600',
     duration: 10,
     xpReward: 100,
-    assignmentType: 'GLOBAL', // MANDATORY FOR ALL
-    priority: 'HIGH', // URGENT RED RING
+    assignmentType: 'GLOBAL', 
+    priority: 'HIGH', 
+    tags: ['#Güvenlik', '#Zorunlu'],
+    popularityScore: 60,
     steps: []
   },
   {
@@ -137,6 +151,8 @@ const MOCK_COURSES: Course[] = [
     xpReward: 250,
     assignmentType: 'GLOBAL',
     priority: 'NORMAL',
+    tags: ['#Sağlık', '#Yaşam'],
+    popularityScore: 80,
     steps: []
   },
   {
@@ -150,6 +166,8 @@ const MOCK_COURSES: Course[] = [
     assignmentType: 'DEPARTMENT',
     targetDepartments: ['front_office'],
     priority: 'HIGH',
+    tags: ['#Dil', '#İngilizce'],
+    popularityScore: 85,
     steps: []
   },
   {
@@ -163,6 +181,8 @@ const MOCK_COURSES: Course[] = [
     assignmentType: 'DEPARTMENT',
     targetDepartments: ['housekeeping'],
     priority: 'HIGH',
+    tags: ['#Düzen', '#Standart'],
+    popularityScore: 70,
     steps: []
   },
   {
@@ -176,6 +196,22 @@ const MOCK_COURSES: Course[] = [
     assignmentType: 'DEPARTMENT',
     targetDepartments: ['housekeeping'],
     priority: 'NORMAL',
+    tags: ['#Temizlik', '#Kimyasal'],
+    popularityScore: 65,
+    steps: []
+  },
+  {
+    id: '501',
+    categoryId: 'cat_kitchen',
+    title: 'Şarap Eşleşmesi 101',
+    description: 'Hangi yemekle hangi şarap gider? Temel kurallar.',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=600',
+    duration: 18,
+    xpReward: 180,
+    assignmentType: 'OPTIONAL',
+    tags: ['#Şarap', '#Servis'],
+    popularityScore: 98,
+    isNew: true,
     steps: []
   }
 ];
