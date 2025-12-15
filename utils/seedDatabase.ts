@@ -5,13 +5,14 @@ import { User, Course, DepartmentType, Task, Category, CareerPath } from '../typ
 
 // Explicitly type the mock users
 const MOCK_USERS: Omit<User, 'id'>[] = [
-  { name: 'Ayşe Yılmaz', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: ['401'], startedCourses: [], completedTasks: [], assignedPathId: 'path_hk_manager', badges: [] },
-  { name: 'Fatma Demir', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], startedCourses: [], completedTasks: [], badges: [] },
-  { name: 'Mehmet Öztürk', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: ['102'], startedCourses: [], completedTasks: [], badges: [] },
-  { name: 'Canan Kaya', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: ['301', '101'], startedCourses: [], completedTasks: [], assignedPathId: 'path_fo_manager', badges: [] },
+  { name: 'Ayşe Yılmaz', phoneNumber: '+905550000001', avatar: 'AY', department: 'housekeeping', role: 'staff', pin: '1234', xp: 120, completedCourses: ['401'], startedCourses: [], completedTasks: [], assignedPathId: 'path_hk_manager', badges: [] },
+  { name: 'Fatma Demir', phoneNumber: '+905550000002', avatar: 'FD', department: 'housekeeping', role: 'staff', pin: '1234', xp: 50, completedCourses: [], startedCourses: [], completedTasks: [], badges: [] },
+  { name: 'Mehmet Öztürk', phoneNumber: '+905550000003', avatar: 'MÖ', department: 'kitchen', role: 'staff', pin: '1234', xp: 300, completedCourses: ['102'], startedCourses: [], completedTasks: [], badges: [] },
+  { name: 'Canan Kaya', phoneNumber: '+905550000004', avatar: 'CK', department: 'front_office', role: 'staff', pin: '1234', xp: 450, completedCourses: ['301', '101'], startedCourses: [], completedTasks: [], assignedPathId: 'path_fo_manager', badges: [] },
   // Admin User
   { 
       name: 'System Admin', 
+      phoneNumber: '+905417726743',
       email: 'admin@hotelacademy.com',
       avatar: 'AD', 
       department: 'management', 

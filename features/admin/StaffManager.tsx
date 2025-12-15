@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Search, User as UserIcon, Camera, Loader2, CheckCircle2 } from 'lucide-react';
@@ -20,6 +21,7 @@ export const StaffManager: React.FC = () => {
   const [newAvatar, setNewAvatar] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
   const [newDept, setNewDept] = useState<DepartmentType>('housekeeping');
   const [generatedPin, setGeneratedPin] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
@@ -53,7 +55,7 @@ export const StaffManager: React.FC = () => {
   };
 
   const handleSaveUser = async () => {
-     if (!newName || !newAvatar) return;
+     if (!newName || !newPhone || !newAvatar) return;
      setIsSaving(true);
 
      try {
@@ -67,6 +69,7 @@ export const StaffManager: React.FC = () => {
          // 3. Save to Firestore
          const newUser: Omit<User, 'id'> = {
              name: newName,
+             phoneNumber: newPhone,
              avatar: downloadUrl, // Using URL now, but type def says string so it's fine
              department: newDept,
              role: 'staff',
@@ -91,6 +94,7 @@ export const StaffManager: React.FC = () => {
       setIsAdding(false);
       setStep(1);
       setNewName('');
+      setNewPhone('');
       setNewAvatar(null);
       setAvatarPreview(null);
       setGeneratedPin('');
@@ -211,6 +215,15 @@ export const StaffManager: React.FC = () => {
                                   />
                               </div>
                               <div>
+                                  <label className="block text-sm font-bold text-gray-700 mb-2">Telefon Numarası</label>
+                                  <input 
+                                    value={newPhone}
+                                    onChange={(e) => setNewPhone(e.target.value)}
+                                    className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                                    placeholder="+90 5XX XXX XX XX"
+                                  />
+                              </div>
+                              <div>
                                   <label className="block text-sm font-bold text-gray-700 mb-2">Departman</label>
                                   <div className="grid grid-cols-2 gap-2">
                                       {['housekeeping', 'kitchen', 'front_office', 'management'].map(d => (
@@ -229,7 +242,7 @@ export const StaffManager: React.FC = () => {
                                   </div>
                               </div>
                               <button 
-                                disabled={!newName || isSaving}
+                                disabled={!newName || !newPhone || isSaving}
                                 onClick={handleSaveUser}
                                 className="w-full bg-primary disabled:bg-gray-300 text-white py-4 rounded-xl font-bold mt-4 flex items-center justify-center gap-2"
                               >

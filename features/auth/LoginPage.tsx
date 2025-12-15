@@ -27,24 +27,51 @@ export const LoginPage: React.FC = () => {
   const [department, setDepartment] = useState<DepartmentType | null>(null);
   const [otpCode, setOtpCode] = useState('');
 
-  // Recaptcha Ref
-  const recaptchaVerifierRef = useRef<any>(null);
-
   useEffect(() => {
-    // Initialize invisible recaptcha
-    if (!(window as any).recaptchaVerifier && step === 'PHONE') {
-        try {
-            (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                'size': 'invisible',
-                'callback': () => {
-                    // reCAPTCHA solved, allow signInWithPhoneNumber.
+    // Initialize invisible recaptcha only on PHONE step
+    if (step === 'PHONE') {
+        const initRecaptcha = async () => {
+            try {
+                // Check if element exists
+                const container = document.getElementById('recaptcha-container');
+                if (!container) return;
+
+                // Clear existing instance to prevent "auth/internal-error" or detached DOM issues
+                if ((window as any).recaptchaVerifier) {
+                    try {
+                        (window as any).recaptchaVerifier.clear();
+                    } catch(e) {
+                        // Ignore clear errors
+                    }
+                    (window as any).recaptchaVerifier = null;
                 }
-            });
-            recaptchaVerifierRef.current = (window as any).recaptchaVerifier;
-        } catch (e) {
-            console.error("Recaptcha Init Error:", e);
-        }
+
+                // Create new instance
+                (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                    'size': 'invisible',
+                    'callback': () => {
+                        // reCAPTCHA solved, allow signInWithPhoneNumber.
+                    }
+                });
+            } catch (e) {
+                console.error("Recaptcha Init Error:", e);
+            }
+        };
+        
+        initRecaptcha();
     }
+
+    // Cleanup on unmount or step change
+    return () => {
+        if ((window as any).recaptchaVerifier) {
+            try {
+                (window as any).recaptchaVerifier.clear();
+            } catch(e) {
+                // ignore
+            }
+            (window as any).recaptchaVerifier = null;
+        }
+    };
   }, [step]);
 
   // --- HANDLERS ---
@@ -69,6 +96,10 @@ export const LoginPage: React.FC = () => {
 
       try {
           const appVerifier = (window as any).recaptchaVerifier;
+          if (!appVerifier) {
+              throw new Error("ReCAPTCHA not initialized");
+          }
+
           const confirmationResult = await signInWithPhoneNumber(auth, cleanNumber, appVerifier);
           
           // Store ID and Number
@@ -85,11 +116,29 @@ export const LoginPage: React.FC = () => {
       } catch (err: any) {
           console.error("SMS Error:", err);
           setLoading(false);
-          setError("SMS gönderilemedi. Lütfen numarayı kontrol edin.");
-          // Reset recaptcha
-          if((window as any).recaptchaVerifier) (window as any).recaptchaVerifier.render().then((widgetId: any) => {
-              (window as any).grecaptcha.reset(widgetId);
-          });
+          setError("SMS gönderilemedi. Numaranızı veya internet bağlantınızı kontrol edin.");
+          
+          // If error is auth/internal-error, it might be domain authorization
+          if (err.code === 'auth/internal-error') {
+              console.warn("Check Firebase Console > Authentication > Settings > Authorized Domains.");
+          }
+
+          // Reset recaptcha if possible to allow retry
+          try {
+              if ((window as any).recaptchaVerifier) {
+                  // We often need to fully re-init on error to be safe
+                  (window as any).recaptchaVerifier.clear();
+                  (window as any).recaptchaVerifier = null;
+                  
+                  // Re-init
+                  (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                      'size': 'invisible',
+                      'callback': () => {}
+                  });
+              }
+          } catch (resetErr) {
+              console.error("Recaptcha Reset Error", resetErr);
+          }
       }
   };
 
