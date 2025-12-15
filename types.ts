@@ -9,11 +9,17 @@ export interface Language {
   dir: 'ltr' | 'rtl';
 }
 
-export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management';
-export type UserRole = 'staff' | 'manager' | 'admin';
+export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management' | string; // Dynamic string support
+export type UserRole = 'staff' | 'manager' | 'admin' | 'super_admin'; // Added super_admin
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
 // --- MULTI-TENANCY TYPES ---
+
+export interface OrganizationSettings {
+    allowStaffContentCreation: boolean; // Can staff post to feed?
+    customDepartments: string[]; // ["Spa", "Security", "Animation"]
+    primaryColor?: string;
+}
 
 export interface Organization {
   id: string;
@@ -28,6 +34,10 @@ export interface Organization {
   ownerId: string; // The GM or Creator
   code: string; // Unique Invite Code (e.g. "RUBI-2024")
   createdAt: number;
+  
+  // Settings
+  settings?: OrganizationSettings;
+  memberCount?: number;
 }
 
 export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'REJECTED';

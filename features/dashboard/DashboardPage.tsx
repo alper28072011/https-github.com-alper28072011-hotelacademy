@@ -1,14 +1,15 @@
+
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useContentStore } from '../../stores/useContentStore';
-import { getCareerPath, getCareerPathByDepartment, getFeedPosts } from '../../services/db';
+import { getFeedPosts } from '../../services/db';
 import { StoryCircle, StoryStatus } from './components/StoryCircle';
 import { FeedPostCard } from './components/FeedPostCard';
 import { X, Quote, Map, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Course, FeedPost, CareerPath } from '../../types';
+import { Course, FeedPost } from '../../types';
 
 export const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
@@ -21,10 +22,12 @@ export const DashboardPage: React.FC = () => {
   const [showGmModal, setShowGmModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // 1. Fetch Content & Stories
+  // 1. Fetch Content
   useEffect(() => {
-    fetchContent();
-  }, [fetchContent]);
+    if (currentUser && currentUser.currentOrganizationId) {
+        fetchContent(currentUser.currentOrganizationId);
+    }
+  }, [fetchContent, currentUser]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -35,50 +38,32 @@ export const DashboardPage: React.FC = () => {
         // 1. Filter Relevant Courses
         const myDept = currentUser.department;
         const relevantCourses = courses.filter(course => {
-            // Always show Onboarding
             if (course.categoryId === 'cat_onboarding') return true;
-            // Include if Global
             if (course.assignmentType === 'GLOBAL') return true;
-            // Include if Department Matches
             if (course.assignmentType === 'DEPARTMENT' && course.targetDepartments?.includes(myDept)) return true;
-            
             return false;
         });
 
-        // 2. Assign Scores for Sorting
+        // 2. Assign Scores
         const getScore = (c: Course) => {
             const isCompleted = currentUser.completedCourses.includes(c.id);
-            if (isCompleted) return 0; // Completed goes to end
-
-            let score = 50; // Base score for uncompleted
-            
-            // Onboarding Boost
+            if (isCompleted) return 0;
+            let score = 50; 
             if (c.categoryId === 'cat_onboarding') score += 100;
-
-            // Started Boost (In Progress should be near top)
             if (currentUser.startedCourses?.includes(c.id)) score += 60;
-
-            // Priority Boost
             if (c.priority === 'HIGH') score += 50;
-
-            // Assignment Type Boost
-            if (c.assignmentType === 'GLOBAL') score += 20;
-            if (c.assignmentType === 'DEPARTMENT') score += 20;
-
             return score;
         };
 
-        // 3. Sort Descending by Score
         const sortedCourses = relevantCourses.sort((a, b) => getScore(b) - getScore(a));
-        
-        setStoryCourses(sortedCourses.slice(0, 15)); // Show up to 15 stories
+        setStoryCourses(sortedCourses.slice(0, 15)); 
 
-        // --- LOAD FEED POSTS ---
+        // --- LOAD FEED POSTS (Scoped to Org) ---
         const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId);
         setFeedPosts(posts);
     };
 
-    if (courses.length > 0) {
+    if (courses.length > 0 || currentUser?.currentOrganizationId) {
         loadData();
     }
   }, [currentUser, courses]);
@@ -91,29 +76,25 @@ export const DashboardPage: React.FC = () => {
       setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  // Helper to determine ring color/status
   const getStoryStatus = (course: Course): StoryStatus => {
       if (!currentUser) return 'viewed';
-      
-      const isCompleted = currentUser.completedCourses.includes(course.id);
-      if (isCompleted) return 'viewed';
-
-      const isStarted = currentUser.startedCourses?.includes(course.id);
-      if (isStarted) return 'progress';
-
-      // Special 'Fiery' Ring for Onboarding
+      if (currentUser.completedCourses.includes(course.id)) return 'viewed';
+      if (currentUser.startedCourses?.includes(course.id)) return 'progress';
       if (course.categoryId === 'cat_onboarding') return 'fiery';
-
       if (course.priority === 'HIGH') return 'urgent';
-      if (course.assignmentType === 'GLOBAL' || course.assignmentType === 'DEPARTMENT') return 'mandatory';
-      
-      return 'mandatory'; // Default
+      return 'mandatory'; 
   };
+
+  // If no Org selected, redirect to Lobby (Safety check)
+  if (!currentUser?.currentOrganizationId) {
+      navigate('/lobby');
+      return null;
+  }
 
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen">
       
-      {/* HEADER: Hotelgram Style */}
+      {/* HEADER */}
       <div className="bg-white sticky top-0 z-40 border-b border-gray-100 px-4 py-3 flex justify-between items-center shadow-sm">
          <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
@@ -137,11 +118,9 @@ export const DashboardPage: React.FC = () => {
          </div>
       </div>
 
-      {/* STORIES SECTION (Sticky below header) */}
+      {/* STORIES */}
       <div className="bg-white py-4 border-b border-gray-100 overflow-x-auto no-scrollbar">
          <div className="flex gap-4 px-4 min-w-max">
-            
-            {/* Journey Map Link (Special Bubble - First) */}
             <div className="flex flex-col items-center gap-2 min-w-[72px] cursor-pointer group" onClick={() => navigate('/journey')}>
                 <div className="relative p-[3px] rounded-full bg-gradient-to-tr from-blue-400 to-indigo-600 animate-pulse-slow">
                     <div className="bg-white rounded-full p-[2px]">
@@ -153,7 +132,6 @@ export const DashboardPage: React.FC = () => {
                 <span className="text-xs font-bold text-gray-800">Yolculuğum</span>
             </div>
 
-            {/* GM Message (Story) */}
             <StoryCircle 
                 label={t('stories_gm')} 
                 image="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=150" 
@@ -161,7 +139,6 @@ export const DashboardPage: React.FC = () => {
                 onClick={() => setShowGmModal(true)}
             />
 
-            {/* Smartly Sorted Courses */}
             {storyCourses.map(course => (
                 <StoryCircle 
                     key={course.id} 
@@ -174,7 +151,7 @@ export const DashboardPage: React.FC = () => {
          </div>
       </div>
 
-      {/* FEED SECTION */}
+      {/* FEED */}
       <div className="flex-1 max-w-lg mx-auto w-full pb-20">
           {feedPosts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-gray-400">

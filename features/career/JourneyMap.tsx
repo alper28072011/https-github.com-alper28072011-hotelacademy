@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -15,7 +16,10 @@ export const JourneyMap: React.FC = () => {
 
   useEffect(() => {
     const loadJourney = async () => {
-        if (!currentUser || !currentUser.currentOrganizationId) return;
+        if (!currentUser || !currentUser.currentOrganizationId) {
+            setLoading(false);
+            return;
+        }
         setLoading(true);
 
         let activePath: CareerPath | null = null;
@@ -25,14 +29,13 @@ export const JourneyMap: React.FC = () => {
             activePath = await getCareerPath(currentUser.assignedPathId);
         }
 
-        // 2. If no assigned path (or failed to fetch), auto-discover for department
+        // 2. If no assigned path, find one for their dept in CURRENT ORG
         if (!activePath) {
             activePath = await getCareerPathByDepartment(currentUser.department, currentUser.currentOrganizationId);
         }
 
         if (activePath) {
             setPath(activePath);
-            // Fetch specific courses in order
             const orderedCourses: Course[] = [];
             for(const id of activePath.courseIds) {
                 const c = await getCourse(id);
@@ -54,15 +57,14 @@ export const JourneyMap: React.FC = () => {
                   <MapPin className="w-10 h-10 text-gray-400" />
               </div>
               <h2 className="text-xl font-bold text-primary mb-2">Henüz Bir Yol Yok</h2>
-              <p className="text-gray-500 text-sm">Departmanınız ({currentUser?.department}) için henüz bir kariyer yolu tanımlanmamış. Yöneticinizle görüşün.</p>
+              <p className="text-gray-500 text-sm">Departmanınız ({currentUser?.department}) için bu otelde ({currentUser?.currentOrganizationId}) henüz bir kariyer yolu tanımlanmamış.</p>
           </div>
       );
   }
 
-  // Calculate Progress
   const completedIds = currentUser?.completedCourses || [];
   const currentStepIndex = courses.findIndex(c => !completedIds.includes(c.id));
-  const activeIndex = currentStepIndex === -1 ? courses.length : currentStepIndex; // If all done, index is length
+  const activeIndex = currentStepIndex === -1 ? courses.length : currentStepIndex;
 
   return (
     <div className="bg-primary-dark min-h-screen pb-24 text-white">
@@ -81,7 +83,6 @@ export const JourneyMap: React.FC = () => {
 
       {/* Map Container */}
       <div className="max-w-md mx-auto p-6 relative">
-          {/* Path Line */}
           <div className="absolute left-[2.25rem] top-10 bottom-10 w-1 bg-white/10 border-l-2 border-dashed border-white/20" />
 
           <div className="flex flex-col gap-12 relative z-10">
@@ -98,7 +99,6 @@ export const JourneyMap: React.FC = () => {
                         key={course.id} 
                         className={`relative flex items-center gap-6 ${isLocked ? 'opacity-50 grayscale' : ''}`}
                       >
-                          {/* Node Icon */}
                           <div className={`relative shrink-0 w-12 h-12 rounded-full border-4 flex items-center justify-center shadow-xl z-10 transition-transform ${
                               isCompleted 
                                 ? 'bg-green-500 border-green-600 scale-90' 
@@ -115,7 +115,6 @@ export const JourneyMap: React.FC = () => {
                               )}
                           </div>
 
-                          {/* Content Card */}
                           <div 
                              onClick={() => !isLocked && navigate(`/course/${course.id}`)}
                              className={`flex-1 p-4 rounded-2xl border transition-all ${
@@ -149,7 +148,6 @@ export const JourneyMap: React.FC = () => {
                   );
               })}
 
-              {/* Final Goal */}
               <motion.div 
                  initial={{ opacity: 0 }}
                  animate={{ opacity: 1 }}

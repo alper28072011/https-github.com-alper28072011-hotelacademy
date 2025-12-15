@@ -8,6 +8,7 @@ import { useOrganizationStore } from './stores/useOrganizationStore';
 import { LoginPage } from './features/auth/LoginPage';
 import { OrganizationLobby } from './features/organization/OrganizationLobby';
 import { HotelPublicPage } from './features/organization/HotelPublicPage';
+import { HotelSettings } from './features/organization/HotelSettings';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ProfilePage } from './features/profile/ProfilePage';
 import { PublicProfilePage } from './features/profile/PublicProfilePage';
@@ -22,7 +23,7 @@ import { JourneyMap } from './features/career/JourneyMap';
 // Admin Imports
 import { AdminLayout } from './features/admin/AdminLayout';
 import { StaffManager } from './features/admin/StaffManager';
-import { TeamRequests } from './features/admin/TeamRequests'; // New
+import { TeamRequests } from './features/admin/TeamRequests'; 
 import { ContentStudio } from './features/admin/ContentStudio';
 import { CareerBuilder } from './features/admin/CareerBuilder';
 import { TalentRadar } from './features/admin/TalentRadar';
@@ -70,7 +71,7 @@ const App: React.FC = () => {
       }
   }, [isAuthenticated, currentUser, currentOrganization, switchOrganization]);
 
-  const isAdminOrManager = ['manager', 'admin'].includes(currentUser?.role || '');
+  const isAdminOrManager = ['manager', 'admin', 'super_admin'].includes(currentUser?.role || '');
 
   return (
     <HashRouter>
@@ -100,6 +101,7 @@ const App: React.FC = () => {
                               <Route path="career" element={<CareerBuilder />} />
                               <Route path="content" element={<ContentStudio />} />
                               <Route path="reports" element={<TalentRadar />} />
+                              <Route path="settings" element={<HotelSettings />} /> 
                           </Route>
                       )}
 

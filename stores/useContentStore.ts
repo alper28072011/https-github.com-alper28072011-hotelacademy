@@ -2,7 +2,6 @@
 import { create } from 'zustand';
 import { Course, Category, User } from '../types';
 import { getCourses, getCategories } from '../services/db';
-import { useOrganizationStore } from './useOrganizationStore';
 
 interface ExploreFeed {
     priority: Course[]; 
@@ -34,7 +33,7 @@ export const useContentStore = create<ContentState>((set, get) => ({
 
   fetchContent: async (orgId: string) => {
     set({ isLoading: true });
-    // Pass orgId to getCourses to fetch Global + Org Specific courses
+    // orgId is now mandatory for filtering context
     const [courses, categories] = await Promise.all([getCourses(orgId), getCategories()]);
     set({ courses, categories, isLoading: false });
   },
