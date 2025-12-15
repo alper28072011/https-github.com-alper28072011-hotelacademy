@@ -6,7 +6,7 @@ import { useAuthStore } from '../../../stores/useAuthStore';
 import { useAppStore } from '../../../stores/useAppStore';
 import { LanguageCode } from '../../../types';
 import { checkUserOwnership } from '../../../services/superAdminService';
-import { deleteAccount } from '../../../services/authService';
+import { deleteUserSmart } from '../../../services/userService';
 
 interface SettingsDrawerProps {
   onClose: () => void;
@@ -29,22 +29,27 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
       if (confirmText !== 'SIL' || !currentUser) return;
       setDeleteStep(2);
 
-      // Check ownership
+      // 1. Check if they own an Active Org (Safety Net)
       const ownedOrg = await checkUserOwnership(currentUser.id);
-      if (ownedOrg) {
-          alert(`HATA: ${ownedOrg.name} otelinin sahibi olduğunuz için hesabınızı silemezsiniz. Lütfen önce yönetici panelinden oteli silin veya sahipliği devredin.`);
+      if (ownedOrg && ownedOrg.status !== 'ARCHIVED') {
+          alert(`HATA: ${ownedOrg.name} otelinin sahibisiniz. Lütfen önce işletme ayarlarından 'Güvenli Çıkış' yapın.`);
           setDeleteStep(0);
           setConfirmText('');
           return;
       }
 
+      // 2. Execute Smart Delete Protocol
       try {
-          await deleteAccount(currentUser.id);
-          logout();
-          window.location.reload();
+          const success = await deleteUserSmart(currentUser);
+          if (success) {
+              logout();
+              window.location.reload();
+          } else {
+              throw new Error("Silme protokolü başarısız.");
+          }
       } catch (error) {
           console.error(error);
-          alert("Silme işlemi başarısız. Lütfen tekrar giriş yapıp deneyin (Güvenlik gereği).");
+          alert("Silme işlemi başarısız. Lütfen tekrar deneyin.");
           setDeleteStep(0);
       }
   };
@@ -130,7 +135,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
                     ) : (
                         <div className="bg-red-50 border border-red-200 p-4 rounded-xl animate-in fade-in zoom-in">
                             <p className="text-xs text-red-800 font-medium mb-3 leading-relaxed">
-                                Bu işlem geri alınamaz. Tüm verileriniz kalıcı olarak silinecektir. Onaylamak için <b>SIL</b> yazın.
+                                Bu işlem geri alınamaz. Tüm verileriniz (puanlar, rozetler) silinecek ve isminiz gönderilerden kaldırılacaktır. Onaylamak için <b>SIL</b> yazın.
                             </p>
                             <input 
                                 value={confirmText}

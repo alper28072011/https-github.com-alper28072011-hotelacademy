@@ -30,6 +30,8 @@ export interface OrganizationSettings {
     primaryColor?: string;
 }
 
+export type OrganizationStatus = 'ACTIVE' | 'ARCHIVED' | 'SUSPENDED';
+
 export interface Organization {
   id: string;
   name: string;
@@ -41,6 +43,9 @@ export interface Organization {
   website?: string;
   
   ownerId: string; // The GM or Creator
+  legacyOwnerId?: string; // The previous owner (for logs/history)
+  status?: OrganizationStatus; // Lifecycle status
+
   code: string; // Unique Invite Code (e.g. "RUBI-2024")
   createdAt: number;
   
