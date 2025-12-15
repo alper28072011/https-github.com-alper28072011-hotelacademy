@@ -1,8 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, Activity, Users, DollarSign, Database, Building2, Search, Power, Trash2, Loader2, List, Grid } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Activity, Users, DollarSign, Database, Building2, Search, Power, Trash2, Loader2, List, Grid, RotateCcw } from 'lucide-react';
 import { getAllPublicOrganizations } from '../../services/db';
+import { deleteOrganizationFully } from '../../services/superAdminService';
 import { Organization } from '../../types';
 import { UserManager } from './UserManager';
 
@@ -12,18 +13,35 @@ export const SuperAdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'USERS' | 'HOTELS'>('OVERVIEW');
+  const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
-      const init = async () => {
-          setLoading(true);
-          const data = await getAllPublicOrganizations();
-          setHotels(data);
-          setLoading(false);
-      };
-      init();
+      loadHotels();
   }, []);
 
+  const loadHotels = async () => {
+      setLoading(true);
+      const data = await getAllPublicOrganizations();
+      setHotels(data);
+      setLoading(false);
+  };
+
   const filteredHotels = hotels.filter(h => h.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  // --- DEV TOOL: RESET SYSTEM ---
+  const handleTestReset = async () => {
+      if (!window.confirm("DİKKAT: Bu işlem, isminde 'Test' veya 'Demo' geçen tüm otelleri ve bağlı verilerini silecektir. Emin misiniz?")) return;
+      setIsResetting(true);
+      
+      const targets = hotels.filter(h => h.name.includes('Test') || h.name.includes('Demo') || h.name === 'My Hotel');
+      for (const h of targets) {
+          await deleteOrganizationFully(h.id);
+      }
+      
+      await loadHotels();
+      setIsResetting(false);
+      alert(`${targets.length} test oteli temizlendi.`);
+  };
 
   return (
     <div className="min-h-screen bg-gray-950 text-white font-sans">
@@ -104,6 +122,18 @@ export const SuperAdminDashboard: React.FC = () => {
                       <h3 className="text-3xl font-bold mb-1">$12.5k</h3>
                       <p className="text-sm text-gray-500">Aylık Tahmini Gelir</p>
                   </div>
+              </div>
+
+              {/* Dev Tools */}
+              <div className="flex justify-end mt-4">
+                  <button 
+                    onClick={handleTestReset}
+                    disabled={isResetting}
+                    className="flex items-center gap-2 text-xs font-mono text-red-500 hover:bg-red-900/20 px-3 py-2 rounded-lg transition-colors border border-red-900/30"
+                  >
+                      {isResetting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                      Test Verilerini Temizle
+                  </button>
               </div>
             </>
           )}
@@ -188,4 +218,3 @@ export const SuperAdminDashboard: React.FC = () => {
     </div>
   );
 };
-    

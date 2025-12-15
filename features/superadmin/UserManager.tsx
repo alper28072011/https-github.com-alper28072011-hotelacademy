@@ -1,12 +1,12 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-    Search, Loader2, MoreVertical, Ban, CheckCircle, 
-    Trash2, Eye, Shield, Filter, ChevronRight, User as UserIcon
+    Search, Loader2, Ban, CheckCircle, 
+    Trash2, Eye, Shield, ChevronRight, User as UserIcon, AlertTriangle, Building2, Crown
 } from 'lucide-react';
-import { User, UserStatus } from '../../types';
-import { getAllUsers, updateUserStatus, deleteUserComplete, PaginatedUsers } from '../../services/superAdminService';
+import { User, UserStatus, Organization } from '../../types';
+import { getAllUsers, updateUserStatus, deleteUserComplete, checkUserOwnership, deleteOrganizationFully, transferOwnership, PaginatedUsers } from '../../services/superAdminService';
 import { useNavigate } from 'react-router-dom';
 
 export const UserManager: React.FC = () => {
@@ -18,6 +18,12 @@ export const UserManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   
+  // Judge Modal State
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [ownedOrg, setOwnedOrg] = useState<Organization | null>(null);
+  const [isCheckingOwnership, setIsCheckingOwnership] = useState(false);
+  const [isProcessingDelete, setIsProcessingDelete] = useState(false);
+  
   // Filter State
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'ALL' | 'BANNED' | 'MANAGERS'>('ALL');
@@ -25,9 +31,7 @@ export const UserManager: React.FC = () => {
   // --- LOAD DATA ---
   const loadUsers = useCallback(async (isLoadMore = false) => {
       setLoading(true);
-      // If new search/filter, reset pagination
       const cursor = isLoadMore ? lastDoc : null;
-      
       const result: PaginatedUsers = await getAllUsers(cursor, 20, searchTerm, filter);
       
       if (isLoadMore) {
@@ -35,16 +39,14 @@ export const UserManager: React.FC = () => {
       } else {
           setUsers(result.users);
       }
-      
       setLastDoc(result.lastDoc);
       setLoading(false);
   }, [searchTerm, filter, lastDoc]);
 
-  // Initial Load & Debounced Search Effect
   useEffect(() => {
       const timer = setTimeout(() => {
           loadUsers(false);
-      }, 500); // 500ms debounce
+      }, 500); 
       return () => clearTimeout(timer);
   }, [searchTerm, filter]);
 
@@ -58,14 +60,47 @@ export const UserManager: React.FC = () => {
       setActionLoading(null);
   };
 
-  const handleDelete = async (userId: string) => {
-      if (!window.confirm("Bu kullanıcıyı kalıcı olarak silmek istediğinize emin misiniz?")) return;
-      setActionLoading(userId);
-      const success = await deleteUserComplete(userId);
-      if (success) {
-          setUsers(prev => prev.filter(u => u.id !== userId));
+  // Step 1: Initiate Delete - Check Ownership
+  const initiateDelete = async (user: User) => {
+      setDeleteTarget(user);
+      setIsCheckingOwnership(true);
+      
+      const org = await checkUserOwnership(user.id);
+      setOwnedOrg(org);
+      
+      setIsCheckingOwnership(false);
+  };
+
+  // Step 2: Execute Judge Decision
+  const executeDelete = async (mode: 'USER_ONLY' | 'WIPE_ALL' | 'TRANSFER') => {
+      if (!deleteTarget) return;
+      setIsProcessingDelete(true);
+
+      let success = false;
+
+      if (mode === 'USER_ONLY') {
+          // Standard user delete
+          success = await deleteUserComplete(deleteTarget.id);
+      } else if (mode === 'WIPE_ALL') {
+          // Delete Org + User
+          if (ownedOrg) await deleteOrganizationFully(ownedOrg.id);
+          success = await deleteUserComplete(deleteTarget.id);
+      } else if (mode === 'TRANSFER') {
+          // Transfer to Super Admin (Placeholder logic for now)
+          // In a real app, we'd select a new user ID.
+          // Here we just delete the user, but leave the org orphaned (or assign to system).
+          // For safety, let's just abort this branch in UI for now or assume a default logic.
+          alert("Otomatik devir şu an pasif. Lütfen otel ayarlarından manuel devredin.");
+          setIsProcessingDelete(false);
+          return;
       }
-      setActionLoading(null);
+
+      if (success) {
+          setUsers(prev => prev.filter(u => u.id !== deleteTarget.id));
+          setDeleteTarget(null);
+          setOwnedOrg(null);
+      }
+      setIsProcessingDelete(false);
   };
 
   // --- RENDER HELPERS ---
@@ -78,7 +113,7 @@ export const UserManager: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[800px]">
+    <div className="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[800px] relative">
         {/* 1. TOP BAR */}
         <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/50">
             <div>
@@ -184,7 +219,7 @@ export const UserManager: React.FC = () => {
                                     )}
 
                                     <button 
-                                        onClick={() => handleDelete(user.id)}
+                                        onClick={() => initiateDelete(user)}
                                         disabled={!!actionLoading || user.isSuperAdmin}
                                         title="Sil"
                                         className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-red-600 transition-colors disabled:opacity-30"
@@ -226,6 +261,98 @@ export const UserManager: React.FC = () => {
                 )
             )}
         </div>
+
+        {/* --- THE JUDGE MODAL --- */}
+        <AnimatePresence>
+            {deleteTarget && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden"
+                    >
+                        {isCheckingOwnership ? (
+                            <div className="p-10 flex flex-col items-center text-gray-500">
+                                <Loader2 className="w-10 h-10 animate-spin mb-4 text-primary" />
+                                <p>Mülkiyet Kontrolü Yapılıyor...</p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className={`p-6 border-b ${ownedOrg ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
+                                    <h3 className={`text-lg font-bold flex items-center gap-2 ${ownedOrg ? 'text-red-700' : 'text-gray-800'}`}>
+                                        <AlertTriangle className="w-6 h-6" />
+                                        {ownedOrg ? "KRİTİK UYARI: İşletme Sahibi!" : "Kullanıcıyı Sil"}
+                                    </h3>
+                                </div>
+                                
+                                <div className="p-6">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center font-bold text-lg overflow-hidden">
+                                            {deleteTarget.avatar.length > 3 ? <img src={deleteTarget.avatar} className="w-full h-full object-cover"/> : deleteTarget.avatar}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-gray-900">{deleteTarget.name}</div>
+                                            <div className="text-xs text-gray-500">{deleteTarget.phoneNumber}</div>
+                                        </div>
+                                    </div>
+
+                                    {ownedOrg ? (
+                                        <div className="space-y-4">
+                                            <div className="bg-red-50 p-4 rounded-xl text-sm text-red-700 border border-red-100 flex gap-3">
+                                                <Building2 className="w-10 h-10 shrink-0 opacity-50" />
+                                                <div>
+                                                    <span className="font-bold block">{ownedOrg.name}</span>
+                                                    Bu kullanıcı bir işletmenin sahibi. Silerseniz işletme verileri ne olacak?
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-2">
+                                                <button 
+                                                    onClick={() => executeDelete('WIPE_ALL')}
+                                                    disabled={isProcessingDelete}
+                                                    className="p-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                                                >
+                                                    {isProcessingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                                    Her Şeyi Yok Et (Kullanıcı + Otel)
+                                                </button>
+                                                <button 
+                                                    onClick={() => executeDelete('TRANSFER')}
+                                                    className="p-3 bg-white border-2 border-gray-200 hover:border-gray-300 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                                                >
+                                                    <Crown className="w-4 h-4 text-yellow-500" />
+                                                    Sahipliği Devret (Manuel)
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <p className="text-gray-600 mb-6">
+                                                Bu kullanıcıyı ve tüm verilerini kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+                                            </p>
+                                            <button 
+                                                onClick={() => executeDelete('USER_ONLY')}
+                                                disabled={isProcessingDelete}
+                                                className="w-full p-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                                            >
+                                                {isProcessingDelete ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                                Evet, Sil
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-center">
+                                    <button onClick={() => setDeleteTarget(null)} className="text-gray-500 font-bold text-sm hover:underline">
+                                        İptal
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
     </div>
   );
 };

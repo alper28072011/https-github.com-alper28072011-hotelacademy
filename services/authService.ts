@@ -1,6 +1,6 @@
 
-import { collection, query, where, getDocs, addDoc, doc, setDoc, getDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
-import { signOut, signInWithPhoneNumber, ApplicationVerifier } from 'firebase/auth';
+import { collection, query, where, getDocs, addDoc, doc, setDoc, getDoc, updateDoc, increment, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { signOut, signInWithPhoneNumber, ApplicationVerifier, deleteUser } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { User, UserRole, AuthMode } from '../types';
 
@@ -124,4 +124,25 @@ export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> =>
  */
 export const logoutUser = async () => {
     await signOut(auth);
+};
+
+/**
+ * Self-Destruct: Deletes DB record AND Auth Account
+ */
+export const deleteAccount = async (userId: string) => {
+    try {
+        const user = auth.currentUser;
+        if (!user) throw new Error("No authenticated user");
+
+        // 1. Delete from Firestore
+        await deleteDoc(doc(db, 'users', userId));
+
+        // 2. Delete from Firebase Auth
+        await deleteUser(user);
+        
+        return true;
+    } catch (error) {
+        console.error("Self Destruct Error:", error);
+        throw error;
+    }
 };
