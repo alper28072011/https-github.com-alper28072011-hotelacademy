@@ -2,11 +2,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Loader2, Phone, ShieldCheck, User as UserIcon, Building2, Smartphone, CheckCircle } from 'lucide-react';
+import { ArrowRight, Loader2, ShieldCheck, User as UserIcon, Building2, CheckCircle, AlertTriangle, Lock } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { auth, RecaptchaVerifier, signInWithPhoneNumber } from '../../services/firebase';
-import { checkUserExists, registerUser } from '../../services/authService';
-import { DepartmentType, User } from '../../types';
+import { auth, RecaptchaVerifier } from '../../services/firebase';
+import { checkUserExists, registerUser, initiatePhoneAuth } from '../../services/authService';
+import { DepartmentType } from '../../types';
+import { PhoneInput } from './components/PhoneInput';
 
 // Admin "Backdoor" Number
 const ADMIN_PHONE = '+905417726743';
@@ -19,13 +20,28 @@ export const LoginPage: React.FC = () => {
     verificationId, setVerificationId,
     isLoading, setLoading,
     error, setError,
-    loginSuccess
+    loginSuccess,
+    authMode, setAuthMode,
+    recordSmsAttempt, cooldownUntil
   } = useAuthStore();
 
   // Profile Setup State
   const [name, setName] = useState('');
   const [department, setDepartment] = useState<DepartmentType | null>(null);
   const [otpCode, setOtpCode] = useState('');
+
+  // Local cooldown check
+  const [isBlocked, setIsBlocked] = useState(false);
+
+  useEffect(() => {
+      // Check block status periodically
+      const checkBlock = () => {
+          setIsBlocked(Date.now() < cooldownUntil);
+      };
+      checkBlock();
+      const interval = setInterval(checkBlock, 1000);
+      return () => clearInterval(interval);
+  }, [cooldownUntil]);
 
   useEffect(() => {
     // Initialize invisible recaptcha only on PHONE step
@@ -40,9 +56,7 @@ export const LoginPage: React.FC = () => {
                 if ((window as any).recaptchaVerifier) {
                     try {
                         (window as any).recaptchaVerifier.clear();
-                    } catch(e) {
-                        // Ignore clear errors
-                    }
+                    } catch(e) { /* ignore */ }
                     (window as any).recaptchaVerifier = null;
                 }
 
@@ -50,7 +64,7 @@ export const LoginPage: React.FC = () => {
                 (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
                     'size': 'invisible',
                     'callback': () => {
-                        // reCAPTCHA solved, allow signInWithPhoneNumber.
+                        // reCAPTCHA solved
                     }
                 });
             } catch (e) {
@@ -61,14 +75,12 @@ export const LoginPage: React.FC = () => {
         initRecaptcha();
     }
 
-    // Cleanup on unmount or step change
+    // Cleanup
     return () => {
         if ((window as any).recaptchaVerifier) {
             try {
                 (window as any).recaptchaVerifier.clear();
-            } catch(e) {
-                // ignore
-            }
+            } catch(e) { /* ignore */ }
             (window as any).recaptchaVerifier = null;
         }
     };
@@ -79,28 +91,37 @@ export const LoginPage: React.FC = () => {
   const handleSendOtp = async (e: React.FormEvent) => {
       e.preventDefault();
       
+      if (isBlocked) {
+          setError("Çok fazla deneme yaptınız. Lütfen bekleyin.");
+          return;
+      }
+
       // Basic validation
       if (phoneNumber.length < 10) {
           setError("Lütfen geçerli bir numara girin.");
           return;
       }
 
+      // Rate Limiting Check
+      const allowed = recordSmsAttempt();
+      if (!allowed) {
+          setError("Güvenlik nedeniyle işleminiz 5 dakika durduruldu.");
+          setIsBlocked(true);
+          return;
+      }
+
       setLoading(true);
       setError(null);
 
-      // Clean number (ensure +90 prefix if missing for TR)
+      // Clean number (whitespace removal is handled in PhoneInput visually, but safeguard here)
       let cleanNumber = phoneNumber.replace(/\s/g, '');
-      if (!cleanNumber.startsWith('+')) {
-          cleanNumber = '+90' + cleanNumber; // Default to TR
-      }
 
       try {
           const appVerifier = (window as any).recaptchaVerifier;
-          if (!appVerifier) {
-              throw new Error("ReCAPTCHA not initialized");
-          }
+          if (!appVerifier) throw new Error("ReCAPTCHA not initialized");
 
-          const confirmationResult = await signInWithPhoneNumber(auth, cleanNumber, appVerifier);
+          // SMART AUTH LOGIC: Check DB before SMS
+          const confirmationResult = await initiatePhoneAuth(cleanNumber, authMode, appVerifier);
           
           // Store ID and Number
           setVerificationId(confirmationResult.verificationId);
@@ -110,34 +131,30 @@ export const LoginPage: React.FC = () => {
           setLoading(false);
           setStep('OTP');
           
-          // Attach confirmation result to window for access in next step (or use a ref/store)
+          // Attach confirmation result to window
           (window as any).confirmationResult = confirmationResult;
 
       } catch (err: any) {
-          console.error("SMS Error:", err);
+          console.error("Auth Error:", err);
           setLoading(false);
-          setError("SMS gönderilemedi. Numaranızı veya internet bağlantınızı kontrol edin.");
           
-          // If error is auth/internal-error, it might be domain authorization
-          if (err.code === 'auth/internal-error') {
-              console.warn("Check Firebase Console > Authentication > Settings > Authorized Domains.");
+          if (err.message === 'ACCOUNT_NOT_FOUND') {
+              setError("Bu numara kayıtlı değil. Lütfen 'Kayıt Ol' sekmesini kullanın.");
+          } else if (err.message === 'ACCOUNT_EXISTS') {
+              setError("Bu numara zaten kayıtlı. Lütfen giriş yapın.");
+          } else if (err.code === 'auth/too-many-requests') {
+              setError("Çok fazla istek gönderildi. Lütfen daha sonra tekrar deneyin.");
+          } else {
+              setError("İşlem başarısız. Lütfen bilgilerinizi kontrol edin.");
           }
 
-          // Reset recaptcha if possible to allow retry
-          try {
-              if ((window as any).recaptchaVerifier) {
-                  // We often need to fully re-init on error to be safe
+          // Reset recaptcha on error to allow retry
+          if((window as any).recaptchaVerifier) {
+              try {
                   (window as any).recaptchaVerifier.clear();
                   (window as any).recaptchaVerifier = null;
-                  
-                  // Re-init
-                  (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                      'size': 'invisible',
-                      'callback': () => {}
-                  });
-              }
-          } catch (resetErr) {
-              console.error("Recaptcha Reset Error", resetErr);
+                  // Re-init happens via useEffect dependency if needed, or simple reload logic
+              } catch (e) {}
           }
       }
   };
@@ -155,13 +172,13 @@ export const LoginPage: React.FC = () => {
 
           await confirmationResult.confirm(otpCode);
           
-          // Auth Successful - Check if User Exists in DB
+          // Auth Successful - Check if User Exists in DB (Double Check)
           const existingUser = await checkUserExists(phoneNumber);
 
           if (existingUser) {
               loginSuccess(existingUser);
           } else {
-              // New User -> Profile Setup
+              // Only if in Register mode should we reach here ideally
               setStep('PROFILE_SETUP');
               setLoading(false);
           }
@@ -181,7 +198,6 @@ export const LoginPage: React.FC = () => {
       setLoading(true);
 
       try {
-          // --- ADMIN BACKDOOR CHECK ---
           const role = phoneNumber === ADMIN_PHONE ? 'admin' : 'staff';
           const avatarInitials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
 
@@ -194,7 +210,7 @@ export const LoginPage: React.FC = () => {
               xp: 0,
               completedCourses: [],
               badges: [],
-              pin: '1234' // Default pin for new users
+              pin: '1234' // Default pin
           });
 
           loginSuccess(newUser);
@@ -206,10 +222,15 @@ export const LoginPage: React.FC = () => {
       }
   };
 
+  const switchMode = (mode: 'LOGIN' | 'REGISTER') => {
+      setAuthMode(mode);
+      setError(null);
+  };
+
   // --- RENDER HELPERS ---
 
   return (
-    <div className="w-full min-h-[80vh] flex flex-col items-center justify-center p-6 relative">
+    <div className="w-full min-h-[85vh] flex flex-col items-center justify-center p-6 relative">
         <div id="recaptcha-container"></div>
 
         <motion.div 
@@ -217,52 +238,79 @@ export const LoginPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-sm"
         >
-            {/* Logo / Header */}
-            <div className="text-center mb-10">
+            {/* Header */}
+            <div className="text-center mb-8">
                 <div className="w-20 h-20 bg-primary text-white rounded-3xl mx-auto flex items-center justify-center shadow-xl shadow-primary/20 mb-4">
                     <span className="text-4xl font-bold">H</span>
                 </div>
                 <h1 className="text-2xl font-bold text-primary tracking-tight">Hotel Academy</h1>
-                <p className="text-gray-400 text-sm mt-1">Global Staff Access</p>
+                <p className="text-gray-400 text-sm mt-1">Enterprise Staff Access</p>
             </div>
 
+            {/* Blocked State */}
+            {isBlocked && (
+                <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-600 mb-6 animate-pulse">
+                    <AlertTriangle className="w-6 h-6 shrink-0" />
+                    <div className="text-xs font-bold">
+                        Güvenlik kilitlenmesi. Lütfen {Math.ceil((cooldownUntil - Date.now()) / 1000 / 60)} dakika bekleyin.
+                    </div>
+                </div>
+            )}
+
             <AnimatePresence mode="wait">
-                {/* STEP 1: PHONE INPUT */}
-                {step === 'PHONE' && (
-                    <motion.form 
-                        key="phone"
+                {/* STEP 1: PHONE INPUT & MODE SELECTION */}
+                {step === 'PHONE' && !isBlocked && (
+                    <motion.div
+                        key="phone-step"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
-                        onSubmit={handleSendOtp}
-                        className="flex flex-col gap-6"
                     >
-                        <div>
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Telefon Numaranız</label>
-                            <div className="relative group">
-                                <Phone className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-accent transition-colors" />
-                                <input 
-                                    type="tel" 
-                                    placeholder="5XX XXX XX XX"
-                                    className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-lg font-bold text-gray-800 placeholder-gray-300 focus:outline-none focus:border-accent transition-all"
-                                    value={phoneNumber}
-                                    onChange={(e) => setPhoneNumber(e.target.value)}
-                                    autoFocus
-                                />
-                            </div>
-                            <p className="text-xs text-gray-400 mt-2 ml-1">SMS ile doğrulama kodu gönderilecektir.</p>
+                        {/* Tabs */}
+                        <div className="flex p-1 bg-gray-100 rounded-xl mb-6 relative">
+                            <motion.div 
+                                layoutId="activeTab"
+                                className={`absolute inset-y-1 w-1/2 bg-white rounded-lg shadow-sm`}
+                                animate={{ x: authMode === 'LOGIN' ? 0 : '100%' }}
+                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                            />
+                            <button 
+                                onClick={() => switchMode('LOGIN')}
+                                className={`flex-1 py-3 text-sm font-bold relative z-10 transition-colors ${authMode === 'LOGIN' ? 'text-primary' : 'text-gray-500'}`}
+                            >
+                                Giriş Yap
+                            </button>
+                            <button 
+                                onClick={() => switchMode('REGISTER')}
+                                className={`flex-1 py-3 text-sm font-bold relative z-10 transition-colors ${authMode === 'REGISTER' ? 'text-primary' : 'text-gray-500'}`}
+                            >
+                                Kayıt Ol
+                            </button>
                         </div>
 
-                        {error && <div className="text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded-xl">{error}</div>}
+                        <form onSubmit={handleSendOtp} className="flex flex-col gap-6">
+                            <PhoneInput 
+                                value={phoneNumber}
+                                onChange={setPhoneNumber}
+                                disabled={isLoading}
+                            />
 
-                        <button 
-                            type="submit" 
-                            disabled={isLoading || phoneNumber.length < 10}
-                            className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-lg font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                        >
-                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Devam Et <ArrowRight className="w-5 h-5" /></>}
-                        </button>
-                    </motion.form>
+                            <div className="flex items-start gap-2 text-xs text-gray-400 px-1">
+                                <Lock className="w-3 h-3 mt-0.5 shrink-0" />
+                                <p>Numaranız yalnızca doğrulama ve güvenli erişim için kullanılacaktır.</p>
+                            </div>
+
+                            {error && <div className="text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded-xl border border-red-100">{error}</div>}
+
+                            <button 
+                                type="submit" 
+                                disabled={isLoading || phoneNumber.length < 10}
+                                className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-lg font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                            >
+                                {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>SMS Gönder <ArrowRight className="w-5 h-5" /></>}
+                            </button>
+                        </form>
+                    </motion.div>
                 )}
 
                 {/* STEP 2: OTP INPUT */}
@@ -276,16 +324,16 @@ export const LoginPage: React.FC = () => {
                         className="flex flex-col gap-6"
                     >
                         <div className="text-center mb-2">
-                            <Smartphone className="w-12 h-12 text-accent mx-auto mb-2 opacity-50" />
+                            <ShieldCheck className="w-12 h-12 text-green-500 mx-auto mb-2 opacity-80" />
                             <h2 className="text-xl font-bold text-gray-800">Kodu Doğrula</h2>
-                            <p className="text-gray-500 text-sm">{phoneNumber} numarasına gönderilen 6 haneli kodu girin.</p>
+                            <p className="text-gray-500 text-sm">{phoneNumber} numarasına gönderilen kodu girin.</p>
                         </div>
 
                         <input 
                             type="text" 
                             maxLength={6}
                             placeholder="000000"
-                            className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 text-center text-3xl tracking-[0.5em] font-bold text-gray-800 placeholder-gray-200 focus:outline-none focus:border-accent transition-all"
+                            className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 text-center text-3xl tracking-[0.5em] font-bold text-gray-800 placeholder-gray-200 focus:outline-none focus:border-primary transition-all shadow-sm"
                             value={otpCode}
                             onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
                             autoFocus
@@ -296,12 +344,12 @@ export const LoginPage: React.FC = () => {
                         <button 
                             type="submit" 
                             disabled={isLoading || otpCode.length !== 6}
-                            className="w-full bg-accent hover:bg-accent-dark disabled:bg-gray-300 text-primary font-bold py-4 rounded-2xl shadow-xl shadow-accent/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                            className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 text-white font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                         >
-                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Doğrula <ShieldCheck className="w-5 h-5" /></>}
+                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Doğrula & Giriş Yap"}
                         </button>
                         
-                        <button type="button" onClick={() => setStep('PHONE')} className="text-gray-400 text-sm font-medium hover:text-gray-600">
+                        <button type="button" onClick={() => setStep('PHONE')} className="text-gray-400 text-sm font-medium hover:text-gray-600 underline">
                             Numarayı Değiştir
                         </button>
                     </motion.form>
@@ -319,19 +367,19 @@ export const LoginPage: React.FC = () => {
                             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 text-green-600">
                                 <CheckCircle className="w-8 h-8" />
                             </div>
-                            <h2 className="text-xl font-bold text-gray-800">Aramıza Hoş Geldin!</h2>
-                            <p className="text-gray-500 text-sm">Seni daha yakından tanıyalım.</p>
+                            <h2 className="text-xl font-bold text-gray-800">Hoş Geldin!</h2>
+                            <p className="text-gray-500 text-sm">Hesabını tamamlayalım.</p>
                         </div>
 
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Adın Soyadın</label>
                                 <div className="relative group">
-                                    <UserIcon className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-accent transition-colors" />
+                                    <UserIcon className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
                                     <input 
                                         type="text" 
                                         placeholder="Örn: Ayşe Yılmaz"
-                                        className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-lg font-bold text-gray-800 placeholder-gray-300 focus:outline-none focus:border-accent transition-all"
+                                        className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-lg font-bold text-gray-800 placeholder-gray-300 focus:outline-none focus:border-primary transition-all"
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
                                     />
@@ -345,7 +393,7 @@ export const LoginPage: React.FC = () => {
                                         <button
                                             key={dept}
                                             onClick={() => setDepartment(dept as any)}
-                                            className={`p-3 rounded-xl border-2 text-sm font-bold transition-all ${department === dept ? 'border-primary bg-primary text-white' : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`}
+                                            className={`p-3 rounded-xl border-2 text-sm font-bold transition-all ${department === dept ? 'border-primary bg-primary text-white shadow-lg shadow-primary/20' : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`}
                                         >
                                             {dept.toUpperCase().replace('_', ' ')}
                                         </button>

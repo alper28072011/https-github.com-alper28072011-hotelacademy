@@ -11,6 +11,7 @@ export interface Language {
 
 export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management';
 export type UserRole = 'staff' | 'manager' | 'admin';
+export type AuthMode = 'LOGIN' | 'REGISTER'; // NEW
 
 // --- KUDOS / GAMIFICATION TYPES ---
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
