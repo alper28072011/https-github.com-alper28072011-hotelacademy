@@ -1,14 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, UserPlus, UserCheck, Grid, Heart, BookOpen, Star, Users, Lock, MoreHorizontal, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, UserPlus, UserCheck, Grid, Heart, BookOpen, Lock, MoreHorizontal } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User, FeedPost, Course, FollowStatus } from '../../types';
 import { getUserById, getUserPosts, getInstructorCourses } from '../../services/db';
 import { followUserSmart, unfollowUserSmart, checkFollowStatus } from '../../services/socialService';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { MasonryGrid } from '../explore/components/MasonryGrid';
+import { ProfileHeader } from './components/ProfileHeader';
 
 export const PublicProfilePage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -104,64 +104,18 @@ export const PublicProfilePage: React.FC = () => {
           <button className="text-gray-800"><MoreHorizontal className="w-6 h-6" /></button>
       </div>
 
-      {/* Profile Header */}
-      <div className="px-6 pt-6 pb-4">
-          <div className="flex items-center gap-8 mb-6">
-              {/* Avatar */}
-              <div className="relative shrink-0">
-                  <div className={`w-20 h-20 rounded-full p-[2px] ${profileUser.instructorProfile ? 'bg-gradient-to-tr from-blue-400 to-indigo-600' : 'bg-gradient-to-tr from-accent to-purple-500'}`}>
-                      <div className="w-full h-full rounded-full border-2 border-white overflow-hidden bg-gray-100">
-                          {profileUser.avatar.length > 5 ? (
-                              <img src={profileUser.avatar} className="w-full h-full object-cover" />
-                          ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-primary text-white font-bold text-xl">{profileUser.avatar}</div>
-                          )}
-                      </div>
-                  </div>
-              </div>
+      {/* Profile Header (Centralized Logic) */}
+      <ProfileHeader 
+          user={profileUser}
+          isOwnProfile={isMe}
+          followersCount={profileUser.followersCount}
+          followingCount={profileUser.followingCount}
+          postCount={userPosts.length}
+      />
 
-              {/* Stats */}
-              <div className="flex-1 flex justify-around text-center">
-                  <div className="flex flex-col">
-                      <span className="font-bold text-xl text-gray-900">{userPosts.length}</span>
-                      <span className="text-xs text-gray-500">Gönderi</span>
-                  </div>
-                  <div className="flex flex-col">
-                      <span className="font-bold text-xl text-gray-900">{profileUser.followersCount || 0}</span>
-                      <span className="text-xs text-gray-500">Takipçi</span>
-                  </div>
-                  <div className="flex flex-col">
-                      <span className="font-bold text-xl text-gray-900">{profileUser.followingCount || 0}</span>
-                      <span className="text-xs text-gray-500">Takip</span>
-                  </div>
-              </div>
-          </div>
-
-          {/* Bio */}
-          <div className="mb-6">
-              <h2 className="font-bold text-gray-900 text-sm">{profileUser.name}</h2>
-              <div className="text-xs text-blue-600 mb-1 font-medium bg-blue-50 w-max px-2 py-0.5 rounded">
-                  {profileUser.department.toUpperCase().replace('_', ' ')}
-              </div>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                  {profileUser.bio || "Hotel Academy Member"}
-              </p>
-          </div>
-
-          {/* Actions */}
-          {isMe ? (
-              <div className="flex gap-2">
-                  <button 
-                    onClick={() => navigate('/profile')} 
-                    className="flex-1 bg-gray-100 text-gray-900 font-bold py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors"
-                  >
-                      Profili Düzenle
-                  </button>
-                  <button className="flex-1 bg-gray-100 text-gray-900 font-bold py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors">
-                      İstatistikler
-                  </button>
-              </div>
-          ) : (
+      {/* Social Actions (Follow etc) - Only if not own profile */}
+      {!isMe && (
+          <div className="px-6 mb-4">
               <div className="flex gap-2">
                   <button 
                     onClick={handleFollowToggle}
@@ -183,8 +137,8 @@ export const PublicProfilePage: React.FC = () => {
                       Mesaj
                   </button>
               </div>
-          )}
-      </div>
+          </div>
+      )}
 
       {/* Tabs */}
       <div className="border-t border-gray-100 sticky top-[60px] bg-white z-20 flex justify-center">

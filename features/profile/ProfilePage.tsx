@@ -4,30 +4,31 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
-    Settings, Grid, FileText, Bookmark, Download, ExternalLink, 
-    Star, Users, Heart, Zap, Award, Building2, ShieldCheck, ChevronRight,
-    Youtube
+    Grid, FileText, Bookmark, Download, 
+    Star, Users, Heart, Zap, Award, Youtube
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useProfileStore } from '../../stores/useProfileStore';
 import { useContentStore } from '../../stores/useContentStore';
 import { EditProfileModal } from './components/EditProfileModal';
 import { SettingsDrawer } from './components/SettingsDrawer';
+import { ProfileHeader } from './components/ProfileHeader'; // New Component
 import { Course, KudosType } from '../../types';
-import { getInstructorCourses } from '../../services/db';
+import { getInstructorCourses, getUserPosts } from '../../services/db';
 
 export const ProfilePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   const { userProfile, initializeListeners } = useProfileStore();
-  const { courses } = useContentStore(); // To resolve IDs
+  const { courses } = useContentStore(); 
 
   // UI State
   const [activeTab, setActiveTab] = useState<'collection' | 'certificates' | 'saved' | 'channel'>('collection');
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [myCreatedCourses, setMyCreatedCourses] = useState<Course[]>([]);
+  const [postCount, setPostCount] = useState(0);
 
   // Active User Data
   const activeUser = userProfile || currentUser;
@@ -43,24 +44,21 @@ export const ProfilePage: React.FC = () => {
   useEffect(() => {
       if (currentUser) {
           getInstructorCourses(currentUser.id).then(setMyCreatedCourses);
+          getUserPosts(currentUser.id).then(posts => setPostCount(posts.length));
       }
   }, [currentUser]);
 
   if (!activeUser) return null;
 
   // --- DATA PREPARATION ---
-
-  // 1. Resolve Certificates (Completed Courses)
   const myCertificates = activeUser.completedCourses
       .map(id => courses.find(c => c.id === id))
-      .filter((c): c is Course => !!c); // Type guard
+      .filter((c): c is Course => !!c);
 
-  // 2. Resolve Saved
   const mySaved = (activeUser.savedCourses || [])
       .map(id => courses.find(c => c.id === id))
       .filter((c): c is Course => !!c);
 
-  // 3. Badges Config
   const badgeConfig: Record<KudosType, { icon: any, color: string, bg: string, label: string }> = {
       'STAR_PERFORMER': { icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-50', label: 'Yıldız Performans' },
       'TEAM_PLAYER': { icon: Users, color: 'text-blue-500', bg: 'bg-blue-50', label: 'Takım Oyuncusu' },
@@ -68,181 +66,19 @@ export const ProfilePage: React.FC = () => {
       'FAST_LEARNER': { icon: Zap, color: 'text-purple-500', bg: 'bg-purple-50', label: 'Hızlı Öğrenen' },
   };
 
-  // Role Checks & Context
-  const isSuperAdmin = activeUser.role === 'super_admin';
-  const isHotelManager = ['manager', 'admin'].includes(activeUser.role);
-  const isFreelancer = !activeUser.currentOrganizationId;
-
-  // --- DYNAMIC ACTION BUTTON LOGIC ---
-  const renderPrimaryAction = () => {
-      if (isSuperAdmin) {
-          return (
-            <div 
-                onClick={() => navigate('/super-admin')}
-                className="bg-gray-900 text-yellow-400 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-black/10 relative overflow-hidden group"
-            >
-                <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="flex items-center gap-3 relative z-10">
-                    <div className="p-1.5 bg-yellow-400/20 rounded-full">
-                        <ShieldCheck className="w-5 h-5 text-yellow-400" />
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-sm font-bold">Platform Yönetimi</span>
-                        <span className="text-[10px] opacity-70">Super Admin Yetkisi</span>
-                    </div>
-                </div>
-                <ChevronRight className="w-5 h-5 opacity-50 relative z-10" />
-            </div>
-          );
-      }
-
-      if (isFreelancer) {
-          return (
-            <div 
-                onClick={() => navigate('/lobby')}
-                className="bg-gray-50 border-2 border-dashed border-gray-200 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all group hover:border-accent"
-            >
-                <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-gray-200 rounded-full group-hover:bg-accent group-hover:text-primary transition-colors">
-                        <Building2 className="w-5 h-5 text-gray-500 group-hover:text-primary" />
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-800">Bir İşletmeye Katıl</span>
-                        <span className="text-[10px] text-gray-500">Kariyerini bir üst seviyeye taşı</span>
-                    </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-gray-400" />
-            </div>
-          );
-      }
-
-      if (isHotelManager) {
-          return (
-            <div 
-                onClick={() => navigate('/admin')}
-                className="bg-blue-50 border border-blue-100 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all hover:bg-blue-100"
-            >
-                <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-blue-100 rounded-full text-blue-600">
-                        <Building2 className="w-5 h-5" />
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-800">İşletme Yönetimi</span>
-                        <span className="text-[10px] text-gray-500">Personel ve İçerik Paneli</span>
-                    </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-gray-400" />
-            </div>
-          );
-      }
-
-      // Default: Staff Member
-      return (
-        <div 
-            onClick={() => activeUser.currentOrganizationId && navigate(`/hotel/${activeUser.currentOrganizationId}`)}
-            className="bg-white border border-gray-100 shadow-sm py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all"
-        >
-            <div className="flex items-center gap-3">
-                <div className="p-1.5 bg-gray-100 rounded-full text-gray-600">
-                    <Building2 className="w-5 h-5" />
-                </div>
-                <div className="flex flex-col">
-                    <span className="text-sm font-bold text-gray-800">Bağlı İşletme</span>
-                    <span className="text-[10px] text-gray-500">Genel sayfayı görüntüle</span>
-                </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
-        </div>
-      );
-  };
-
   return (
     <div className="min-h-screen bg-white pb-24">
         
-        {/* HEADER SECTION */}
-        <div className="px-4 pt-6 pb-2">
-            {/* Top Bar */}
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-xl font-bold flex items-center gap-1">
-                    {activeUser.phoneNumber} 
-                    {/* Optional: Verified Tick */}
-                    <span className="text-blue-500">
-                        <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M19.965 8.521C19.988 8.347 20 8.173 20 8c0-2.379-2.143-4.288-4.521-3.965C14.786 2.802 13.466 2 12 2s-2.786.802-3.479 2.035C6.138 3.712 4 5.621 4 8c0 .173.012.347.035.521C2.802 9.215 2 10.535 2 12s.802 2.785 2.035 3.479A8.318 8.318 0 0 0 4 16c0 2.379 2.143 4.288 4.521 3.965C9.214 21.198 10.534 22 12 22s2.786-.802 3.479-2.035C17.857 20.288 20 18.379 20 16c0-.173-.012-.347-.035-.521C21.198 14.785 22 13.465 22 12s-.802-2.785-2.035-3.479zm-9.015 8.961-4.036-4.036 1.414-1.414 2.622 2.622 5.45-5.45 1.414 1.414-6.864 6.864z"></path></svg>
-                    </span>
-                </h1>
-                <div className="flex gap-4">
-                    <button onClick={() => setIsSettingsOpen(true)} className="text-gray-800 hover:bg-gray-100 p-1 rounded-full transition-colors">
-                        <Settings className="w-7 h-7" />
-                    </button>
-                </div>
-            </div>
-
-            {/* Profile Info Row */}
-            <div className="flex items-center gap-6 mb-4">
-                {/* Avatar */}
-                <div className="relative shrink-0">
-                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-pink-600">
-                        <div className="w-full h-full rounded-full border-2 border-white overflow-hidden bg-gray-100">
-                            {activeUser.avatar.length > 5 ? (
-                                <img src={activeUser.avatar} alt="Profile" className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gray-800 text-white font-bold text-2xl">{activeUser.avatar}</div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Stats */}
-                <div className="flex-1 flex justify-around text-center">
-                    <div>
-                        <div className="font-bold text-lg text-gray-900">{Math.floor(activeUser.xp / 1000)}</div>
-                        <div className="text-xs text-gray-500">Seviye</div>
-                    </div>
-                    <div>
-                        <div className="font-bold text-lg text-gray-900">{activeUser.completedCourses.length}</div>
-                        <div className="text-xs text-gray-500">Sertifika</div>
-                    </div>
-                    <div>
-                        <div className="font-bold text-lg text-gray-900">{activeUser.badges?.reduce((acc, b) => acc + b.count, 0) || 0}</div>
-                        <div className="text-xs text-gray-500">Rozet</div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Bio & Details */}
-            <div className="mb-6">
-                <h2 className="font-bold text-gray-900">{activeUser.name}</h2>
-                <div className="text-sm text-gray-500 mb-1 capitalize">
-                    {isFreelancer ? "Freelancer" : activeUser.department?.replace('_', ' ') + " Specialist"}
-                </div>
-                <p className="text-sm text-gray-800 whitespace-pre-wrap leading-tight">
-                    {activeUser.bio || "Henüz bir biyografi eklenmedi."}
-                </p>
-                {activeUser.instagramHandle && (
-                    <a href={`https://instagram.com/${activeUser.instagramHandle.replace('@', '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm font-medium text-blue-900 mt-1">
-                        <ExternalLink className="w-3 h-3" /> {activeUser.instagramHandle}
-                    </a>
-                )}
-            </div>
-
-            {/* DYNAMIC DASHBOARD SWITCHER */}
-            <div className="mb-6">
-                {renderPrimaryAction()}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2 mb-2">
-                <button 
-                    onClick={() => setIsEditing(true)}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold py-2 rounded-lg text-sm transition-colors"
-                >
-                    Profili Düzenle
-                </button>
-                <button className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold py-2 rounded-lg text-sm transition-colors">
-                    Kariyer Yolu
-                </button>
-            </div>
-        </div>
+        {/* SHARED HEADER COMPONENT */}
+        <ProfileHeader 
+            user={activeUser}
+            isOwnProfile={true}
+            onSettingsClick={() => setIsSettingsOpen(true)}
+            onEditClick={() => setIsEditing(true)}
+            followersCount={activeUser.followersCount}
+            followingCount={activeUser.followingCount}
+            postCount={postCount}
+        />
 
         {/* TABS (STICKY) */}
         <div className="sticky top-0 bg-white z-30 border-b border-gray-200 flex overflow-x-auto no-scrollbar">
@@ -274,7 +110,6 @@ export const ProfilePage: React.FC = () => {
 
         {/* CONTENT AREA */}
         <div className="min-h-[300px]">
-            {/* ... Content Tabs ... */}
             {activeTab === 'collection' && (
                 <div className="grid grid-cols-3 gap-1 p-1">
                     <div className="aspect-square bg-gray-50 flex flex-col items-center justify-center p-2 border border-gray-100">
