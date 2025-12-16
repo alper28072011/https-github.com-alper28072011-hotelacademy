@@ -58,7 +58,8 @@ export const OrganizationLobby: React.FC = () => {
           await switchOrganization(org.id);
           
           // SMART REDIRECT: Go to Settings for Onboarding instead of Dashboard
-          navigate('/admin/settings', { state: { isNewOrg: true } });
+          // Using 'replace' to prevent going back to Lobby easily
+          navigate('/admin/settings', { state: { isNewOrg: true }, replace: true });
       }
       setIsCreating(false);
   };
