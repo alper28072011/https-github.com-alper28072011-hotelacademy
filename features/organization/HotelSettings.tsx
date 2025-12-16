@@ -1,34 +1,56 @@
 
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Building2, Save, Upload, Loader2, Palette, Shield, List, Trash2, Plus, AlertTriangle, XCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Building2, Save, Upload, Loader2, Palette, Shield, List, Trash2, Plus, AlertTriangle, XCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { updateOrganization } from '../../services/db';
 import { deleteOrganizationFully } from '../../services/organizationService';
 import { uploadFile } from '../../services/storage';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import confetti from 'canvas-confetti';
 
 export const HotelSettings: React.FC = () => {
   const { currentOrganization, switchOrganization } = useOrganizationStore();
   const { currentUser } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [activeTab, setActiveTab] = useState<'BRAND' | 'DEPTS' | 'PERMS' | 'DANGER'>('BRAND');
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false); // Changed from Archiving to Deleting
+  const [isDeleting, setIsDeleting] = useState(false); 
   const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [showWelcome, setShowWelcome] = useState(false); // Onboarding State
 
   // Form State
   const [name, setName] = useState(currentOrganization?.name || '');
   const [description, setDescription] = useState(currentOrganization?.description || '');
-  const [location, setLocation] = useState(currentOrganization?.location || '');
+  const [locationStr, setLocationStr] = useState(currentOrganization?.location || '');
   const [website, setWebsite] = useState(currentOrganization?.website || '');
   const [allowContent, setAllowContent] = useState(currentOrganization?.settings?.allowStaffContentCreation || false);
   const [departments, setDepartments] = useState<string[]>(currentOrganization?.settings?.customDepartments || []);
   const [newDept, setNewDept] = useState('');
 
-  // Save Handler
+  // Sync state when org loads
+  useEffect(() => {
+      if(currentOrganization) {
+          setName(currentOrganization.name);
+          setDescription(currentOrganization.description || '');
+          setLocationStr(currentOrganization.location || '');
+          setWebsite(currentOrganization.website || '');
+          setDepartments(currentOrganization.settings?.customDepartments || []);
+      }
+  }, [currentOrganization]);
+
+  // Check for Onboarding Flag
+  useEffect(() => {
+      if (location.state?.isNewOrg) {
+          setShowWelcome(true);
+          confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+          // Clear state to prevent re-trigger on refresh? Not strictly necessary for this UX.
+      }
+  }, [location.state]);
+
   const handleSave = async () => {
       if (!currentOrganization) return;
       setIsSaving(true);
@@ -36,7 +58,7 @@ export const HotelSettings: React.FC = () => {
       const updates = {
           name,
           description,
-          location,
+          location: locationStr,
           website,
           settings: {
               ...currentOrganization.settings,
@@ -50,6 +72,7 @@ export const HotelSettings: React.FC = () => {
       await switchOrganization(currentOrganization.id); // Refresh store
       
       setIsSaving(false);
+      if (showWelcome) setShowWelcome(false); // Close wizard if open
       alert('Ayarlar kaydedildi.');
   };
 
@@ -61,27 +84,6 @@ export const HotelSettings: React.FC = () => {
           await switchOrganization(currentOrganization.id);
           setIsSaving(false);
       }
-  };
-
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files?.[0] && currentOrganization) {
-          setIsSaving(true);
-          const url = await uploadFile(e.target.files[0], 'org_covers');
-          await updateOrganization(currentOrganization.id, { coverUrl: url });
-          await switchOrganization(currentOrganization.id);
-          setIsSaving(false);
-      }
-  };
-
-  const addDept = () => {
-      if (newDept && !departments.includes(newDept)) {
-          setDepartments([...departments, newDept]);
-          setNewDept('');
-      }
-  };
-
-  const removeDept = (dept: string) => {
-      setDepartments(departments.filter(d => d !== dept));
   };
 
   const handleDeleteOrg = async () => {
@@ -104,7 +106,54 @@ export const HotelSettings: React.FC = () => {
   if (!currentOrganization) return <div>Yükleniyor...</div>;
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 pb-20">
+    <div className="flex flex-col h-full bg-gray-50 pb-20 relative">
+        {/* ONBOARDING MODAL OVERLAY */}
+        <AnimatePresence>
+            {showWelcome && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
+                    <motion.div 
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.9, opacity: 0 }}
+                        className="bg-white rounded-[2rem] w-full max-w-lg overflow-hidden shadow-2xl"
+                    >
+                        <div className="bg-primary p-8 text-center text-white relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10" />
+                            <div className="relative z-10">
+                                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
+                                    <Building2 className="w-8 h-8 text-white" />
+                                </div>
+                                <h2 className="text-2xl font-bold mb-1">Hoş Geldin Patron! 👋</h2>
+                                <p className="text-white/80 text-sm">Ofisin hazır. Şimdi burayı biraz dekore edelim.</p>
+                            </div>
+                        </div>
+                        <div className="p-8">
+                            <div className="flex flex-col gap-4 mb-8">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">1</div>
+                                    <div className="text-sm text-gray-600">İşletme logonu yükle.</div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">2</div>
+                                    <div className="text-sm text-gray-600">Departmanlarını tanımla.</div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">3</div>
+                                    <div className="text-sm text-gray-600">Ekibini davet etmeye başla!</div>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setShowWelcome(false)}
+                                className="w-full bg-primary hover:bg-primary-light text-white font-bold py-4 rounded-xl shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-95"
+                            >
+                                Hadi Başlayalım <ArrowRight className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
+
         {/* Header */}
         <div className="bg-white p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 z-20">
             <h1 className="text-2xl font-bold text-gray-800">Otel Ayarları</h1>
@@ -141,13 +190,46 @@ export const HotelSettings: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100"
             >
-                {/* Brand & Depts Tabs Omitted for Brevity - Keeping Existing Logic */}
-                {(activeTab === 'BRAND' || activeTab === 'DEPTS' || activeTab === 'PERMS') && (
+                {/* BRAND SETTINGS */}
+                {activeTab === 'BRAND' && (
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-6">
+                            <div className="relative group cursor-pointer w-24 h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-primary">
+                                {currentOrganization.logoUrl ? <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" /> : <Upload className="w-8 h-8 text-gray-400" />}
+                                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleLogoUpload} />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-gray-800">Otel Logosu</h3>
+                                <p className="text-xs text-gray-500">Önerilen: 500x500px PNG</p>
+                            </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">İşletme Adı</label>
+                                <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Konum</label>
+                                <input value={locationStr} onChange={e => setLocationStr(e.target.value)} placeholder="Şehir, Ülke" className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Hakkında</label>
+                            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
+                        </div>
+                    </div>
+                )}
+
+                {/* Other Tabs Placeholder Logic */}
+                {(activeTab === 'DEPTS' || activeTab === 'PERMS') && (
                     <div className="text-gray-500 text-sm text-center py-4">
                         (Standart ayar alanları - Değişiklik yok)
                     </div>
                 )}
 
+                {/* DANGER ZONE */}
                 {activeTab === 'DANGER' && (
                     <div className="space-y-6">
                         <div className="bg-red-50 p-6 rounded-xl border border-red-100">

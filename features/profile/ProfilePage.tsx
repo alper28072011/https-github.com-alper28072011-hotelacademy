@@ -68,10 +68,93 @@ export const ProfilePage: React.FC = () => {
       'FAST_LEARNER': { icon: Zap, color: 'text-purple-500', bg: 'bg-purple-50', label: 'Hızlı Öğrenen' },
   };
 
-  // Role Checks
+  // Role Checks & Context
   const isSuperAdmin = activeUser.role === 'super_admin';
   const isHotelManager = ['manager', 'admin'].includes(activeUser.role);
   const isFreelancer = !activeUser.currentOrganizationId;
+
+  // --- DYNAMIC ACTION BUTTON LOGIC ---
+  const renderPrimaryAction = () => {
+      if (isSuperAdmin) {
+          return (
+            <div 
+                onClick={() => navigate('/super-admin')}
+                className="bg-gray-900 text-yellow-400 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-black/10 relative overflow-hidden group"
+            >
+                <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="flex items-center gap-3 relative z-10">
+                    <div className="p-1.5 bg-yellow-400/20 rounded-full">
+                        <ShieldCheck className="w-5 h-5 text-yellow-400" />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-bold">Platform Yönetimi</span>
+                        <span className="text-[10px] opacity-70">Super Admin Yetkisi</span>
+                    </div>
+                </div>
+                <ChevronRight className="w-5 h-5 opacity-50 relative z-10" />
+            </div>
+          );
+      }
+
+      if (isFreelancer) {
+          return (
+            <div 
+                onClick={() => navigate('/lobby')}
+                className="bg-gray-50 border-2 border-dashed border-gray-200 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all group hover:border-accent"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-gray-200 rounded-full group-hover:bg-accent group-hover:text-primary transition-colors">
+                        <Building2 className="w-5 h-5 text-gray-500 group-hover:text-primary" />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-bold text-gray-800">Bir İşletmeye Katıl</span>
+                        <span className="text-[10px] text-gray-500">Kariyerini bir üst seviyeye taşı</span>
+                    </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+            </div>
+          );
+      }
+
+      if (isHotelManager) {
+          return (
+            <div 
+                onClick={() => navigate('/admin')}
+                className="bg-blue-50 border border-blue-100 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all hover:bg-blue-100"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-blue-100 rounded-full text-blue-600">
+                        <Building2 className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-bold text-gray-800">İşletme Yönetimi</span>
+                        <span className="text-[10px] text-gray-500">Personel ve İçerik Paneli</span>
+                    </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+            </div>
+          );
+      }
+
+      // Default: Staff Member
+      return (
+        <div 
+            onClick={() => activeUser.currentOrganizationId && navigate(`/hotel/${activeUser.currentOrganizationId}`)}
+            className="bg-white border border-gray-100 shadow-sm py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all"
+        >
+            <div className="flex items-center gap-3">
+                <div className="p-1.5 bg-gray-100 rounded-full text-gray-600">
+                    <Building2 className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col">
+                    <span className="text-sm font-bold text-gray-800">Bağlı İşletme</span>
+                    <span className="text-[10px] text-gray-500">Genel sayfayı görüntüle</span>
+                </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-400" />
+        </div>
+      );
+  };
 
   return (
     <div className="min-h-screen bg-white pb-24">
@@ -142,65 +225,9 @@ export const ProfilePage: React.FC = () => {
                 )}
             </div>
 
-            {/* PROFESSIONAL DASHBOARD SWITCHERS */}
-            <div className="space-y-3 mb-6">
-                {/* SCENARIO A: SUPER ADMIN (Platform Owner) */}
-                {isSuperAdmin && (
-                    <div 
-                        onClick={() => navigate('/super-admin')}
-                        className="bg-gray-900 text-yellow-400 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-black/10 relative overflow-hidden group"
-                    >
-                        <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="flex items-center gap-3 relative z-10">
-                            <div className="p-1.5 bg-yellow-400/20 rounded-full">
-                                <ShieldCheck className="w-5 h-5 text-yellow-400" />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold">Platform Yönetimi</span>
-                                <span className="text-[10px] opacity-70">Super Admin Yetkisi</span>
-                            </div>
-                        </div>
-                        <ChevronRight className="w-5 h-5 opacity-50 relative z-10" />
-                    </div>
-                )}
-
-                {/* SCENARIO B: HOTEL MANAGER (Business Owner) */}
-                {(isHotelManager || isSuperAdmin) && !isFreelancer && (
-                    <div 
-                        onClick={() => navigate('/admin')}
-                        className="bg-blue-50 border border-blue-100 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-blue-100 rounded-full">
-                                <Building2 className="w-5 h-5 text-blue-600" />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-gray-800">İşletme Yönetimi</span>
-                                <span className="text-[10px] text-gray-500">Personel ve İçerik Paneli</span>
-                            </div>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
-                    </div>
-                )}
-                
-                {/* SCENARIO C: FREELANCER CTA */}
-                {isFreelancer && (
-                    <div 
-                        onClick={() => navigate('/lobby')}
-                        className="bg-gray-50 border-2 border-dashed border-gray-200 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all group hover:border-accent"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 bg-gray-200 rounded-full group-hover:bg-accent group-hover:text-primary transition-colors">
-                                <Building2 className="w-5 h-5 text-gray-500 group-hover:text-primary" />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="text-sm font-bold text-gray-800">Bir İşletmeye Katıl</span>
-                                <span className="text-[10px] text-gray-500">Kariyerini bir üst seviyeye taşı</span>
-                            </div>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
-                    </div>
-                )}
+            {/* DYNAMIC DASHBOARD SWITCHER */}
+            <div className="mb-6">
+                {renderPrimaryAction()}
             </div>
 
             {/* Action Buttons */}
