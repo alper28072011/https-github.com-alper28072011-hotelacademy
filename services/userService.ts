@@ -1,9 +1,10 @@
 
-import { doc, deleteDoc, updateDoc, collection, query, where, getDocs, writeBatch, runTransaction, getDoc, serverTimestamp, addDoc } from 'firebase/firestore';
+import { doc, deleteDoc, updateDoc, collection, query, where, getDocs, writeBatch, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { deleteUser } from 'firebase/auth'; // Client SDK
 import { db, auth } from './firebase';
-import { User, Organization } from '../types';
-import { detachUserFromAllOrgs } from './organizationService';
+import { User } from '../types';
+import { detachUserFromAllOrgs, getBackupAdmins, transferOwnership } from './organizationService';
+import { checkUserOwnership } from './superAdminService';
 
 /**
  * Suspends a user account (Temporary Freeze).
@@ -23,27 +24,21 @@ export const suspendAccount = async (userId: string): Promise<boolean> => {
 
 /**
  * Downloads all user data as a JSON file.
- * Collects User Profile, Posts, and Memberships.
  */
 export const downloadUserData = async (userId: string): Promise<Blob | null> => {
     try {
-        // 1. Fetch Profile
         const userSnap = await getDoc(doc(db, 'users', userId));
         const profile = userSnap.exists() ? userSnap.data() : null;
-
         if (!profile) return null;
 
-        // 2. Fetch Posts
         const postsQ = query(collection(db, 'posts'), where('authorId', '==', userId));
         const postsSnap = await getDocs(postsQ);
         const posts = postsSnap.docs.map(d => ({id: d.id, ...d.data()}));
 
-        // 3. Fetch Memberships
         const memQ = query(collection(db, 'memberships'), where('userId', '==', userId));
         const memSnap = await getDocs(memQ);
         const memberships = memSnap.docs.map(d => d.data());
 
-        // 4. Construct Data Object
         const fullData = {
             profile,
             posts,
@@ -52,104 +47,121 @@ export const downloadUserData = async (userId: string): Promise<Blob | null> => 
             platform: "Hotel Academy"
         };
 
-        // 5. Create Blob
         const jsonStr = JSON.stringify(fullData, null, 2);
         return new Blob([jsonStr], { type: "application/json" });
-
     } catch (e) {
-        console.error("Download failed:", e);
         return null;
     }
 };
 
 /**
- * SENARYO 2 & 3B: Smart Delete Protocol
- * Kullanıcıyı silerken hiyerarşiyi korur ve verileri anonimleştirir.
+ * VALIDATION: Checks if a user can be deleted safely.
  */
-export const deleteUserSmart = async (user: User): Promise<boolean> => {
+export const validateUserDeletion = async (userId: string): Promise<{ 
+    canDelete: boolean; 
+    reason?: 'SOLE_OWNER' | 'HAS_SUCCESSORS' | 'SAFE'; 
+    orgName?: string;
+    orgId?: string;
+}> => {
+    // Check if they own an active organization
+    const ownedOrg = await checkUserOwnership(userId);
+    
+    if (!ownedOrg || ownedOrg.status === 'ARCHIVED') {
+        return { canDelete: true, reason: 'SAFE' };
+    }
+
+    // If owner, check for backups
+    const backups = await getBackupAdmins(ownedOrg.id, userId);
+    
+    if (backups.length === 0) {
+        return { 
+            canDelete: false, 
+            reason: 'SOLE_OWNER', 
+            orgName: ownedOrg.name,
+            orgId: ownedOrg.id 
+        };
+    }
+
+    return { 
+        canDelete: true, 
+        reason: 'HAS_SUCCESSORS', 
+        orgId: ownedOrg.id 
+    };
+};
+
+/**
+ * SMART DELETE PROTOCOL
+ * Handles ownership transfers and cleanups automatically.
+ */
+export const deleteUserSmart = async (user: User): Promise<{ success: boolean; error?: string }> => {
     try {
-        // --- ADIM 1: Hierarchy Roll-up (Yönetici Kontrolü) ---
-        if (user.role === 'manager' && user.currentOrganizationId) {
-            await handleManagerExit(user);
+        // 1. Validate Ownership Status
+        const validation = await validateUserDeletion(user.id);
+
+        if (!validation.canDelete && validation.reason === 'SOLE_OWNER') {
+            return { 
+                success: false, 
+                error: `"${validation.orgName}" işletmesinin tek yöneticisisiniz. Hesabınızı silmek için önce işletmeyi silmeli veya yetkiyi devretmelisiniz.` 
+            };
         }
 
-        // --- ADIM 2: Anonymization (İçerik Temizliği) ---
+        // 2. Handle Succession (If needed)
+        if (validation.reason === 'HAS_SUCCESSORS' && validation.orgId) {
+            const backups = await getBackupAdmins(validation.orgId, user.id);
+            const successor = backups[0]; // Oldest admin
+            
+            // Transfer crown
+            await transferOwnership(validation.orgId, successor.userId);
+            
+            // Notify Successor
+            await addDoc(collection(db, `users/${successor.userId}/notifications`), {
+                title: 'Yönetim Devri',
+                message: `${user.name} hesabı silindiği için işletme sahipliği size devredildi.`,
+                type: 'alert',
+                isRead: false,
+                createdAt: serverTimestamp()
+            });
+        }
+
+        // 3. Anonymize Content (Keep data, remove PII)
         await anonymizeUserContent(user.id);
 
-        // --- ADIM 3: Detach Assets (İlişki Kesme) ---
+        // 4. Detach Memberships
         await detachUserFromAllOrgs(user.id);
 
-        // --- ADIM 4: Hard Delete Profile ---
+        // 5. Delete Firestore Profile
         await deleteDoc(doc(db, 'users', user.id));
 
-        // --- ADIM 5: Auth Delete (Client Side) ---
+        // 6. Delete Auth (Client Side)
         const currentUser = auth.currentUser;
         if (currentUser && currentUser.uid === user.id) {
             await deleteUser(currentUser);
         }
 
-        return true;
-    } catch (error) {
+        return { success: true };
+
+    } catch (error: any) {
         console.error("Smart Delete Failed:", error);
-        return false;
+        return { success: false, error: error.message || "Silme işlemi başarısız." };
     }
 };
 
 /**
- * Yardımcı: Yönetici Ayrılma Protokolü
- */
-const handleManagerExit = async (manager: User) => {
-    if (!manager.currentOrganizationId) return;
-
-    try {
-        // 1. Find Organization Owner
-        const orgRef = doc(db, 'organizations', manager.currentOrganizationId);
-        const orgSnap = await getDoc(orgRef);
-        
-        if (orgSnap.exists()) {
-            const org = orgSnap.data() as Organization;
-            
-            // Eğer silinen kişi ZATEN mal sahibi ise -> Archive Protocol çalışmalıydı. 
-            // Buraya düştüyse ve mal sahibi ise bu bir hatadır veya Super Admin siliyordur.
-            if (org.ownerId === manager.id) {
-                console.warn("Owner deletion intercepted in Manager Handler. Use archiveOrganization instead.");
-                return;
-            }
-
-            // 2. Notify Owner (Department orphaned)
-            await addDoc(collection(db, `users/${org.ownerId}/notifications`), {
-                title: 'Kritik: Yönetici Ayrıldı',
-                message: `${manager.name} (${manager.department}) görevden ayrıldı. İlgili departmanın yetkisi geçici olarak size devredildi.`,
-                type: 'alert',
-                isRead: false,
-                createdAt: serverTimestamp()
-            });
-
-            // 3. Reassign active tasks/issues (Optional depth)
-            // Bu örnekte sadece bildirim atıyoruz. Daha derin bir sistemde
-            // 'Department' objesi güncellenirdi.
-        }
-    } catch (e) {
-        console.error("Manager Exit Protocol Error:", e);
-    }
-};
-
-/**
- * Yardımcı: İçerik Anonimleştirme
+ * Helper: Anonymize Content
  */
 const anonymizeUserContent = async (userId: string) => {
     const batch = writeBatch(db);
-    const MAX_BATCH_SIZE = 400; // Safety limit
+    const MAX_BATCH_SIZE = 400; 
     
-    // 1. Feed Posts
+    // Posts
     const postsQ = query(collection(db, 'posts'), where('authorId', '==', userId));
     const postsSnap = await getDocs(postsQ);
-    
     let count = 0;
+    
     postsSnap.docs.forEach(d => {
         if (count < MAX_BATCH_SIZE) {
             batch.update(d.ref, {
-                authorName: 'Eski Personel',
+                authorName: 'Eski Kullanıcı',
                 authorAvatar: 'https://ui-avatars.com/api/?name=Deleted&background=random',
                 authorId: 'deleted_user'
             });
@@ -157,20 +169,5 @@ const anonymizeUserContent = async (userId: string) => {
         }
     });
 
-    // 2. Issues (Reports)
-    const issuesQ = query(collection(db, 'issues'), where('userId', '==', userId));
-    const issuesSnap = await getDocs(issuesQ);
-    
-    issuesSnap.docs.forEach(d => {
-        if (count < MAX_BATCH_SIZE) {
-            batch.update(d.ref, {
-                userName: 'Eski Personel'
-            });
-            count++;
-        }
-    });
-
-    if (count > 0) {
-        await batch.commit();
-    }
+    if (count > 0) await batch.commit();
 };
