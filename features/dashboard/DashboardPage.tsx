@@ -7,23 +7,20 @@ import { useContentStore } from '../../stores/useContentStore';
 import { getFeedPosts } from '../../services/db';
 import { StoryCircle, StoryStatus } from './components/StoryCircle';
 import { FeedPostCard } from './components/FeedPostCard';
-import { X, Quote, Map, RefreshCw, Settings, Building } from 'lucide-react';
+import { X, Quote, Map, Settings, Building } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Course, FeedPost } from '../../types';
 
 export const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuthStore();
+  const { currentUser } = useAuthStore();
   const { courses, fetchContent } = useContentStore();
   
   const [storyCourses, setStoryCourses] = useState<Course[]>([]);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
   const [showGmModal, setShowGmModal] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // 1. Fetch Content (Freelancer friendly: pass null orgId is handled by store now?)
-  // Actually store fetchContent expects string. Let's fix useContentStore later or pass empty string if null.
   useEffect(() => {
     if (currentUser) {
         fetchContent(currentUser.currentOrganizationId || ''); 
@@ -64,7 +61,6 @@ export const DashboardPage: React.FC = () => {
         setStoryCourses(sortedCourses.slice(0, 15)); 
 
         // --- LOAD FEED POSTS ---
-        // Pass null if no org to get Global/Public feed
         const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId || null);
         setFeedPosts(posts);
     };
@@ -73,14 +69,6 @@ export const DashboardPage: React.FC = () => {
         loadData();
     }
   }, [currentUser, courses]);
-
-  const handleRefresh = async () => {
-      if(!currentUser) return;
-      setIsRefreshing(true);
-      const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId || null);
-      setFeedPosts(posts);
-      setTimeout(() => setIsRefreshing(false), 500);
-  };
 
   const getStoryStatus = (course: Course): StoryStatus => {
       if (!currentUser) return 'viewed';
@@ -93,51 +81,11 @@ export const DashboardPage: React.FC = () => {
 
   if (!currentUser) return null;
 
-  const isOwner = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'super_admin';
   const isFreelancer = !currentUser.currentOrganizationId;
 
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen">
       
-      {/* HEADER */}
-      <div className="bg-white sticky top-0 z-40 border-b border-gray-100 px-4 py-3 flex justify-between items-center shadow-sm">
-         <div className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isFreelancer ? 'bg-gray-800' : 'bg-accent'}`}>
-                <span className={`font-bold text-lg ${isFreelancer ? 'text-white' : 'text-primary'}`}>H</span>
-            </div>
-            <div className="flex flex-col">
-                <span className="text-primary font-bold text-lg tracking-tight leading-none">Hotelgram</span>
-                {isFreelancer && <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Freelancer Mode</span>}
-            </div>
-         </div>
-         <div className="flex items-center gap-4">
-            
-            {/* OWNER UI BUTTON */}
-            {isOwner && !isFreelancer && (
-                <button 
-                    onClick={() => navigate('/admin/settings')}
-                    className="p-2 bg-gray-100 rounded-full text-gray-600 hover:bg-primary hover:text-white transition-all shadow-sm"
-                    aria-label="Manage Hotel"
-                >
-                    <Settings className="w-5 h-5" />
-                </button>
-            )}
-
-            <button onClick={handleRefresh} className={`${isRefreshing ? 'animate-spin' : ''}`}>
-                <RefreshCw className="w-6 h-6 text-gray-700" />
-            </button>
-            <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden cursor-pointer border border-gray-300" onClick={logout}>
-                {currentUser?.avatar && currentUser.avatar.length > 4 ? (
-                    <img src={currentUser.avatar} alt="Me" className="w-full h-full object-cover" />
-                ) : (
-                    <div className="w-full h-full bg-primary text-white flex items-center justify-center font-bold text-xs">
-                        {currentUser?.avatar}
-                    </div>
-                )}
-            </div>
-         </div>
-      </div>
-
       {/* STORIES */}
       <div className="bg-white py-4 border-b border-gray-100 overflow-x-auto no-scrollbar">
          <div className="flex gap-4 px-4 min-w-max">

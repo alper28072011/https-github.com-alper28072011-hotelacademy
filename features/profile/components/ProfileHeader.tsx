@@ -2,8 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-    Settings, ExternalLink, ShieldCheck, Building2, 
-    ChevronRight, LayoutDashboard, Crown, Eye
+    ExternalLink, ShieldCheck, Building2, 
+    ChevronRight, LayoutDashboard, Crown, Eye, Settings
 } from 'lucide-react';
 import { User, Organization } from '../../../types';
 import { getOrganizationDetails } from '../../../services/db';
@@ -11,7 +11,6 @@ import { getOrganizationDetails } from '../../../services/db';
 interface ProfileHeaderProps {
   user: User;
   isOwnProfile: boolean;
-  onSettingsClick?: () => void;
   onEditClick?: () => void;
   followersCount?: number;
   followingCount?: number;
@@ -21,7 +20,6 @@ interface ProfileHeaderProps {
 export const ProfileHeader: React.FC<ProfileHeaderProps> = ({ 
     user, 
     isOwnProfile, 
-    onSettingsClick, 
     onEditClick,
     followersCount = 0,
     followingCount = 0,
@@ -167,24 +165,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   };
 
   return (
-    <div className="px-4 pt-6 pb-2">
-        {/* Top Row */}
-        <div className="flex justify-between items-center mb-6">
-            <h1 className="text-xl font-bold flex items-center gap-1">
-                {user.phoneNumber} 
-                {user.isSuperAdmin && (
-                    <span className="text-blue-500" title="Doğrulanmış Hesap">
-                        <ShieldCheck className="w-4 h-4 fill-current" />
-                    </span>
-                )}
-            </h1>
-            {isOwnProfile && onSettingsClick && (
-                <button onClick={onSettingsClick} className="text-gray-800 hover:bg-gray-100 p-2 rounded-full transition-colors">
-                    <Settings className="w-6 h-6" />
-                </button>
-            )}
-        </div>
-
+    <div className="px-4 pb-2">
         {/* Profile Info Row */}
         <div className="flex items-center gap-6 mb-4">
             {/* Avatar */}
@@ -198,6 +179,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                         )}
                     </div>
                 </div>
+                {user.isSuperAdmin && (
+                    <div className="absolute bottom-0 right-0 bg-blue-500 text-white p-1 rounded-full border-2 border-white">
+                        <ShieldCheck className="w-3 h-3" />
+                    </div>
+                )}
             </div>
 
             {/* Stats */}

@@ -11,7 +11,6 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { useProfileStore } from '../../stores/useProfileStore';
 import { useContentStore } from '../../stores/useContentStore';
 import { EditProfileModal } from './components/EditProfileModal';
-import { SettingsDrawer } from './components/SettingsDrawer';
 import { ProfileHeader } from './components/ProfileHeader';
 import { Course, KudosType, FeedPost } from '../../types';
 import { getInstructorCourses, getUserPosts } from '../../services/db';
@@ -23,10 +22,9 @@ export const ProfilePage: React.FC = () => {
   const { userProfile, initializeListeners } = useProfileStore();
   const { courses } = useContentStore(); 
 
-  // UI State - Updated Default to 'collection' but added 'posts'
+  // UI State
   const [activeTab, setActiveTab] = useState<'collection' | 'posts' | 'certificates' | 'saved' | 'channel'>('collection');
   const [isEditing, setIsEditing] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   // Data State
   const [myCreatedCourses, setMyCreatedCourses] = useState<Course[]>([]);
@@ -73,13 +71,12 @@ export const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white pb-24">
+    <div className="min-h-screen bg-white pb-24 pt-4">
         
-        {/* SHARED HEADER COMPONENT */}
+        {/* SHARED HEADER COMPONENT (Without Settings Button) */}
         <ProfileHeader 
             user={activeUser}
             isOwnProfile={true}
-            onSettingsClick={() => setIsSettingsOpen(true)}
             onEditClick={() => setIsEditing(true)}
             followersCount={activeUser.followersCount}
             followingCount={activeUser.followingCount}
@@ -87,7 +84,7 @@ export const ProfilePage: React.FC = () => {
         />
 
         {/* TABS (STICKY) */}
-        <div className="sticky top-0 bg-white z-30 border-b border-gray-200 flex overflow-x-auto no-scrollbar">
+        <div className="sticky top-[60px] bg-white z-30 border-b border-gray-200 flex overflow-x-auto no-scrollbar">
             <button 
                 onClick={() => setActiveTab('collection')}
                 className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'collection' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
@@ -232,17 +229,12 @@ export const ProfilePage: React.FC = () => {
             )}
         </div>
 
-        {/* MODALS */}
+        {/* EDIT MODAL */}
         <AnimatePresence>
             {isEditing && (
                 <EditProfileModal 
                     user={activeUser} 
                     onClose={() => setIsEditing(false)} 
-                />
-            )}
-            {isSettingsOpen && (
-                <SettingsDrawer 
-                    onClose={() => setIsSettingsOpen(false)} 
                 />
             )}
         </AnimatePresence>
