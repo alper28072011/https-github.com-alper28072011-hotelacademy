@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { User, CareerPath, DepartmentType, Course } from '../../types';
 import { getUsersByDepartment, getCareerPaths, getCourses } from '../../services/db';
@@ -43,8 +44,11 @@ export const TalentRadar: React.FC = () => {
   // Mandatory Training Compliance Calc
   let mandatoryTotal = 0;
   let mandatoryCompleted = 0;
-  const mandatoryCourses = courses.filter(c => c.assignmentType === 'GLOBAL' || c.priority === 'HIGH');
-  const mandatoryCourseIds = mandatoryCourses.map(c => c.id);
+  
+  // Filter: Only include PRIVATE courses or HIGH priority assigned ones for compliance.
+  // We ignore purely Public courses unless they were explicitly assigned (not fully tracked here yet)
+  const corporateCourses = courses.filter(c => c.visibility === 'PRIVATE' || c.priority === 'HIGH');
+  const corporateCourseIds = corporateCourses.map(c => c.id);
 
   users.forEach(user => {
       // Dept Score Calc
@@ -64,14 +68,13 @@ export const TalentRadar: React.FC = () => {
               if (percent >= 90) {
                   readyForPromotion.push({ user, path, percent });
               } else if (percent > 0 && percent < 40) {
-                  // Mock logic: stuck in early stage
                   needsAttention.push({ user, path, percent });
               }
           }
       }
 
       // Mandatory Compliance Logic
-      mandatoryCourseIds.forEach(mId => {
+      corporateCourseIds.forEach(mId => {
           mandatoryTotal++;
           if(user.completedCourses.includes(mId)) {
               mandatoryCompleted++;
@@ -86,7 +89,7 @@ export const TalentRadar: React.FC = () => {
        {/* Intro */}
        <div>
             <h1 className="text-2xl font-bold text-gray-800">Yetenek Radarı</h1>
-            <p className="text-gray-500">Ekip gelişim analitiği ve terfi önerileri.</p>
+            <p className="text-gray-500">Ekip gelişim analitiği ve terfi önerileri (Sadece Kurumsal Eğitimler).</p>
        </div>
 
        {/* Compliance Card (New) */}
@@ -97,7 +100,7 @@ export const TalentRadar: React.FC = () => {
                 </div>
                 <div>
                     <h3 className="font-bold text-lg text-gray-800">Zorunlu Eğitim Uyumu</h3>
-                    <p className="text-gray-500 text-sm">Global ve Acil eğitimlerin tamamlanma oranı.</p>
+                    <p className="text-gray-500 text-sm">İşletme içi özel eğitimlerin tamamlanma oranı.</p>
                 </div>
             </div>
             <div className="hidden md:flex gap-4">

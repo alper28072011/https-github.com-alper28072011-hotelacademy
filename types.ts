@@ -22,6 +22,15 @@ export interface UserMetadata {
     deviceInfo?: string;
 }
 
+// --- INSTRUCTOR PROFILE (NEW) ---
+export interface InstructorProfile {
+    bio: string;
+    expertise: string[]; // ["Hospitality", "Culinary"]
+    totalStudents: number;
+    averageRating: number;
+    earnings: number; // Virtual currency or Real
+}
+
 // --- MULTI-TENANCY TYPES ---
 
 export interface OrganizationSettings {
@@ -109,6 +118,7 @@ export interface User {
   joinDate?: number; 
   instagramHandle?: string;
   organizationHistory: string[]; // List of Org IDs they worked at
+  instructorProfile?: InstructorProfile; // NEW: For Marketplace Creators
   
   // Social Graph (NEW)
   followers?: string[]; // List of User IDs
@@ -181,10 +191,20 @@ export interface Category {
 // --- NEW TARGETING TYPES ---
 export type AssignmentType = 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
 export type ContentPriority = 'HIGH' | 'NORMAL';
+export type CourseVisibility = 'PRIVATE' | 'PUBLIC'; // NEW: Hybrid Model
 
 export interface Course {
   id: string;
   organizationId?: string; // Optional: Some courses can be system-wide (Global Marketplace), others Org specific
+  authorId: string; // NEW: The creator (Instructor)
+  
+  // Marketplace Fields
+  visibility: CourseVisibility; // NEW
+  price: number; // NEW: 0 = Free
+  rating?: number; // 0-5
+  studentCount?: number;
+  discussionBoardId?: string; // Link to community
+
   categoryId: string;
   title: string;
   description: string;

@@ -194,12 +194,31 @@ export const getDailyTasks = async (dept: DepartmentType, orgId: string): Promis
   } catch (error) { return []; }
 };
 
+/**
+ * UPDATED: Hybrid Course Fetching
+ * Returns:
+ * 1. PUBLIC courses (Global Marketplace)
+ * 2. PRIVATE courses belonging to the user's current Org
+ */
 export const getCourses = async (orgId?: string): Promise<Course[]> => {
   try {
     const snapshot = await getDocs(coursesRef);
     const allCourses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
-    return allCourses.filter(c => !c.organizationId || (orgId && c.organizationId === orgId));
+    
+    return allCourses.filter(c => 
+        c.visibility === 'PUBLIC' || 
+        (orgId && c.organizationId === orgId && c.visibility === 'PRIVATE') ||
+        (!c.visibility && orgId && c.organizationId === orgId) // Backward compatibility
+    );
   } catch (error) { return []; }
+};
+
+export const getInstructorCourses = async (authorId: string): Promise<Course[]> => {
+    try {
+        const q = query(coursesRef, where('authorId', '==', authorId));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({ id: d.id, ...d.data() } as Course));
+    } catch (e) { return []; }
 };
 
 export const getCareerPathByDepartment = async (dept: DepartmentType, orgId: string): Promise<CareerPath | null> => {
@@ -343,6 +362,9 @@ export const getCourse = async (courseId: string): Promise<Course | null> => {
       return null;
     } catch (error) { return null; }
 };
+export const createCourse = async (course: Omit<Course, 'id'>) => {
+    try { await addDoc(coursesRef, course); return true; } catch(e) { return false; }
+};
 export const updateUserProfile = async (userId: string, data: Partial<User>) => {
     try {
         const userRef = doc(db, 'users', userId);
@@ -465,7 +487,6 @@ export const inviteUserToOrg = async (user: User, orgId: string, dept: Departmen
             joinedAt: Date.now()
         };
         await setDoc(doc(db, 'memberships', membershipId), newMembership);
-        // Note: We don't automatically switch their org here, they must do it themselves or via notification
         return true;
     } catch (e) { return false; }
 };

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Course } from '../../../types';
-import { Play, Clock, Zap, Star } from 'lucide-react';
+import { Play, Clock, Zap, Star, Globe, Lock, DollarSign } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,6 +11,8 @@ interface HeroCourseCardProps {
 
 export const HeroCourseCard: React.FC<HeroCourseCardProps> = ({ course }) => {
   const navigate = useNavigate();
+
+  const isPublic = course.visibility === 'PUBLIC';
 
   return (
     <motion.div 
@@ -30,7 +32,7 @@ export const HeroCourseCard: React.FC<HeroCourseCardProps> = ({ course }) => {
       <div className="absolute inset-0 bg-gradient-to-t from-primary-dark via-primary/40 to-transparent" />
       <div className="absolute inset-0 bg-gradient-to-r from-primary-dark/60 to-transparent" />
 
-      {/* Floating Badges */}
+      {/* Floating Badges (Top Left) */}
       <div className="absolute top-4 left-4 flex flex-col gap-2">
           {course.priority === 'HIGH' && (
               <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-lg w-max animate-pulse">
@@ -42,6 +44,26 @@ export const HeroCourseCard: React.FC<HeroCourseCardProps> = ({ course }) => {
                   {tag}
               </div>
           ))}
+      </div>
+
+      {/* Visibility Badge (Top Right) */}
+      <div className="absolute top-4 right-4">
+          {isPublic ? (
+              <div className="flex gap-2">
+                  <div className="bg-blue-500 text-white p-2 rounded-full shadow-lg">
+                      <Globe className="w-4 h-4" />
+                  </div>
+                  {course.price > 0 && (
+                      <div className="bg-green-500 text-white px-3 py-1.5 rounded-full shadow-lg font-bold text-xs flex items-center">
+                          <DollarSign className="w-3 h-3" />{course.price}
+                      </div>
+                  )}
+              </div>
+          ) : (
+              <div className="bg-gray-800/80 backdrop-blur text-white p-2 rounded-full shadow-lg border border-white/10">
+                  <Lock className="w-4 h-4" />
+              </div>
+          )}
       </div>
 
       {/* Bottom Content */}
@@ -56,7 +78,7 @@ export const HeroCourseCard: React.FC<HeroCourseCardProps> = ({ course }) => {
           <div className="flex items-center gap-4">
               <button className="flex-1 bg-accent hover:bg-white text-primary font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-accent/20 active:scale-95 transition-all">
                   <Play className="w-5 h-5 fill-current" />
-                  Devam Et
+                  {course.price > 0 ? 'Satın Al & İzle' : 'Devam Et'}
               </button>
               <div className="flex flex-col text-white/80 text-xs font-mono">
                   <div className="flex items-center gap-1">
