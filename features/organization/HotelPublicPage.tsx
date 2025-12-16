@@ -2,7 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, Users, Utensils, BedDouble, ConciergeBell, Settings } from 'lucide-react';
+import { 
+    ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, 
+    Users, Utensils, BedDouble, ConciergeBell, Settings, ShieldCheck, 
+    BarChart3, Edit, Megaphone, Bell
+} from 'lucide-react';
 import { getOrganizationDetails, sendJoinRequest, getMyMemberships } from '../../services/db';
 import { Organization, DepartmentType } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -16,6 +20,7 @@ export const HotelPublicPage: React.FC = () => {
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [isMember, setIsMember] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false); // Mock for now
   
   // Wizard State
   const [showWizard, setShowWizard] = useState(false);
@@ -57,6 +62,11 @@ export const HotelPublicPage: React.FC = () => {
       }
   };
 
+  const handleFollow = () => {
+      setIsFollowing(!isFollowing);
+      // In a real app, call toggleOrgFollow(orgId) here
+  };
+
   const canManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager') && currentUser.currentOrganizationId === orgId;
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
@@ -79,19 +89,48 @@ export const HotelPublicPage: React.FC = () => {
             >
                 <ArrowLeft className="w-6 h-6" />
             </button>
-
-            {canManage && (
-                <button 
-                    onClick={() => navigate('/admin')}
-                    className="absolute top-6 right-6 bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl text-primary font-bold shadow-lg hover:bg-white transition-all flex items-center gap-2"
-                >
-                    <Settings className="w-4 h-4" /> Sayfayı Yönet
-                </button>
-            )}
         </div>
 
+        {/* OWNER DASHBOARD PANEL (Instagram Professional Dashboard Style) */}
+        {canManage && (
+            <div className="px-6 -mt-10 relative z-20 mb-6">
+                <div className="bg-gray-900 text-white rounded-2xl p-4 shadow-2xl border border-gray-700">
+                    <div className="flex justify-between items-start mb-4">
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <ShieldCheck className="w-4 h-4 text-accent" />
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-300">Sayfa Yönetimi</h3>
+                            </div>
+                            <p className="text-xs text-gray-400">Son 30 günde 1.2k ziyaret</p>
+                        </div>
+                        <button 
+                            onClick={() => navigate('/admin')}
+                            className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                        >
+                            Panele Git
+                        </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-2">
+                        <button onClick={() => navigate('/admin/content')} className="bg-gray-800 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-gray-700 transition-colors">
+                            <Megaphone className="w-5 h-5 text-blue-400" />
+                            <span className="text-[10px] font-bold">İçerik</span>
+                        </button>
+                        <button onClick={() => navigate('/admin/settings')} className="bg-gray-800 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-gray-700 transition-colors">
+                            <Edit className="w-5 h-5 text-green-400" />
+                            <span className="text-[10px] font-bold">Düzenle</span>
+                        </button>
+                        <button onClick={() => navigate('/admin/reports')} className="bg-gray-800 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-gray-700 transition-colors">
+                            <BarChart3 className="w-5 h-5 text-purple-400" />
+                            <span className="text-[10px] font-bold">Analiz</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* PROFILE INFO */}
-        <div className="px-6 -mt-16 relative z-10">
+        <div className={`px-6 relative z-10 ${canManage ? '' : '-mt-16'}`}>
             <div className="w-32 h-32 rounded-3xl bg-white p-1 shadow-2xl mb-4">
                 <div className="w-full h-full rounded-2xl overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200">
                     {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-gray-400">{org.name[0]}</span>}
@@ -104,6 +143,17 @@ export const HotelPublicPage: React.FC = () => {
                     {org.location && <div className="flex items-center gap-1"><MapPin className="w-4 h-4 text-accent" /> {org.location}</div>}
                     {org.website && <div className="flex items-center gap-1"><Globe className="w-4 h-4 text-blue-500" /> {org.website}</div>}
                 </div>
+                {/* Stats Row */}
+                <div className="flex gap-6 mt-4 pb-4 border-b border-gray-100">
+                    <div className="text-center">
+                        <div className="font-bold text-lg text-gray-900">{org.followersCount || 0}</div>
+                        <div className="text-xs text-gray-500">Takipçi</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="font-bold text-lg text-gray-900">{org.memberCount || 0}</div>
+                        <div className="text-xs text-gray-500">Personel</div>
+                    </div>
+                </div>
             </div>
 
             <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 mb-8">
@@ -114,24 +164,32 @@ export const HotelPublicPage: React.FC = () => {
             </div>
         </div>
 
-        {/* STICKY CTA */}
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 z-20">
+        {/* STICKY ACTIONS */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 z-30 shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)]">
             {isMember ? (
                 <button 
                     onClick={() => navigate('/')}
-                    className="w-full bg-green-600 text-white font-bold text-lg py-4 rounded-2xl shadow-lg shadow-green-600/30 flex items-center justify-center gap-2"
+                    className="w-full bg-green-600 text-white font-bold text-lg py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2"
                 >
                     <CheckCircle2 className="w-6 h-6" />
                     Panele Git
                 </button>
             ) : (
-                <button 
-                    onClick={() => setShowWizard(true)}
-                    className="w-full bg-primary text-white font-bold text-lg py-4 rounded-2xl shadow-xl shadow-primary/30 flex items-center justify-center gap-2 animate-pulse-slow"
-                >
-                    <UserPlus className="w-6 h-6" />
-                    Takıma Katıl
-                </button>
+                <div className="flex gap-3">
+                    <button 
+                        onClick={handleFollow}
+                        className={`flex-1 font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all ${isFollowing ? 'bg-gray-100 text-gray-800' : 'bg-blue-600 text-white'}`}
+                    >
+                        {isFollowing ? 'Takip Ediliyor' : <><Bell className="w-5 h-5" /> Takip Et</>}
+                    </button>
+                    <button 
+                        onClick={() => setShowWizard(true)}
+                        className="flex-1 bg-primary text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2"
+                    >
+                        <UserPlus className="w-5 h-5" />
+                        İşe Başvur
+                    </button>
+                </div>
             )}
         </div>
 

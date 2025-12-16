@@ -22,13 +22,24 @@ export interface UserMetadata {
     deviceInfo?: string;
 }
 
-// --- INSTRUCTOR PROFILE (NEW) ---
+// --- SOCIAL & INSTRUCTOR TYPES ---
 export interface InstructorProfile {
     bio: string;
     expertise: string[]; // ["Hospitality", "Culinary"]
     totalStudents: number;
     averageRating: number;
     earnings: number; // Virtual currency or Real
+}
+
+// NEW: Social Graph Logic
+export type FollowStatus = 'NONE' | 'PENDING' | 'FOLLOWING';
+
+export interface Relationship {
+    id: string;
+    followerId: string;
+    followingId: string;
+    status: 'PENDING' | 'ACCEPTED';
+    createdAt: number;
 }
 
 // --- MULTI-TENANCY TYPES ---
@@ -60,8 +71,10 @@ export interface Organization {
   
   // Settings
   settings?: OrganizationSettings;
-  memberCount?: number;
-  subGroups?: string[]; // Flexible sub-departments e.g. "Pool Bar", "Lobby Bar"
+  memberCount?: number; // Employees
+  followersCount?: number; // Social Followers (News & Updates)
+  publicContentEnabled?: boolean; // Is the page public to the world?
+  subGroups?: string[];
 }
 
 export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'REJECTED';
@@ -121,9 +134,10 @@ export interface User {
   organizationHistory: string[]; // List of Org IDs they worked at
   instructorProfile?: InstructorProfile; // NEW: For Marketplace Creators
   
-  // Social Graph (NEW)
-  followers?: string[]; // List of User IDs
-  following?: string[]; // List of User IDs
+  // Social Graph (Updated)
+  isPrivate?: boolean; // New: Private Account Logic
+  followers?: string[]; // IDs (Legacy - consider moving to subcollection for scale)
+  following?: string[]; // IDs
   followersCount?: number;
   followingCount?: number;
 
