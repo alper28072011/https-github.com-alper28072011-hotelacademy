@@ -1,22 +1,32 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Wand2, FileText, Link, Type, Loader2, Play, 
-    CheckCircle2, Save, RotateCcw, Smartphone, Image as ImageIcon
+    CheckCircle2, Save, RotateCcw, Smartphone, Image as ImageIcon,
+    Settings, Globe, Lock, ChevronRight, Upload, Edit
 } from 'lucide-react';
 import { generateMicroCourse } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
+import { updateCourse } from '../../services/db';
+import { uploadFile } from '../../services/storage';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { StoryCard, Course } from '../../types';
+import { StoryCard, Course, CourseVisibility } from '../../types';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export const ContentStudio: React.FC = () => {
   const { currentUser } = useAuthStore();
   const { currentOrganization } = useOrganizationStore();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // STAGE: 'INPUT' -> 'GENERATING' -> 'PREVIEW' -> 'PUBLISHED'
-  const [stage, setStage] = useState<'INPUT' | 'GENERATING' | 'PREVIEW' | 'PUBLISHED'>('INPUT');
+  // Mode: CREATE vs EDIT
+  const [isEditing, setIsEditing] = useState(false);
+  const [editCourseId, setEditCourseId] = useState<string | null>(null);
+
+  // STAGE: 'INPUT' -> 'GENERATING' -> 'PREVIEW' -> 'SETTINGS' -> 'PUBLISHED'
+  const [stage, setStage] = useState<'INPUT' | 'GENERATING' | 'PREVIEW' | 'SETTINGS' | 'PUBLISHED'>('INPUT');
   
   // INPUT STATE
   const [inputType, setInputType] = useState<'TEXT' | 'URL'>('TEXT');
@@ -31,12 +41,37 @@ export const ContentStudio: React.FC = () => {
       tags: string[];
   } | null>(null);
 
-  // SETTINGS
-  const [targetAudience, setTargetAudience] = useState('New Staff');
-  const [tone, setTone] = useState<'PROFESSIONAL' | 'FUN'>('FUN');
+  // SETTINGS STATE
+  const [visibility, setVisibility] = useState<CourseVisibility>('PUBLIC');
+  const [category, setCategory] = useState('cat_onboarding');
+  const [coverImage, setCoverImage] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
+
+  // INITIALIZE FOR EDIT MODE
+  useEffect(() => {
+      if (location.state?.courseData) {
+          const course = location.state.courseData as Course;
+          setIsEditing(true);
+          setEditCourseId(course.id);
+          setGeneratedCourse({
+              title: course.title,
+              description: course.description,
+              cards: course.steps,
+              tags: course.tags || []
+          });
+          setVisibility(course.visibility);
+          setCategory(course.categoryId);
+          setCoverImage(course.thumbnailUrl);
+          setStage('PREVIEW'); // Skip generation
+      }
+  }, [location.state]);
 
   // PREVIEW STATE
   const [activeCardIndex, setActiveCardIndex] = useState(0);
+
+  // AI SETTINGS
+  const [targetAudience, setTargetAudience] = useState('New Staff');
+  const [tone, setTone] = useState<'PROFESSIONAL' | 'FUN'>('FUN');
 
   const handleMagicGenerate = async () => {
       if (!sourceText && !topic) return;
@@ -48,11 +83,12 @@ export const ContentStudio: React.FC = () => {
       const result = await generateMicroCourse(fullContext, {
           targetAudience,
           tone,
-          language: 'Turkish' // Hardcoded for demo, can be dynamic
+          language: 'Turkish' 
       });
 
       if (result) {
           setGeneratedCourse(result);
+          setCoverImage(result.cards[0].mediaUrl || '');
           setStage('PREVIEW');
       } else {
           alert("AI Üretimi Başarısız Oldu. Lütfen tekrar deneyin.");
@@ -60,33 +96,59 @@ export const ContentStudio: React.FC = () => {
       }
   };
 
-  const handlePublish = async () => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          setIsUploading(true);
+          try {
+              const url = await uploadFile(e.target.files[0], 'course_covers');
+              setCoverImage(url);
+          } catch (error) {
+              console.error("Upload failed", error);
+          } finally {
+              setIsUploading(false);
+          }
+      }
+  };
+
+  const handleFinalize = async () => {
       if (!generatedCourse || !currentUser) return;
       
-      const newCourse: any = {
+      const courseData: any = {
+          title: generatedCourse.title,
+          description: generatedCourse.description,
+          thumbnailUrl: coverImage || 'https://via.placeholder.com/400',
+          duration: Math.ceil(generatedCourse.cards.reduce((acc, c) => acc + c.duration, 0) / 60),
+          steps: generatedCourse.cards,
+          tags: generatedCourse.tags,
+          visibility: visibility,
+          categoryId: category,
+          
+          // Defaults for new items
           organizationId: currentOrganization?.id,
           authorId: currentUser.id,
           ownerType: currentOrganization ? 'ORGANIZATION' : 'USER',
-          visibility: 'PUBLIC', // Default
-          title: generatedCourse.title,
-          description: generatedCourse.description,
-          thumbnailUrl: generatedCourse.cards[0].mediaUrl || 'https://via.placeholder.com/400',
-          duration: Math.ceil(generatedCourse.cards.reduce((acc, c) => acc + c.duration, 0) / 60),
           xpReward: 500,
-          steps: generatedCourse.cards, // Map StoryCards to Steps
-          tags: generatedCourse.tags,
           priority: 'NORMAL',
           price: 0,
           priceType: 'FREE'
       };
 
-      const success = await publishContent(newCourse, currentUser);
+      let success = false;
+
+      if (isEditing && editCourseId) {
+          // Update Mode
+          success = await updateCourse(editCourseId, courseData);
+      } else {
+          // Create Mode
+          success = await publishContent(courseData, currentUser);
+      }
+
       if (success) {
           setStage('PUBLISHED');
+      } else {
+          alert("İşlem başarısız oldu.");
       }
   };
-
-  // --- RENDER STAGES ---
 
   if (stage === 'PUBLISHED') {
       return (
@@ -94,9 +156,12 @@ export const ContentStudio: React.FC = () => {
               <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-6">
                   <CheckCircle2 className="w-12 h-12" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-800">Harika İş!</h2>
-              <p className="text-gray-500 mt-2">Mikro-Eğitim başarıyla yayınlandı.</p>
-              <button onClick={() => window.location.reload()} className="mt-8 bg-gray-100 px-6 py-3 rounded-xl font-bold text-gray-700">Yeni Oluştur</button>
+              <h2 className="text-3xl font-bold text-gray-800">İşlem Tamam!</h2>
+              <p className="text-gray-500 mt-2">İçerik başarıyla {isEditing ? 'güncellendi' : 'yayınlandı'}.</p>
+              <div className="flex gap-4 mt-8">
+                  <button onClick={() => navigate('/admin/courses')} className="bg-gray-100 px-6 py-3 rounded-xl font-bold text-gray-700">Listeye Dön</button>
+                  <button onClick={() => window.location.reload()} className="bg-primary text-white px-6 py-3 rounded-xl font-bold">Yeni Oluştur</button>
+              </div>
           </div>
       );
   }
@@ -109,8 +174,8 @@ export const ContentStudio: React.FC = () => {
             
             <div className="mb-2">
                 <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <Wand2 className="w-6 h-6 text-accent" />
-                    Sihirli Stüdyo
+                    {isEditing ? <Edit className="w-6 h-6 text-accent" /> : <Wand2 className="w-6 h-6 text-accent" />}
+                    {isEditing ? 'İçerik Düzenle' : 'Sihirli Stüdyo'}
                 </h1>
                 <p className="text-gray-500 text-sm">Ham içeriği saniyeler içinde etkileşimli bir Story serisine dönüştürün.</p>
             </div>
@@ -197,14 +262,14 @@ export const ContentStudio: React.FC = () => {
                     <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex items-start gap-3">
                         <CheckCircle2 className="w-6 h-6 text-green-600 shrink-0" />
                         <div>
-                            <h3 className="font-bold text-green-800">Hazır!</h3>
-                            <p className="text-green-700 text-sm">AI, {generatedCourse.cards.length} kartlık bir seri oluşturdu. Sağ taraftan önizleyebilirsiniz.</p>
+                            <h3 className="font-bold text-green-800">İçerik Hazır</h3>
+                            <p className="text-green-700 text-sm">Kartları inceleyin ve yayın ayarları için devam edin.</p>
                         </div>
                     </div>
 
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-gray-400 uppercase">Kart Listesi</label>
-                        <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1">
+                        <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
                             {generatedCourse.cards.map((card, idx) => (
                                 <div 
                                     key={idx}
@@ -220,11 +285,90 @@ export const ContentStudio: React.FC = () => {
                     </div>
 
                     <div className="flex gap-3 mt-auto">
-                        <button onClick={() => setStage('INPUT')} className="flex-1 py-3 border-2 border-gray-200 text-gray-500 font-bold rounded-xl hover:bg-gray-50 flex items-center justify-center gap-2">
-                            <RotateCcw className="w-4 h-4" /> Vazgeç
+                        <button onClick={() => isEditing ? navigate('/admin/courses') : setStage('INPUT')} className="flex-1 py-3 border-2 border-gray-200 text-gray-500 font-bold rounded-xl hover:bg-gray-50 flex items-center justify-center gap-2">
+                            <RotateCcw className="w-4 h-4" /> Geri
                         </button>
-                        <button onClick={handlePublish} className="flex-[2] bg-primary text-white py-3 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-primary-light">
-                            <Save className="w-4 h-4" /> Yayınla
+                        <button onClick={() => setStage('SETTINGS')} className="flex-[2] bg-primary text-white py-3 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-primary-light">
+                            Devam Et <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {stage === 'SETTINGS' && (
+                <div className="flex flex-col gap-6 animate-in slide-in-from-right-4">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Settings className="w-6 h-6 text-gray-800" />
+                        <h2 className="text-xl font-bold text-gray-800">Yayın Ayarları</h2>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* Privacy */}
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Görünürlük</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button 
+                                    onClick={() => setVisibility('PUBLIC')}
+                                    className={`p-4 rounded-xl border-2 text-left transition-all ${visibility === 'PUBLIC' ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-gray-100 bg-white hover:bg-gray-50'}`}
+                                >
+                                    <div className="flex items-center gap-2 font-bold mb-1"><Globe className="w-4 h-4" /> Herkese Açık</div>
+                                    <div className="text-xs opacity-80">Tüm dünyada görülebilir.</div>
+                                </button>
+                                <button 
+                                    onClick={() => setVisibility('PRIVATE')}
+                                    className={`p-4 rounded-xl border-2 text-left transition-all ${visibility === 'PRIVATE' ? 'border-gray-800 bg-gray-100 text-gray-900' : 'border-gray-100 bg-white hover:bg-gray-50'}`}
+                                >
+                                    <div className="flex items-center gap-2 font-bold mb-1"><Lock className="w-4 h-4" /> Kurum İçi</div>
+                                    <div className="text-xs opacity-80">Sadece personel görür.</div>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Category */}
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Kategori</label>
+                            <select 
+                                value={category}
+                                onChange={e => setCategory(e.target.value)}
+                                className="w-full p-4 bg-white border border-gray-200 rounded-xl font-medium outline-none focus:border-primary"
+                            >
+                                <option value="cat_onboarding">Oryantasyon</option>
+                                <option value="cat_guest">Misafir İlişkileri</option>
+                                <option value="cat_kitchen">Mutfak</option>
+                                <option value="cat_hk">Kat Hizmetleri</option>
+                                <option value="cat_safety">Güvenlik</option>
+                            </select>
+                        </div>
+
+                        {/* Cover Image */}
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Kapak Görseli</label>
+                            <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300 group">
+                                {coverImage ? (
+                                    <img src={coverImage} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                                        <ImageIcon className="w-8 h-8" />
+                                    </div>
+                                )}
+                                
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <label className="cursor-pointer bg-white text-gray-800 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-gray-100">
+                                        {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                        Değiştir
+                                        <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" />
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 mt-auto pt-6">
+                        <button onClick={() => setStage('PREVIEW')} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-50 rounded-xl">
+                            Geri
+                        </button>
+                        <button onClick={handleFinalize} className="flex-[2] bg-primary text-white py-3 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-primary-light">
+                            <Save className="w-4 h-4" /> {isEditing ? 'Güncelle' : 'Yayınla'}
                         </button>
                     </div>
                 </div>
@@ -233,7 +377,7 @@ export const ContentStudio: React.FC = () => {
 
         {/* RIGHT PANEL: PHONE SIMULATOR */}
         <div className="flex-1 bg-gray-100 rounded-[2.5rem] p-8 flex items-center justify-center relative overflow-hidden border border-gray-200 shadow-inner">
-             {stage === 'PREVIEW' && generatedCourse ? (
+             {generatedCourse && (stage === 'PREVIEW' || stage === 'SETTINGS') ? (
                  <div className="w-[300px] h-[600px] bg-black rounded-[2rem] border-8 border-gray-800 shadow-2xl overflow-hidden relative">
                      {/* Header Bar */}
                      <div className="absolute top-0 left-0 right-0 h-1 z-20 flex gap-1 px-2 pt-2">

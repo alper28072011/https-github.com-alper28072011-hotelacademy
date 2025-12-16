@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Users, Film, LogOut, ArrowLeft, Map, BarChart2, Inbox, Settings, Loader2, Building2 } from 'lucide-react';
+import { Users, Film, LogOut, ArrowLeft, Map, BarChart2, Inbox, Settings, Loader2, Building2, LayoutList } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 
@@ -50,7 +50,8 @@ export const AdminLayout: React.FC = () => {
     { path: '/admin/requests', icon: Inbox, label: 'İstekler' }, 
     { path: '/admin/staff', icon: Users, label: 'Ekip' },
     { path: '/admin/career', icon: Map, label: 'Kariyer' },
-    { path: '/admin/content', icon: Film, label: 'İçerik' },
+    { path: '/admin/content', icon: Film, label: 'Stüdyo' },
+    { path: '/admin/courses', icon: LayoutList, label: 'İçerikler' }, // New
     { path: '/admin/reports', icon: BarChart2, label: 'Analiz' },
     { path: '/admin/settings', icon: Settings, label: 'Ayarlar' }, 
   ];

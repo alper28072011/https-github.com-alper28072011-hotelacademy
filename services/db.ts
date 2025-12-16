@@ -1,3 +1,4 @@
+
 import { 
   collection, 
   getDocs, 
@@ -32,17 +33,124 @@ const tasksRef = collection(db, 'tasks');
 const issuesRef = collection(db, 'issues');
 const careerPathsRef = collection(db, 'careerPaths');
 
-// --- ORGANIZATION MANAGEMENT ---
+// --- CONTENT MANAGEMENT (CRUD) ---
+
+export const deleteCourse = async (courseId: string): Promise<boolean> => {
+    try {
+        await deleteDoc(doc(db, 'courses', courseId));
+        return true;
+    } catch (e) {
+        console.error("Delete course failed:", e);
+        return false;
+    }
+};
+
+export const updateCourse = async (courseId: string, data: Partial<Course>): Promise<boolean> => {
+    try {
+        await updateDoc(doc(db, 'courses', courseId), data);
+        return true;
+    } catch (e) {
+        console.error("Update course failed:", e);
+        return false;
+    }
+};
+
+export const getOrgCourses = async (orgId: string): Promise<Course[]> => {
+    try {
+        const q = query(coursesRef, where('organizationId', '==', orgId), orderBy('createdAt', 'desc'));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+    } catch (e) {
+        return [];
+    }
+};
+
+// --- HYBRID FEED ALGORITHMS ---
+
+/**
+ * Fetches content for the Dashboard Stories/Feed.
+ * Logic: Returns ALL 'Public' content + 'Private' content belonging to user's Org.
+ * Sorted by Date.
+ */
+export const getHybridContent = async (user: User): Promise<Course[]> => {
+    try {
+        // 1. Fetch Public Content (Global Marketplace)
+        const publicQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), orderBy('createdAt', 'desc'), limit(50));
+        const publicSnap = await getDocs(publicQ);
+        const publicCourses = publicSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+
+        let privateCourses: Course[] = [];
+        
+        // 2. Fetch Private Content (My Organization)
+        if (user.currentOrganizationId) {
+            const privateQ = query(
+                coursesRef, 
+                where('organizationId', '==', user.currentOrganizationId), 
+                where('visibility', '==', 'PRIVATE'),
+                orderBy('createdAt', 'desc'), 
+                limit(50)
+            );
+            const privateSnap = await getDocs(privateQ);
+            privateCourses = privateSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+        }
+
+        // 3. Merge & Deduplicate
+        const combined = [...privateCourses, ...publicCourses];
+        const uniqueMap = new Map();
+        combined.forEach(item => uniqueMap.set(item.id, item));
+        
+        // 4. Sort by Date (Newest first)
+        return Array.from(uniqueMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    } catch (error) {
+        console.error("Hybrid Feed Error:", error);
+        return [];
+    }
+};
+
+export const getFeedPosts = async (dept: DepartmentType | null, orgId: string | null): Promise<FeedPost[]> => {
+    try {
+        // Similar logic for Social Feed Posts if we want them hybrid too
+        // For now, let's keep FeedPosts strictly Org-based as they are usually operational updates.
+        // But if needed, we can expand.
+        if (!orgId) return [];
+
+        const q = query(
+            postsRef, 
+            where('organizationId', '==', orgId),
+            orderBy('createdAt', 'desc'),
+            limit(50)
+        );
+
+        const snap = await getDocs(q);
+        const allPosts = snap.docs.map(d => ({id: d.id, ...d.data()} as FeedPost));
+
+        // Client-side filtering for department targeting
+        if (dept) {
+             return allPosts.filter(p => {
+                if (p.assignmentType === 'GLOBAL') return true;
+                if (!p.targetDepartments || p.targetDepartments.length === 0) return true;
+                if (p.targetDepartments.includes(dept)) return true;
+                if (p.type === 'kudos') return true;
+                return false;
+            });
+        }
+        
+        return allPosts;
+    } catch (e) {
+        console.error("Error fetching feed:", e);
+        return [];
+    }
+};
+
+// ... (Keep existing basic CRUD below) ...
 
 export const switchUserActiveOrganization = async (userId: string, orgId: string): Promise<boolean> => {
     try {
         const userRef = doc(db, 'users', userId);
         await updateDoc(userRef, { currentOrganizationId: orgId });
         return true;
-    } catch (e) {
-        console.error("Switch Org Failed:", e);
-        return false;
-    }
+    } catch (e) { return false; }
 };
 
 export const searchOrganizations = async (searchTerm: string): Promise<Organization[]> => {
@@ -55,10 +163,7 @@ export const searchOrganizations = async (searchTerm: string): Promise<Organizat
         return snap.docs
             .map(d => ({id: d.id, ...d.data()} as Organization))
             .filter(o => o.name.toLowerCase().includes(term) || o.code === searchTerm.toUpperCase());
-    } catch (e) {
-        console.error("Search failed:", e);
-        return [];
-    }
+    } catch (e) { return []; }
 };
 
 export const getAllPublicOrganizations = async (): Promise<Organization[]> => {
@@ -66,9 +171,7 @@ export const getAllPublicOrganizations = async (): Promise<Organization[]> => {
         const q = query(orgsRef, limit(20), orderBy('createdAt', 'desc'));
         const snap = await getDocs(q);
         return snap.docs.map(d => ({id: d.id, ...d.data()} as Organization));
-    } catch (e) {
-        return [];
-    }
+    } catch (e) { return []; }
 };
 
 export const createOrganization = async (name: string, sector: OrganizationSector, owner: User): Promise<Organization | null> => {
@@ -89,7 +192,7 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
             createdAt: Date.now(),
             settings: {
                 allowStaffContentCreation: false,
-                customDepartments: ['Yönetim', 'Operasyon', 'Mutfak'], // Start with custom localized defaults
+                customDepartments: ['Yönetim', 'Operasyon', 'Mutfak'], 
                 primaryColor: '#0B1E3B'
             }
         };
@@ -102,8 +205,8 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
             userId: owner.id,
             organizationId: orgId,
             role: 'manager', 
-            roleTitle: 'Kurucu', // Founder title
-            permissions: ['CAN_MANAGE_TEAM', 'CAN_CREATE_CONTENT', 'CAN_VIEW_ANALYTICS', 'CAN_EDIT_SETTINGS'], // God mode
+            roleTitle: 'Kurucu',
+            permissions: ['CAN_MANAGE_TEAM', 'CAN_CREATE_CONTENT', 'CAN_VIEW_ANALYTICS', 'CAN_EDIT_SETTINGS'],
             department: 'management',
             status: 'ACTIVE',
             joinedAt: Date.now()
@@ -118,10 +221,7 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
         });
 
         return newOrg;
-    } catch (e) {
-        console.error("Error creating org:", e);
-        return null;
-    }
+    } catch (e) { return null; }
 };
 
 export const getOrganizationDetails = async (orgId: string): Promise<Organization | null> => {
@@ -138,68 +238,9 @@ export const updateOrganization = async (orgId: string, data: Partial<Organizati
     } catch (e) { return false; }
 };
 
-// ... (Feed/Course functions) ...
-
-export const getFeedPosts = async (dept: DepartmentType | null, orgId: string | null): Promise<FeedPost[]> => {
-    try {
-        let q;
-        if (orgId) {
-            // Fetch organization posts
-            q = query(
-                postsRef, 
-                where('organizationId', '==', orgId),
-                orderBy('createdAt', 'desc'),
-                limit(50)
-            );
-        } else {
-            // Fetch global posts for freelancers
-            q = query(postsRef, orderBy('createdAt', 'desc'), limit(20));
-        }
-
-        const snap = await getDocs(q);
-        const allPosts = snap.docs.map(d => ({id: d.id, ...d.data()} as FeedPost));
-
-        // Filter by Department if in an Org
-        if (orgId && dept) {
-             return allPosts.filter(p => {
-                if (p.assignmentType === 'GLOBAL') return true;
-                if (p.targetDepartments?.includes(dept)) return true;
-                if (p.type === 'kudos') return true;
-                return false;
-            });
-        }
-        
-        return allPosts;
-    } catch (e) {
-        console.error("Error fetching feed:", e);
-        return [];
-    }
-};
-
 export const getUnifiedFeed = async (user: User): Promise<Course[]> => {
-    try {
-        const publicQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), limit(20));
-        const publicSnap = await getDocs(publicQ);
-        const publicCourses = publicSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
-
-        let corpCourses: Course[] = [];
-        if (user.currentOrganizationId) {
-            const corpQ = query(coursesRef, where('organizationId', '==', user.currentOrganizationId), where('visibility', '==', 'PRIVATE'));
-            const corpSnap = await getDocs(corpQ);
-            corpCourses = corpSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
-        }
-        
-        const allMap = new Map<string, Course>();
-        corpCourses.forEach(c => allMap.set(c.id, c));
-        publicCourses.forEach(c => {
-            if(!allMap.has(c.id)) allMap.set(c.id, c);
-        });
-
-        return Array.from(allMap.values());
-    } catch (error) { return []; }
+    return getHybridContent(user);
 };
-
-// ... (Rest of existing functions) ...
 
 export const getUsersByDepartment = async (dept: DepartmentType, orgId: string): Promise<User[]> => {
   if (!orgId) return [];
@@ -229,9 +270,6 @@ export const getUsersByDepartment = async (dept: DepartmentType, orgId: string):
   } catch (error) { return []; }
 };
 
-// ... (Tasks, Career, etc.) ...
-
-// --- UPDATED INVITE LOGIC ---
 export const inviteUserToOrg = async (
     user: User, 
     orgId: string, 
@@ -243,12 +281,8 @@ export const inviteUserToOrg = async (
         await runTransaction(db, async (transaction) => {
             const membershipId = `${user.id}_${orgId}`;
             const memRef = doc(db, 'memberships', membershipId);
-            
-            // Determine System Role based on permissions
-            // If they can manage team or edit settings, they are effectively a 'manager' in system eyes for RBAC
             const systemRole = (permissions.includes('CAN_MANAGE_TEAM') || permissions.includes('CAN_EDIT_SETTINGS')) ? 'manager' : 'staff';
 
-            // 1. Create Membership with Matrix
             transaction.set(memRef, {
                 id: membershipId,
                 userId: user.id,
@@ -261,7 +295,6 @@ export const inviteUserToOrg = async (
                 joinedAt: Date.now()
             });
 
-            // 2. Update User Context
             const userRef = doc(db, 'users', user.id);
             transaction.update(userRef, {
                 currentOrganizationId: orgId,
@@ -271,13 +304,9 @@ export const inviteUserToOrg = async (
             });
         });
         return true;
-    } catch (e) { 
-        console.error(e);
-        return false; 
-    }
+    } catch (e) { return false; }
 };
 
-// --- UPDATED APPROVAL LOGIC ---
 export const approveJoinRequest = async (
     requestId: string, 
     joinRequest: JoinRequest,
@@ -288,7 +317,6 @@ export const approveJoinRequest = async (
         await runTransaction(db, async (transaction) => {
             const membershipId = `${joinRequest.userId}_${joinRequest.organizationId}`;
             const memRef = doc(db, 'memberships', membershipId);
-            
             const systemRole = (assignedPermissions.includes('CAN_MANAGE_TEAM') || assignedPermissions.includes('CAN_EDIT_SETTINGS')) ? 'manager' : 'staff';
 
             const membershipData: Membership = {
@@ -319,7 +347,6 @@ export const approveJoinRequest = async (
     } catch (e) { return false; }
 };
 
-// ... (Rest of existing small functions) ...
 export const getMyMemberships = async (userId: string): Promise<Membership[]> => {
     try {
         const q = query(membershipsRef, where('userId', '==', userId));
@@ -603,5 +630,5 @@ export const getInstructorCourses = async (authorId: string): Promise<Course[]> 
     } catch (e) { return []; }
 };
 export const getCourses = async (orgId?: string): Promise<Course[]> => {
-  return getUnifiedFeed({ currentOrganizationId: orgId } as User); 
+  return getHybridContent({ currentOrganizationId: orgId } as User); 
 };

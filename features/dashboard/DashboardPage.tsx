@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useContentStore } from '../../stores/useContentStore';
-import { getFeedPosts } from '../../services/db';
+import { getFeedPosts, getHybridContent } from '../../services/db';
 import { StoryCircle, StoryStatus } from './components/StoryCircle';
 import { FeedPostCard } from './components/FeedPostCard';
 import { X, Quote, Map, Settings, Building } from 'lucide-react';
@@ -15,7 +15,7 @@ export const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { courses, fetchContent } = useContentStore();
+  const { fetchContent } = useContentStore();
   
   const [storyCourses, setStoryCourses] = useState<Course[]>([]);
   const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
@@ -31,22 +31,20 @@ export const DashboardPage: React.FC = () => {
     const loadData = async () => {
         if (!currentUser) return;
         
-        // --- SMART SORTING ALGORITHM FOR STORIES ---
+        // --- 1. HYBRID CONTENT ALGORITHM (STORIES) ---
+        // Fetch everything available to the user (Public + Their Org)
+        const allCourses = await getHybridContent(currentUser);
         
-        // 1. Filter Relevant Courses
+        // Filter based on relevance (Department/Assignment)
         const myDept = currentUser.department;
-        const relevantCourses = courses.filter(course => {
-            if (course.categoryId === 'cat_onboarding') return true;
-            // If no org, show global only
-            if (!currentUser.currentOrganizationId) {
-                return course.visibility === 'PUBLIC';
-            }
-            if (course.assignmentType === 'GLOBAL') return true;
+        const relevantCourses = allCourses.filter(course => {
+            if (course.visibility === 'PUBLIC') return true; // Show all public stuff in stories
+            if (course.assignmentType === 'GLOBAL') return true; // Show all global org stuff
             if (course.assignmentType === 'DEPARTMENT' && course.targetDepartments?.includes(myDept || '')) return true;
             return false;
         });
 
-        // 2. Assign Scores
+        // 2. Assign Scores for Sorting
         const getScore = (c: Course) => {
             const isCompleted = currentUser.completedCourses.includes(c.id);
             if (isCompleted) return 0;
@@ -60,15 +58,15 @@ export const DashboardPage: React.FC = () => {
         const sortedCourses = relevantCourses.sort((a, b) => getScore(b) - getScore(a));
         setStoryCourses(sortedCourses.slice(0, 15)); 
 
-        // --- LOAD FEED POSTS ---
+        // --- 3. LOAD FEED POSTS (Social Updates) ---
         const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId || null);
         setFeedPosts(posts);
     };
 
-    if (courses.length > 0 || currentUser) {
+    if (currentUser) {
         loadData();
     }
-  }, [currentUser, courses]);
+  }, [currentUser]);
 
   const getStoryStatus = (course: Course): StoryStatus => {
       if (!currentUser) return 'viewed';

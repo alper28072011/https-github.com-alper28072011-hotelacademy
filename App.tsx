@@ -27,6 +27,7 @@ import { AdminLayout } from './features/admin/AdminLayout';
 import { StaffManager } from './features/admin/StaffManager';
 import { TeamRequests } from './features/admin/TeamRequests'; 
 import { ContentStudio } from './features/admin/ContentStudio';
+import { CourseManager } from './features/admin/CourseManager'; // NEW
 import { CareerBuilder } from './features/admin/CareerBuilder';
 import { TalentRadar } from './features/admin/TalentRadar';
 import { SuperAdminDashboard } from './features/superadmin/SuperAdminDashboard';
@@ -121,6 +122,7 @@ const App: React.FC = () => {
                   <Route path="staff" element={<StaffManager />} />
                   <Route path="career" element={<CareerBuilder />} />
                   <Route path="content" element={<ContentStudio />} />
+                  <Route path="courses" element={<CourseManager />} />
                   <Route path="reports" element={<TalentRadar />} />
                   <Route path="settings" element={<OrganizationSettings />} /> 
               </Route>
