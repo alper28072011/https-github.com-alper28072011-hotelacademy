@@ -115,13 +115,12 @@ const App: React.FC = () => {
               {/* ORGANIZATION ADMIN ROUTES */}
               {canAccessAdmin && currentOrganization && (
                   <Route path="/admin" element={<AdminLayout />}>
-                      <Route index element={<Navigate to="requests" replace />} />
+                      <Route index element={<OrganizationSettings />} /> 
                       <Route path="requests" element={<TeamRequests />} />
                       <Route path="staff" element={<StaffManager />} />
                       <Route path="career" element={<CareerBuilder />} />
                       <Route path="content" element={<ContentStudio />} />
                       <Route path="reports" element={<TalentRadar />} />
-                      {/* REFACTOR: Directly using OrganizationSettings here */}
                       <Route path="settings" element={<OrganizationSettings />} /> 
                   </Route>
               )}

@@ -56,12 +56,11 @@ export const OrganizationLobby: React.FC = () => {
       const org = await createOrganization(newOrgName, newOrgSector, currentUser);
       
       if (org) {
-          // 1. Switch Organization Context (Updates persistent store)
+          // 1. Switch Organization Context
           await switchOrganization(org.id);
           
           // 2. CRITICAL: Manually update AuthStore User State
-          // This ensures the router and profile page see the new 'manager' role immediately
-          // without needing a page refresh or re-fetch.
+          // We update the local store immediately to prevent routing lag
           const updatedUser: User = {
               ...currentUser,
               currentOrganizationId: org.id,
@@ -70,11 +69,13 @@ export const OrganizationLobby: React.FC = () => {
           };
           loginSuccess(updatedUser);
 
-          // 3. Direct Navigation to Admin Panel
-          // We use replace: true to prevent going back to Lobby easily
-          navigate('/admin', { replace: true });
+          // 3. FORCE REDIRECT (With small delay to ensure state propagation)
+          setTimeout(() => {
+              navigate('/admin', { replace: true });
+          }, 100);
+      } else {
+          setIsCreating(false);
       }
-      setIsCreating(false);
   };
 
   const handleSelectMembership = async (orgId: string) => {
