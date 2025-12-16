@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Wand2, FileText, Link, Type, Loader2, Play, 
     CheckCircle2, Save, RotateCcw, Smartphone, Image as ImageIcon,
-    Settings, Globe, Lock, ChevronRight, Upload, Edit
+    Settings, Globe, Lock, ChevronRight, Upload, Edit, FileType
 } from 'lucide-react';
 import { generateMicroCourse } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
@@ -14,6 +14,34 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { StoryCard, Course, CourseVisibility } from '../../types';
 import { useLocation, useNavigate } from 'react-router-dom';
+
+// FIX 5: PDF Extraction Logic via CDN to avoid local node_modules dependency issues
+const extractTextFromPDF = async (file: File): Promise<string> => {
+    try {
+        // Dynamically import from CDN
+        const pdfjsLib = await import('https://esm.sh/pdfjs-dist@3.11.174');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
+
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let fullText = '';
+        // Limit to first 10 pages to avoid huge payloads
+        const maxPages = Math.min(pdf.numPages, 10);
+        
+        for (let i = 1; i <= maxPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map((item: any) => item.str).join(' ');
+            fullText += pageText + '\n';
+        }
+        
+        return fullText;
+    } catch (e) {
+        console.error("PDF Extraction Failed:", e);
+        return "";
+    }
+};
 
 export const ContentStudio: React.FC = () => {
   const { currentUser } = useAuthStore();
@@ -29,9 +57,10 @@ export const ContentStudio: React.FC = () => {
   const [stage, setStage] = useState<'INPUT' | 'GENERATING' | 'PREVIEW' | 'SETTINGS' | 'PUBLISHED'>('INPUT');
   
   // INPUT STATE
-  const [inputType, setInputType] = useState<'TEXT' | 'URL'>('TEXT');
+  const [inputType, setInputType] = useState<'TEXT' | 'URL' | 'PDF'>('TEXT');
   const [sourceText, setSourceText] = useState('');
   const [topic, setTopic] = useState('');
+  const [isExtracting, setIsExtracting] = useState(false);
   
   // GENERATED DATA
   const [generatedCourse, setGeneratedCourse] = useState<{
@@ -72,6 +101,16 @@ export const ContentStudio: React.FC = () => {
   // AI SETTINGS
   const [targetAudience, setTargetAudience] = useState('New Staff');
   const [tone, setTone] = useState<'PROFESSIONAL' | 'FUN'>('FUN');
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          setIsExtracting(true);
+          const text = await extractTextFromPDF(e.target.files[0]);
+          setSourceText(text);
+          if (!text) alert("PDF okunamadı veya metin içermiyor.");
+          setIsExtracting(false);
+      }
+  };
 
   const handleMagicGenerate = async () => {
       if (!sourceText && !topic) return;
@@ -183,12 +222,15 @@ export const ContentStudio: React.FC = () => {
             {stage === 'INPUT' && (
                 <div className="flex flex-col gap-6 animate-in slide-in-from-left-4">
                     {/* Source Selector */}
-                    <div className="bg-gray-50 p-1 rounded-xl flex">
-                        <button onClick={() => setInputType('TEXT')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${inputType === 'TEXT' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}>
-                            <Type className="w-4 h-4" /> Metin / Konu
+                    <div className="bg-gray-50 p-1 rounded-xl flex gap-1">
+                        <button onClick={() => setInputType('TEXT')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${inputType === 'TEXT' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}>
+                            <Type className="w-4 h-4" /> Metin
                         </button>
-                        <button onClick={() => setInputType('URL')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${inputType === 'URL' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}>
-                            <Link className="w-4 h-4" /> Link / PDF
+                        <button onClick={() => setInputType('URL')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${inputType === 'URL' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}>
+                            <Link className="w-4 h-4" /> Link
+                        </button>
+                        <button onClick={() => setInputType('PDF')} className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${inputType === 'PDF' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}>
+                            <FileType className="w-4 h-4" /> PDF
                         </button>
                     </div>
 
@@ -206,12 +248,37 @@ export const ContentStudio: React.FC = () => {
                         
                         <div>
                             <label className="text-xs font-bold text-gray-400 uppercase mb-1">Kaynak İçerik</label>
-                            <textarea 
-                                value={sourceText}
-                                onChange={e => setSourceText(e.target.value)}
-                                placeholder={inputType === 'TEXT' ? "Eğitim metnini buraya yapıştırın veya anahtar noktaları yazın..." : "Web sitesi linkini veya PDF metnini buraya yapıştırın..."}
-                                className="w-full p-4 bg-white border-2 border-gray-100 rounded-xl font-medium text-gray-600 focus:border-accent outline-none h-40 resize-none"
-                            />
+                            
+                            {inputType === 'PDF' ? (
+                                <div className="w-full h-40 bg-white border-2 border-gray-100 border-dashed rounded-xl flex flex-col items-center justify-center relative cursor-pointer hover:border-accent">
+                                    {isExtracting ? (
+                                        <div className="flex flex-col items-center">
+                                            <Loader2 className="w-8 h-8 text-accent animate-spin mb-2" />
+                                            <span className="text-gray-500 text-sm">PDF Analiz Ediliyor...</span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                                            <span className="text-gray-600 font-bold text-sm">PDF Yükle</span>
+                                            <span className="text-gray-400 text-xs">Maks. 10 sayfa</span>
+                                            <input type="file" accept="application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handlePdfUpload} />
+                                        </>
+                                    )}
+                                </div>
+                            ) : (
+                                <textarea 
+                                    value={sourceText}
+                                    onChange={e => setSourceText(e.target.value)}
+                                    placeholder={inputType === 'TEXT' ? "Eğitim metnini buraya yapıştırın veya anahtar noktaları yazın..." : "Web sitesi linkini veya PDF metnini buraya yapıştırın..."}
+                                    className="w-full p-4 bg-white border-2 border-gray-100 rounded-xl font-medium text-gray-600 focus:border-accent outline-none h-40 resize-none"
+                                />
+                            )}
+                            
+                            {sourceText && inputType === 'PDF' && (
+                                <div className="mt-2 text-xs text-green-600 font-bold flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3" /> Metin başarıyla alındı ({sourceText.length} karakter)
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -236,8 +303,8 @@ export const ContentStudio: React.FC = () => {
 
                     <button 
                         onClick={handleMagicGenerate}
-                        disabled={!topic}
-                        className="w-full bg-gradient-to-r from-accent to-accent-dark text-primary py-4 rounded-xl font-bold text-lg shadow-xl shadow-accent/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+                        disabled={!topic || (inputType === 'PDF' && !sourceText)}
+                        className="w-full bg-gradient-to-r from-accent to-accent-dark text-primary py-4 rounded-xl font-bold text-lg shadow-xl shadow-accent/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Wand2 className="w-6 h-6" /> Sihirli Oluştur
                     </button>

@@ -24,15 +24,21 @@ export const generateMicroCourse = async (
   }
 ): Promise<GeneratedMicroCourse | null> => {
   try {
+    // FIX 4: Explicit Tone Enforcement in Prompt
+    const toneInstructions = params.tone === 'FUN' 
+      ? "USE 'FUN' TONE: Use emojis in every card (🚀, 💡, 🔥). Address the user as 'Sen' (informal). Be witty, encouraging, and use short, punchy sentences like a social media influencer. Make it exciting!" 
+      : "USE 'PROFESSIONAL' TONE: Use formal, clear business Turkish (Siz). Focus on efficiency, standards, and respect. No slang.";
+
     const prompt = `
       Act as a world-class Instructional Designer and Gamification Expert for Hotel Staff Training.
       
       YOUR TASK:
       Convert the provided [SOURCE MATERIAL] into an interactive "Micro-Learning Story" (like Instagram Stories or Duolingo).
       
-      AUDIENCE: ${params.targetAudience}
-      TONE: ${params.tone}
-      LANGUAGE: ${params.language}
+      CRITICAL SETTINGS:
+      - AUDIENCE: ${params.targetAudience}
+      - LANGUAGE: ${params.language}
+      - ${toneInstructions}
       
       STRUCTURE RULES:
       1. Break the content into 5-10 "Story Cards".
@@ -40,11 +46,11 @@ export const generateMicroCourse = async (
       3. Mix 'INFO' cards (short, punchy text) with 'QUIZ' cards (checking understanding).
       4. Every 2-3 info cards MUST be followed by a Quiz.
       5. The last card must be 'XP_REWARD' type with a congratulatory message.
-      6. Content must be extremely concise (max 280 chars per card). Use emojis.
+      6. Content must be extremely concise (max 280 chars per card).
       7. For 'mediaUrl', provide a relevant English search keyword for a stock photo (e.g., "hotel receptionist smiling").
       
       SOURCE MATERIAL:
-      "${sourceContent.substring(0, 10000)}" 
+      "${sourceContent.substring(0, 15000)}" 
     `;
 
     // Define the exact schema for the UI to render

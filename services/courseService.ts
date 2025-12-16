@@ -58,7 +58,7 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
             verificationStatus: status,
             qualityScore: 0, // Start fresh
             flagCount: 0,
-            createdAt: serverTimestamp()
+            createdAt: Date.now()
         };
 
         // 3. Write to DB

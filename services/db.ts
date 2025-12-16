@@ -55,6 +55,34 @@ export const updateCourse = async (courseId: string, data: Partial<Course>): Pro
     }
 };
 
+/**
+ * FIX 1: Comprehensive Admin Fetcher
+ * Fetches courses where user is Author OR courses belonging to their Organization.
+ */
+export const getAdminCourses = async (userId: string, orgId?: string | null): Promise<Course[]> => {
+    try {
+        const results = new Map<string, Course>();
+
+        // 1. Fetch "My Created Courses"
+        const authorQ = query(coursesRef, where('authorId', '==', userId), orderBy('createdAt', 'desc'));
+        const authorSnap = await getDocs(authorQ);
+        authorSnap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() } as Course));
+
+        // 2. Fetch "Organization Courses" (if org exists)
+        if (orgId) {
+            const orgQ = query(coursesRef, where('organizationId', '==', orgId), orderBy('createdAt', 'desc'));
+            const orgSnap = await getDocs(orgQ);
+            orgSnap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() } as Course));
+        }
+
+        // Return deduplicated list sorted by date
+        return Array.from(results.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } catch (e) {
+        console.error("Get Admin Courses Error:", e);
+        return [];
+    }
+};
+
 export const getOrgCourses = async (orgId: string): Promise<Course[]> => {
     try {
         const q = query(coursesRef, where('organizationId', '==', orgId), orderBy('createdAt', 'desc'));
@@ -68,39 +96,34 @@ export const getOrgCourses = async (orgId: string): Promise<Course[]> => {
 // --- HYBRID FEED ALGORITHMS ---
 
 /**
- * Fetches content for the Dashboard Stories/Feed.
- * Logic: Returns ALL 'Public' content + 'Private' content belonging to user's Org.
- * Sorted by Date.
+ * FIX 2: Ensures Public content is visible in the feed alongside Org content.
  */
 export const getHybridContent = async (user: User): Promise<Course[]> => {
     try {
+        const results = new Map<string, Course>();
+
         // 1. Fetch Public Content (Global Marketplace)
+        // Note: 'visibility' index needed in Firestore
         const publicQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), orderBy('createdAt', 'desc'), limit(50));
         const publicSnap = await getDocs(publicQ);
-        const publicCourses = publicSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+        publicSnap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() } as Course));
 
-        let privateCourses: Course[] = [];
-        
         // 2. Fetch Private Content (My Organization)
         if (user.currentOrganizationId) {
             const privateQ = query(
                 coursesRef, 
                 where('organizationId', '==', user.currentOrganizationId), 
-                where('visibility', '==', 'PRIVATE'),
+                // We fetch all org content, client can filter PRIVATE later if needed, but usually org members see all org content.
+                // Optimally: where('visibility', '==', 'PRIVATE') but some org content might be public too.
                 orderBy('createdAt', 'desc'), 
                 limit(50)
             );
             const privateSnap = await getDocs(privateQ);
-            privateCourses = privateSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+            privateSnap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() } as Course));
         }
 
-        // 3. Merge & Deduplicate
-        const combined = [...privateCourses, ...publicCourses];
-        const uniqueMap = new Map();
-        combined.forEach(item => uniqueMap.set(item.id, item));
-        
-        // 4. Sort by Date (Newest first)
-        return Array.from(uniqueMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        // 3. Convert Map to Array & Sort
+        return Array.from(results.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     } catch (error) {
         console.error("Hybrid Feed Error:", error);
@@ -110,9 +133,6 @@ export const getHybridContent = async (user: User): Promise<Course[]> => {
 
 export const getFeedPosts = async (dept: DepartmentType | null, orgId: string | null): Promise<FeedPost[]> => {
     try {
-        // Similar logic for Social Feed Posts if we want them hybrid too
-        // For now, let's keep FeedPosts strictly Org-based as they are usually operational updates.
-        // But if needed, we can expand.
         if (!orgId) return [];
 
         const q = query(
@@ -125,7 +145,6 @@ export const getFeedPosts = async (dept: DepartmentType | null, orgId: string | 
         const snap = await getDocs(q);
         const allPosts = snap.docs.map(d => ({id: d.id, ...d.data()} as FeedPost));
 
-        // Client-side filtering for department targeting
         if (dept) {
              return allPosts.filter(p => {
                 if (p.assignmentType === 'GLOBAL') return true;
@@ -143,7 +162,7 @@ export const getFeedPosts = async (dept: DepartmentType | null, orgId: string | 
     }
 };
 
-// ... (Keep existing basic CRUD below) ...
+// ... (Rest of the file remains unchanged) ...
 
 export const switchUserActiveOrganization = async (userId: string, orgId: string): Promise<boolean> => {
     try {

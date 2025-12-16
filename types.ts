@@ -237,6 +237,7 @@ export interface Course {
   assignmentType?: AssignmentType; 
   targetDepartments?: DepartmentType[]; 
   priority?: ContentPriority; 
+  createdAt?: number;
   
   // NEW: Micro-Learning Core
   steps: StoryCard[]; 

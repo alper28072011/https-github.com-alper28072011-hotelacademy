@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronDown, CheckCircle, AlertCircle, BookOpen, Share2, Heart } from 'lucide-react';
+import { X, ChevronDown, CheckCircle, AlertCircle, BookOpen, Share2, Heart, AlertTriangle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getCourse, updateUserProgress } from '../../services/db';
 import { Course, StoryCard } from '../../types';
@@ -42,8 +42,13 @@ export const CoursePlayerPage: React.FC = () => {
   const currentCard = course.steps[currentIndex] as StoryCard;
   const isLastCard = currentIndex === course.steps.length - 1;
 
+  // FIX 3: Crash Protection
+  // If a Quiz card has no valid interaction data, allow skip.
+  const isQuizBroken = currentCard.type === 'QUIZ' && (!currentCard.interaction || !currentCard.interaction.options);
+
   const handleNext = () => {
-      if (currentCard.type === 'QUIZ' && !isAnswered) return; // Block unless answered
+      // Block unless answered, EXCEPT if the quiz is broken (allow bypass)
+      if (currentCard.type === 'QUIZ' && !isAnswered && !isQuizBroken) return; 
       
       if (currentIndex < course.steps.length - 1) {
           setCurrentIndex(prev => prev + 1);
@@ -171,36 +176,45 @@ export const CoursePlayerPage: React.FC = () => {
                             </p>
 
                             {/* QUIZ INTERACTION */}
-                            {currentCard.type === 'QUIZ' && currentCard.interaction && (
-                                <div className="flex flex-col gap-3 pointer-events-auto">
-                                    {currentCard.interaction.options.map((option, idx) => {
-                                        let bgClass = "bg-white/20 backdrop-blur-md text-white border-white/20";
-                                        if (isAnswered) {
-                                            if (idx === currentCard.interaction?.correctOptionIndex) bgClass = "bg-green-500 text-white border-green-500";
-                                            else if (idx === selectedOption && !isCorrect) bgClass = "bg-red-500 text-white border-red-500";
-                                            else bgClass = "bg-white/10 text-gray-400 border-transparent";
-                                        }
+                            {currentCard.type === 'QUIZ' && (
+                                isQuizBroken ? (
+                                    <div className="bg-red-500/20 border border-red-500/50 p-4 rounded-xl text-white text-sm flex items-center gap-2 pointer-events-auto">
+                                        <AlertTriangle className="w-5 h-5" />
+                                        <span>Soru yüklenemedi. Ekrana dokunarak geçebilirsiniz.</span>
+                                    </div>
+                                ) : (
+                                    currentCard.interaction && (
+                                        <div className="flex flex-col gap-3 pointer-events-auto">
+                                            {currentCard.interaction.options?.map((option, idx) => {
+                                                let bgClass = "bg-white/20 backdrop-blur-md text-white border-white/20";
+                                                if (isAnswered) {
+                                                    if (idx === currentCard.interaction?.correctOptionIndex) bgClass = "bg-green-500 text-white border-green-500";
+                                                    else if (idx === selectedOption && !isCorrect) bgClass = "bg-red-500 text-white border-red-500";
+                                                    else bgClass = "bg-white/10 text-gray-400 border-transparent";
+                                                }
 
-                                        return (
-                                            <button 
-                                                key={idx}
-                                                onClick={() => handleQuizAnswer(idx)}
-                                                disabled={isAnswered}
-                                                className={`p-4 rounded-xl text-left font-bold text-sm border-2 transition-all active:scale-98 ${bgClass}`}
-                                            >
-                                                {option}
-                                                {isAnswered && idx === currentCard.interaction?.correctOptionIndex && <CheckCircle className="inline ml-2 w-4 h-4" />}
-                                            </button>
-                                        );
-                                    })}
-                                    
-                                    {isAnswered && (
-                                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`mt-2 p-3 rounded-lg text-sm font-bold ${isCorrect ? 'bg-green-500/20 text-green-200' : 'bg-red-500/20 text-red-200'}`}>
-                                            {isCorrect ? "Harika! Doğru Cevap." : "Hata! Tekrar dene."}
-                                            {currentCard.interaction.explanation && <div className="mt-1 font-normal opacity-80">{currentCard.interaction.explanation}</div>}
-                                        </motion.div>
-                                    )}
-                                </div>
+                                                return (
+                                                    <button 
+                                                        key={idx}
+                                                        onClick={() => handleQuizAnswer(idx)}
+                                                        disabled={isAnswered}
+                                                        className={`p-4 rounded-xl text-left font-bold text-sm border-2 transition-all active:scale-98 ${bgClass}`}
+                                                    >
+                                                        {option}
+                                                        {isAnswered && idx === currentCard.interaction?.correctOptionIndex && <CheckCircle className="inline ml-2 w-4 h-4" />}
+                                                    </button>
+                                                );
+                                            })}
+                                            
+                                            {isAnswered && (
+                                                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`mt-2 p-3 rounded-lg text-sm font-bold ${isCorrect ? 'bg-green-500/20 text-green-200' : 'bg-red-500/20 text-red-200'}`}>
+                                                    {isCorrect ? "Harika! Doğru Cevap." : "Hata! Tekrar dene."}
+                                                    {currentCard.interaction.explanation && <div className="mt-1 font-normal opacity-80">{currentCard.interaction.explanation}</div>}
+                                                </motion.div>
+                                            )}
+                                        </div>
+                                    )
+                                )
                             )}
 
                             {/* REWARD CARD EXTRA */}

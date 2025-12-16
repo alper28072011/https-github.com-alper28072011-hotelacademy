@@ -7,12 +7,15 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Course } from '../../types';
-import { getOrgCourses, deleteCourse, updateCourse } from '../../services/db';
+import { getAdminCourses, deleteCourse, updateCourse } from '../../services/db';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
+import { useAuthStore } from '../../stores/useAuthStore';
 
 export const CourseManager: React.FC = () => {
   const navigate = useNavigate();
   const { currentOrganization } = useOrganizationStore();
+  const { currentUser } = useAuthStore();
+  
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,12 +27,13 @@ export const CourseManager: React.FC = () => {
 
   useEffect(() => {
       fetchCourses();
-  }, [currentOrganization]);
+  }, [currentOrganization, currentUser]);
 
   const fetchCourses = async () => {
-      if (!currentOrganization) return;
+      if (!currentUser) return;
       setLoading(true);
-      const data = await getOrgCourses(currentOrganization.id);
+      // FIX 1: Use getAdminCourses to fetch both personal and org content
+      const data = await getAdminCourses(currentUser.id, currentOrganization?.id);
       setCourses(data);
       setLoading(false);
   };
@@ -179,7 +183,7 @@ export const CourseManager: React.FC = () => {
                 
                 {filteredCourses.length === 0 && (
                     <div className="col-span-full py-20 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-3xl">
-                        İçerik bulunamadı.
+                        {searchTerm ? "Aramaya uygun içerik yok." : "Henüz bir eğitim oluşturulmadı."}
                     </div>
                 )}
             </div>
