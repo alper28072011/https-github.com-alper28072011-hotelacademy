@@ -141,12 +141,6 @@ export const updateOrganization = async (orgId: string, data: Partial<Organizati
 
 // --- UNIFIED FEED ALGORITHM ---
 
-/**
- * Returns a mixed feed of:
- * 1. Public Content (Trending)
- * 2. Organization Private Content (Mandatory/Assigned)
- * 3. Followed Users Content (Social)
- */
 export const getUnifiedFeed = async (user: User): Promise<Course[]> => {
     try {
         // 1. Fetch Public Courses (Global)
@@ -161,17 +155,9 @@ export const getUnifiedFeed = async (user: User): Promise<Course[]> => {
             const corpSnap = await getDocs(corpQ);
             corpCourses = corpSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
         }
-
-        // 3. Fetch Followed Content (Social) - Simplified for prototype (Client filter)
-        // Ideally done via "IN" query if following list < 30
-        let socialCourses: Course[] = [];
-        // NOTE: Firestore limitation prevents efficiently querying "authorId IN following" AND "visibility == PUBLIC" together easily without composite index.
-        // For prototype, we will skip this or assume publicCourses covers it partially.
         
         // MERGE & DEDUPLICATE
         const allMap = new Map<string, Course>();
-        
-        // Priority: Corporate High -> Corporate Normal -> Public Trending
         
         corpCourses.forEach(c => allMap.set(c.id, c));
         publicCourses.forEach(c => {
@@ -186,9 +172,6 @@ export const getUnifiedFeed = async (user: User): Promise<Course[]> => {
     }
 };
 
-/**
- * Legacy wrapper for backward compatibility
- */
 export const getCourses = async (orgId?: string): Promise<Course[]> => {
   return getUnifiedFeed({ currentOrganizationId: orgId } as User); 
 };
@@ -208,33 +191,19 @@ export const getFeedPosts = async (userDept: DepartmentType | null, orgId: strin
         let q;
         
         if (orgId) {
-            // Corporate Context: Show Org specific posts
-            q = query(
-                postsRef, 
-                where('organizationId', '==', orgId), 
-                limit(50) 
-            );
+            q = query(postsRef, where('organizationId', '==', orgId), limit(50));
         } else {
-            // Freelancer Context: Show Global/Public posts
-            // Note: Ideally we would filter by 'assignmentType' == 'GLOBAL' across all orgs, 
-            // or use a 'visibility' == 'PUBLIC' field on posts if we added it.
-            // For now, we will fetch recent posts and filter client side for safety, 
-            // or just show nothing if we want strict privacy.
-            // Let's assume we want to show a "Global Feed" of sorts.
             q = query(postsRef, limit(20), orderBy('createdAt', 'desc'));
         }
 
         const snapshot = await getDocs(q);
-        const posts = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
+        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
         
-        // Client-side filter for Department relevance if in Org
         if (orgId && userDept) {
             return posts.filter(p => p.assignmentType === 'GLOBAL' || p.targetDepartments?.includes(userDept))
                         .sort((a,b) => b.createdAt - a.createdAt);
         }
 
-        // For Freelancer, return all fetched (or filter by Public flag if added later)
         return posts.sort((a,b) => b.createdAt - a.createdAt);
 
     } catch (e) {
@@ -260,7 +229,15 @@ export const getUsersByDepartment = async (dept: DepartmentType, orgId: string):
     const usersQ = query(usersRef, where('__name__', 'in', userIds.slice(0, 10)));
     const userSnap = await getDocs(usersQ);
     
-    return userSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+    // CRITICAL FIX: Merge the department from membership, because User doc might be stale or belong to another org
+    return userSnap.docs.map(doc => {
+        const userData = doc.data() as User;
+        return { 
+            id: doc.id, 
+            ...userData,
+            department: dept // FORCE override from membership context
+        };
+    });
   } catch (error) { return []; }
 };
 
@@ -306,8 +283,6 @@ export const getCareerPaths = async (orgId: string): Promise<CareerPath[]> => {
 
 export const sendJoinRequest = async (userId: string, orgId: string, dept: DepartmentType, roleTitle?: string): Promise<{success: boolean, message?: string}> => {
     try {
-        // 1. SINGLE TENANCY CHECK: Check if user is already a STAFF in another organization
-        // We allow 'manager' or 'admin' to have multiple, but 'staff' should be single tenant effectively for this version.
         const memberships = await getMyMemberships(userId);
         const hasActiveStaffRole = memberships.some(m => m.role === 'staff' && m.status === 'ACTIVE');
         
@@ -315,7 +290,6 @@ export const sendJoinRequest = async (userId: string, orgId: string, dept: Depar
             return { success: false, message: "Zaten bir işletmede aktif personel kaydınız var." };
         }
 
-        // 2. Check duplicate request
         const q = query(requestsRef, where('userId', '==', userId), where('organizationId', '==', orgId), where('status', '==', 'PENDING'));
         const snap = await getDocs(q);
         if (!snap.empty) return { success: true, message: "İstek zaten gönderilmiş." };
@@ -532,19 +506,35 @@ export const searchUserByPhone = async (phone: string): Promise<User | null> => 
 };
 export const inviteUserToOrg = async (user: User, orgId: string, dept: DepartmentType): Promise<boolean> => {
     try {
-        const membershipId = `${user.id}_${orgId}`;
-        const newMembership: Membership = {
-            id: membershipId,
-            userId: user.id,
-            organizationId: orgId,
-            role: 'staff',
-            department: dept,
-            status: 'ACTIVE', 
-            joinedAt: Date.now()
-        };
-        await setDoc(doc(db, 'memberships', membershipId), newMembership);
+        await runTransaction(db, async (transaction) => {
+            const membershipId = `${user.id}_${orgId}`;
+            const memRef = doc(db, 'memberships', membershipId);
+            
+            // 1. Create Membership
+            transaction.set(memRef, {
+                id: membershipId,
+                userId: user.id,
+                organizationId: orgId,
+                role: 'staff',
+                department: dept,
+                status: 'ACTIVE', 
+                joinedAt: Date.now()
+            });
+
+            // 2. Update User Context (Important for immediate access)
+            const userRef = doc(db, 'users', user.id);
+            transaction.update(userRef, {
+                currentOrganizationId: orgId,
+                department: dept,
+                role: 'staff',
+                organizationHistory: arrayUnion(orgId)
+            });
+        });
         return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+        console.error(e);
+        return false; 
+    }
 };
 export const followUser = async (currentUserId: string, targetUserId: string): Promise<boolean> => {
     try {

@@ -33,7 +33,9 @@ export const StaffManager: React.FC = () => {
             const u = await getUsersByDepartment(d, currentOrganization.id);
             allUsers = [...allUsers, ...u];
         }
-        setUsers(allUsers);
+        // Remove duplicates just in case
+        const uniqueUsers = Array.from(new Map(allUsers.map(item => [item.id, item])).values());
+        setUsers(uniqueUsers);
         setLoading(false);
     };
     fetchAll();
@@ -66,6 +68,11 @@ export const StaffManager: React.FC = () => {
           alert("Bir hata oluştu.");
       }
       setIsInviting(false);
+  };
+
+  const getDeptLabel = (dept?: string | null) => {
+      if (!dept) return 'Departman Yok';
+      return dept.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
   return (
@@ -107,18 +114,21 @@ export const StaffManager: React.FC = () => {
             {filteredUsers.map(user => (
                 <div key={user.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
                     <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden shrink-0 border border-gray-200">
-                        {user.avatar.length > 5 ? (
+                        {user.avatar && user.avatar.length > 5 ? (
                             <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
                         ) : (
-                            <span className="text-xl font-bold text-gray-400">{user.avatar}</span>
+                            <span className="text-xl font-bold text-gray-400">{user.avatar || '?'}</span>
                         )}
                     </div>
                     <div>
                         <h3 className="font-bold text-gray-800 leading-tight">{user.name}</h3>
-                        <div className="text-xs text-gray-500 capitalize">{user.department.replace('_', ' ')}</div>
+                        <div className="text-xs text-gray-500">{getDeptLabel(user.department)}</div>
                     </div>
                 </div>
             ))}
+            {filteredUsers.length === 0 && (
+                <div className="col-span-full py-10 text-center text-gray-400">Bu departmanda personel bulunamadı.</div>
+            )}
         </div>
       )}
 

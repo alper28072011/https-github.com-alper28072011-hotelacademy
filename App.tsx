@@ -55,9 +55,10 @@ const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
-// --- SUPER ADMIN GUARD & REDIRECTOR ---
+// --- SUPER ADMIN GUARD ---
 const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { currentUser } = useAuthStore();
+    // Hardcoded safety check + Role check
     const isSuper = currentUser?.role === 'super_admin' && currentUser?.phoneNumber.replace(/\s/g, '') === '+905417726743';
     
     if (!isSuper) return <Navigate to="/" replace />;
@@ -86,9 +87,6 @@ const App: React.FC = () => {
       sync();
   }, [isAuthenticated, currentUser]); 
 
-  // Strict Super Admin Check for Auto-Redirect
-  const isSuperAdmin = currentUser?.role === 'super_admin' && currentUser?.phoneNumber.replace(/\s/g, '') === '+905417726743';
-
   if (isHydrating && isAuthenticated) {
       return (
           <div className="h-screen flex items-center justify-center bg-primary">
@@ -103,11 +101,6 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <Routes>
-        {/* SUPER ADMIN ROOT REDIRECT */}
-        {isAuthenticated && isSuperAdmin && (
-             <Route path="/" element={<Navigate to="/super-admin" replace />} />
-        )}
-
         {/* Protected Routes */}
         {isAuthenticated ? (
            <>
@@ -119,8 +112,7 @@ const App: React.FC = () => {
               <Route path="/course/:courseId" element={<CourseIntroPage />} />
               <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
               
-              {/* ORGANIZATION ADMIN ROUTES - REMOVED CONDITIONAL RENDERING */}
-              {/* The guard logic is now inside AdminLayout to prevent route missing errors */}
+              {/* ORGANIZATION ADMIN ROUTES */}
               <Route path="/admin" element={<AdminLayout />}>
                   <Route index element={<OrganizationSettings />} /> 
                   <Route path="requests" element={<TeamRequests />} />

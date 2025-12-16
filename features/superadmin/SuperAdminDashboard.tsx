@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShieldCheck, Activity, Users, DollarSign, Database, Building2, Search, Power, Trash2, Loader2, List, Grid, RotateCcw } from 'lucide-react';
@@ -65,7 +66,7 @@ export const SuperAdminDashboard: React.FC = () => {
                 onClick={() => navigate('/')}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 transition-colors text-sm font-bold border border-gray-700"
             >
-                <ArrowLeft className="w-4 h-4" /> Çıkış
+                <ArrowLeft className="w-4 h-4" /> Uygulamaya Dön
             </button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Organization, Membership, User } from '../types';
+import { Organization, Membership, User, DepartmentType, UserRole } from '../types';
 import { getOrganizationDetails, getMyMemberships, switchUserActiveOrganization } from '../services/db';
 import { useAuthStore } from './useAuthStore'; // Import Auth Store for cross-store update
 
@@ -47,25 +47,49 @@ export const useOrganizationStore = create<OrganizationState>()(
                 return false;
             }
 
-            // 2. Persist to DB (User Profile)
+            // 2. Determine Role (CRITICAL FIX for "Unauthorized" Bug)
+            let role: UserRole = 'staff';
+            let dept: DepartmentType = 'housekeeping';
+
+            // Priority A: Are you the Owner?
+            if (org.ownerId === currentUser.id) {
+                role = 'manager';
+                dept = 'management';
+            } else {
+                // Priority B: Check cached memberships
+                let membership = get().myMemberships.find(m => m.organizationId === orgId);
+                
+                // Priority C: Fetch fresh memberships if not found (e.g. newly joined)
+                if (!membership) {
+                    const freshMemberships = await getMyMemberships(currentUser.id);
+                    set({ myMemberships: freshMemberships }); // Sync store
+                    membership = freshMemberships.find(m => m.organizationId === orgId);
+                }
+
+                if (membership) {
+                    role = membership.role;
+                    dept = membership.department;
+                }
+            }
+
+            // 3. Persist to DB (User Profile)
             await switchUserActiveOrganization(currentUser.id, orgId);
 
-            // 3. Update Auth Store User (Important for Routing!)
-            const membership = get().myMemberships.find(m => m.organizationId === orgId);
+            // 4. Update Auth Store User (Important for Routing & Guards!)
             const updatedUser: User = { 
                 ...currentUser, 
                 currentOrganizationId: orgId,
-                role: membership?.role || 'staff',
-                department: membership?.department || 'housekeeping'
+                role: role,
+                department: dept
             };
             authStore.loginSuccess(updatedUser);
 
-            // 4. Update Org Store
+            // 5. Update Org Store
             set({ currentOrganization: org, isLoading: false });
             return true;
 
         } catch (e) {
-            console.error(e);
+            console.error("Switch Org Failed:", e);
             set({ isLoading: false });
             return false;
         }
