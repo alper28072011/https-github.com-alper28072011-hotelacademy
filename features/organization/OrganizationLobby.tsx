@@ -6,11 +6,11 @@ import { Plus, Search, Building2, ArrowRight, Loader2, LogOut, MapPin, Briefcase
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { createOrganization, searchOrganizations } from '../../services/db';
-import { Organization, OrganizationSector } from '../../types';
+import { Organization, OrganizationSector, User } from '../../types';
 
 export const OrganizationLobby: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuthStore();
+  const { currentUser, logout, loginSuccess } = useAuthStore();
   const { switchOrganization, fetchMemberships, myMemberships } = useOrganizationStore();
   const [activeTab, setActiveTab] = useState<'FIND' | 'CREATE'>('FIND');
   
@@ -52,12 +52,24 @@ export const OrganizationLobby: React.FC = () => {
   const handleCreate = async () => {
       if (!newOrgName || !currentUser) return;
       setIsCreating(true);
+      
       const org = await createOrganization(newOrgName, newOrgSector, currentUser);
+      
       if (org) {
-          // Explicit await to ensure state is synced before navigation
+          // 1. Switch Organization Context
           await switchOrganization(org.id);
           
-          // SMART REDIRECT: Go to Admin Panel
+          // 2. CRITICAL: Manually update AuthStore User State
+          // This ensures the router and profile page see the new role immediately
+          const updatedUser: User = {
+              ...currentUser,
+              currentOrganizationId: org.id,
+              role: 'manager', // Owner starts as manager/admin
+              department: 'management'
+          };
+          loginSuccess(updatedUser);
+
+          // 3. Direct Navigation to Admin Panel
           navigate('/admin', { replace: true });
       }
       setIsCreating(false);
@@ -68,10 +80,8 @@ export const OrganizationLobby: React.FC = () => {
       setSwitchingOrgId(orgId);
       
       try {
-          // Critical: Wait for this to complete. It updates DB and Local User State.
           const success = await switchOrganization(orgId);
           if (success) {
-              // Only navigate if successful
               navigate('/');
           } else {
               setSwitchingOrgId(null);
