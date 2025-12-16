@@ -44,23 +44,24 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       fetchOrg();
   }, [user.currentOrganizationId]);
 
-  // 2. Strict Navigation Logic
+  // 2. Strict Navigation Logic (Refactored)
   const handleActionClick = () => {
-      // Case 1: Freelancer (No Org)
+      // A. Freelancer (No Organization) -> Go to Lobby
       if (!user.currentOrganizationId) {
           navigate('/lobby');
           return;
       }
 
-      // Case 2: Management Check (Role OR Ownership)
-      // We check org.ownerId to handle race conditions where user.role might lag slightly
+      // B. Manager/Admin Check
+      // We check strict role strings AND confirm with org ownerId for safety
       const isOwner = org && org.ownerId === user.id;
-      const isAdminOrManager = ['admin', 'manager', 'super_admin'].includes(user.role);
+      const isManager = ['admin', 'manager', 'super_admin'].includes(user.role);
 
-      if (isOwner || isAdminOrManager) {
+      if (isManager || isOwner) {
+          // Force Navigation to Admin Panel
           navigate('/admin');
       } else {
-          // Staff Members go to Dashboard (Home) or Org Profile
+          // Standard Staff -> Dashboard
           navigate('/');
       }
   };

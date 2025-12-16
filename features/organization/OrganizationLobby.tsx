@@ -56,11 +56,12 @@ export const OrganizationLobby: React.FC = () => {
       const org = await createOrganization(newOrgName, newOrgSector, currentUser);
       
       if (org) {
-          // 1. Switch Organization Context
+          // 1. Switch Organization Context (Updates persistent store)
           await switchOrganization(org.id);
           
           // 2. CRITICAL: Manually update AuthStore User State
-          // This ensures the router and profile page see the new role immediately
+          // This ensures the router and profile page see the new 'manager' role immediately
+          // without needing a page refresh or re-fetch.
           const updatedUser: User = {
               ...currentUser,
               currentOrganizationId: org.id,
@@ -70,6 +71,7 @@ export const OrganizationLobby: React.FC = () => {
           loginSuccess(updatedUser);
 
           // 3. Direct Navigation to Admin Panel
+          // We use replace: true to prevent going back to Lobby easily
           navigate('/admin', { replace: true });
       }
       setIsCreating(false);

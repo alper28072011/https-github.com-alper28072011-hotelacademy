@@ -7,7 +7,9 @@ import { useAuthStore } from './stores/useAuthStore';
 import { useOrganizationStore } from './stores/useOrganizationStore';
 import { LoginPage } from './features/auth/LoginPage';
 import { OrganizationLobby } from './features/organization/OrganizationLobby';
+// REFACTOR: Use OrganizationProfile instead of HotelPublicPage
 import { OrganizationProfile } from './features/organization/OrganizationProfile';
+// REFACTOR: Use OrganizationSettings instead of HotelSettings
 import { OrganizationSettings } from './features/organization/OrganizationSettings';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ProfilePage } from './features/profile/ProfilePage';
@@ -103,14 +105,14 @@ const App: React.FC = () => {
         {/* Protected Routes */}
         {isAuthenticated ? (
            <>
-              {/* PUBLIC ORG PAGE (Accessible if authed but not joined) */}
+              {/* REFACTOR: Changed path from /hotel/:orgId to explicit route, using OrganizationProfile */}
               <Route path="/hotel/:orgId" element={<OrganizationProfile />} />
 
               {/* Course Flow Routes */}
               <Route path="/course/:courseId" element={<CourseIntroPage />} />
               <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
               
-              {/* ORGANIZATION ADMIN ROUTES (On-Demand Access) */}
+              {/* ORGANIZATION ADMIN ROUTES */}
               {canAccessAdmin && currentOrganization && (
                   <Route path="/admin" element={<AdminLayout />}>
                       <Route index element={<Navigate to="requests" replace />} />
@@ -119,6 +121,7 @@ const App: React.FC = () => {
                       <Route path="career" element={<CareerBuilder />} />
                       <Route path="content" element={<ContentStudio />} />
                       <Route path="reports" element={<TalentRadar />} />
+                      {/* REFACTOR: Directly using OrganizationSettings here */}
                       <Route path="settings" element={<OrganizationSettings />} /> 
                   </Route>
               )}
