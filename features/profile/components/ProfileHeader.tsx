@@ -44,7 +44,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       fetchOrg();
   }, [user.currentOrganizationId]);
 
-  // 2. Role Translation Helper
+  // 2. Role Translation Helper (Updated Labels)
   const getRoleLabel = (role: string) => {
       switch(role) {
           case 'super_admin': return "Platform Sahibi";
@@ -55,14 +55,14 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       }
   };
 
-  // 3. Action Button Logic
+  // 3. Action Button Logic (Updated Navigation)
   const renderActionSection = () => {
       const roleLabel = getRoleLabel(user.role);
       const orgName = loadingOrg ? "Yükleniyor..." : (org?.name || "Bilinmeyen Kurum");
 
       // --- SCENARIO 1: OWN PROFILE ---
       if (isOwnProfile) {
-          // A. Freelancer (No Org)
+          // A. Freelancer (No Org) -> LOBBY
           if (!user.currentOrganizationId) {
               return (
                 <div 
@@ -83,7 +83,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
               );
           }
 
-          // B. Manager / Admin (Has Org)
+          // B. Manager / Admin (Has Org) -> ADMIN PANEL
           if (['admin', 'manager', 'super_admin'].includes(user.role)) {
               return (
                 <div 
@@ -105,10 +105,10 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
               );
           }
 
-          // C. Staff (Has Org)
+          // C. Staff (Has Org) -> DASHBOARD (HOME)
           return (
             <div 
-                onClick={() => navigate(`/hotel/${user.currentOrganizationId}`)}
+                onClick={() => navigate('/')}
                 className="bg-white border border-gray-200 shadow-sm py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all hover:bg-gray-50 mb-6"
             >
                 <div className="flex items-center gap-3">

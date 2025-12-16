@@ -83,13 +83,11 @@ export const useAuthStore = create<AuthState>()(
             console.error("Firebase logout error", e);
         }
 
-        // 1. Clear Zustand Persistence Keys
-        localStorage.removeItem('hotel-academy-auth-v3');
-        localStorage.removeItem('hotel-academy-org-v1');
-        localStorage.removeItem('hotel-academy-operations');
-        localStorage.removeItem('hotel-academy-storage'); // Optional: Clear app settings like language if desired, or keep it.
+        // 1. NUCLEAR OPTION: Clear Entire LocalStorage
+        // This ensures no stale state from any store (Auth, Org, Profile, etc.) remains.
+        localStorage.clear();
 
-        // 2. Reset State in Memory
+        // 2. Reset State in Memory (Visual feedback before reload)
         set({
             isAuthenticated: false,
             currentUser: null,
@@ -98,8 +96,8 @@ export const useAuthStore = create<AuthState>()(
             verificationId: null
         });
 
-        // 3. HARD RELOAD (Critical for Security & State Cleaning)
-        // This ensures no in-memory state leaks to the next user on the same device.
+        // 3. HARD RELOAD (Critical for Security)
+        // Forces browser to clear memory and reload the app from scratch.
         window.location.href = '/';
       },
 
