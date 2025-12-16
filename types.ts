@@ -61,6 +61,7 @@ export interface Organization {
   // Settings
   settings?: OrganizationSettings;
   memberCount?: number;
+  subGroups?: string[]; // Flexible sub-departments e.g. "Pool Bar", "Lobby Bar"
 }
 
 export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'REJECTED';
@@ -191,19 +192,21 @@ export interface Category {
 // --- NEW TARGETING TYPES ---
 export type AssignmentType = 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
 export type ContentPriority = 'HIGH' | 'NORMAL';
-export type CourseVisibility = 'PRIVATE' | 'PUBLIC'; // NEW: Hybrid Model
+export type CourseVisibility = 'PRIVATE' | 'PUBLIC' | 'FOLLOWERS_ONLY'; // Expanded
+export type OwnerType = 'USER' | 'ORGANIZATION'; // New: Who owns this content?
 
 export interface Course {
   id: string;
-  organizationId?: string; // Optional: Some courses can be system-wide (Global Marketplace), others Org specific
-  authorId: string; // NEW: The creator (Instructor)
+  organizationId?: string; // If OwnerType is ORGANIZATION
+  authorId: string; // The user who physically created it
   
-  // Marketplace Fields
+  // Marketplace & Ownership Fields
+  ownerType: OwnerType; // NEW
   visibility: CourseVisibility; // NEW
-  price: number; // NEW: 0 = Free
+  price: number; // 0 = Free
   rating?: number; // 0-5
   studentCount?: number;
-  discussionBoardId?: string; // Link to community
+  discussionBoardId?: string; 
 
   categoryId: string;
   title: string;
@@ -217,9 +220,12 @@ export interface Course {
   tags?: string[]; 
   popularityScore?: number; 
   isNew?: boolean;
+  
+  // Assignments (Only relevant if ownerType == ORGANIZATION)
   assignmentType?: AssignmentType; 
   targetDepartments?: DepartmentType[]; 
   priority?: ContentPriority; 
+  
   steps: CourseStep[];
 }
 

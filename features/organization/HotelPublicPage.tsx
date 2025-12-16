@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, Users, Utensils, BedDouble, ConciergeBell } from 'lucide-react';
+import { ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, Users, Utensils, BedDouble, ConciergeBell, Settings } from 'lucide-react';
 import { getOrganizationDetails, sendJoinRequest, getMyMemberships } from '../../services/db';
 import { Organization, DepartmentType } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -57,6 +57,8 @@ export const HotelPublicPage: React.FC = () => {
       }
   };
 
+  const canManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager') && currentUser.currentOrganizationId === orgId;
+
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
   if (!org) return <div>Hotel not found</div>;
 
@@ -77,6 +79,15 @@ export const HotelPublicPage: React.FC = () => {
             >
                 <ArrowLeft className="w-6 h-6" />
             </button>
+
+            {canManage && (
+                <button 
+                    onClick={() => navigate('/admin')}
+                    className="absolute top-6 right-6 bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl text-primary font-bold shadow-lg hover:bg-white transition-all flex items-center gap-2"
+                >
+                    <Settings className="w-4 h-4" /> Sayfayı Yönet
+                </button>
+            )}
         </div>
 
         {/* PROFILE INFO */}

@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
     Settings, Grid, FileText, Bookmark, Download, ExternalLink, 
-    Star, Users, Heart, Zap, Award, Building2, ShieldCheck, ChevronRight
+    Star, Users, Heart, Zap, Award, Building2, ShieldCheck, ChevronRight,
+    Youtube
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useProfileStore } from '../../stores/useProfileStore';
@@ -13,6 +14,7 @@ import { useContentStore } from '../../stores/useContentStore';
 import { EditProfileModal } from './components/EditProfileModal';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { Course, KudosType } from '../../types';
+import { getInstructorCourses } from '../../services/db';
 
 export const ProfilePage: React.FC = () => {
   const { t } = useTranslation();
@@ -22,9 +24,10 @@ export const ProfilePage: React.FC = () => {
   const { courses } = useContentStore(); // To resolve IDs
 
   // UI State
-  const [activeTab, setActiveTab] = useState<'collection' | 'certificates' | 'saved'>('collection');
+  const [activeTab, setActiveTab] = useState<'collection' | 'certificates' | 'saved' | 'channel'>('collection');
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [myCreatedCourses, setMyCreatedCourses] = useState<Course[]>([]);
 
   // Active User Data
   const activeUser = userProfile || currentUser;
@@ -36,6 +39,12 @@ export const ProfilePage: React.FC = () => {
       return cleanup;
     }
   }, [currentUser, initializeListeners]);
+
+  useEffect(() => {
+      if (currentUser) {
+          getInstructorCourses(currentUser.id).then(setMyCreatedCourses);
+      }
+  }, [currentUser]);
 
   if (!activeUser) return null;
 
@@ -187,22 +196,28 @@ export const ProfilePage: React.FC = () => {
         </div>
 
         {/* TABS (STICKY) */}
-        <div className="sticky top-0 bg-white z-30 border-b border-gray-200 flex">
+        <div className="sticky top-0 bg-white z-30 border-b border-gray-200 flex overflow-x-auto no-scrollbar">
             <button 
                 onClick={() => setActiveTab('collection')}
-                className={`flex-1 flex justify-center py-3 border-b-2 transition-all ${activeTab === 'collection' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
+                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'collection' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
             >
                 <Grid className="w-6 h-6" />
             </button>
             <button 
                 onClick={() => setActiveTab('certificates')}
-                className={`flex-1 flex justify-center py-3 border-b-2 transition-all ${activeTab === 'certificates' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
+                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'certificates' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
             >
                 <FileText className="w-6 h-6" />
             </button>
             <button 
+                onClick={() => setActiveTab('channel')}
+                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'channel' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
+            >
+                <Youtube className="w-6 h-6" />
+            </button>
+            <button 
                 onClick={() => setActiveTab('saved')}
-                className={`flex-1 flex justify-center py-3 border-b-2 transition-all ${activeTab === 'saved' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
+                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'saved' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
             >
                 <Bookmark className="w-6 h-6" />
             </button>
@@ -210,7 +225,7 @@ export const ProfilePage: React.FC = () => {
 
         {/* CONTENT AREA */}
         <div className="min-h-[300px]">
-            {/* ... Content Tabs (Same as before) ... */}
+            {/* ... Content Tabs ... */}
             {activeTab === 'collection' && (
                 <div className="grid grid-cols-3 gap-1 p-1">
                     <div className="aspect-square bg-gray-50 flex flex-col items-center justify-center p-2 border border-gray-100">
@@ -248,6 +263,40 @@ export const ProfilePage: React.FC = () => {
                             <button className="p-2 text-gray-400 hover:text-primary"><Download className="w-5 h-5" /></button>
                         </div>
                     ))}
+                    {myCertificates.length === 0 && <div className="text-center py-10 text-gray-400">Henüz tamamlanan kurs yok.</div>}
+                </div>
+            )}
+
+            {activeTab === 'channel' && (
+                <div className="grid grid-cols-2 gap-2 p-2">
+                    {myCreatedCourses.map(course => (
+                        <div key={course.id} className="bg-gray-50 rounded-xl overflow-hidden shadow-sm border border-gray-100" onClick={() => navigate(`/course/${course.id}`)}>
+                            <div className="aspect-video bg-gray-200">
+                                <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="p-3">
+                                <h4 className="font-bold text-gray-800 text-sm line-clamp-1">{course.title}</h4>
+                                <div className="flex justify-between items-center mt-2">
+                                    <span className="text-[10px] text-gray-500">{course.studentCount || 0} Öğrenci</span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${course.visibility === 'PUBLIC' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                                        {course.visibility === 'PUBLIC' ? 'Public' : 'Private'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {myCreatedCourses.length === 0 && (
+                        <div className="col-span-2 py-10 text-center text-gray-400 flex flex-col items-center">
+                            <Youtube className="w-10 h-10 mb-2 opacity-50" />
+                            <p>Henüz kendi kanalında içerik üretmedin.</p>
+                            <button 
+                                onClick={() => navigate('/admin/content')}
+                                className="mt-4 bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg"
+                            >
+                                İlk Kursunu Oluştur
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
