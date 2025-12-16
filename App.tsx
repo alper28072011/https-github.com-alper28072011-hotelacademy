@@ -50,7 +50,7 @@ const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </main>
        <footer className="relative z-10 p-4 text-center text-gray-400 text-xs">
-          <p>v2.0.0 &bull; Multi-Tenant</p>
+          <p>v2.2.0 &bull; Individual First</p>
        </footer>
     </div>
   );
@@ -70,6 +70,7 @@ const App: React.FC = () => {
   // Sync Org State & Handle Hydration
   useEffect(() => {
       const sync = async () => {
+          // If user has a preferred org, try to switch to it.
           if (isAuthenticated && currentUser?.currentOrganizationId && !currentOrganization) {
               await switchOrganization(currentUser.currentOrganizationId);
           }
@@ -90,7 +91,7 @@ const App: React.FC = () => {
           <div className="h-screen flex items-center justify-center bg-primary">
               <div className="text-center">
                   <Loader2 className="w-12 h-12 text-accent animate-spin mx-auto mb-4" />
-                  <p className="text-white/60 font-medium">İşletme yükleniyor...</p>
+                  <p className="text-white/60 font-medium">Profil yükleniyor...</p>
               </div>
           </div>
       );
@@ -105,56 +106,48 @@ const App: React.FC = () => {
               {/* PUBLIC HOTEL PAGE (Accessible if authed but not joined) */}
               <Route path="/hotel/:orgId" element={<HotelPublicPage />} />
 
-              {/* LEVEL 1: ORGANIZATION CHECK */}
-              {/* If no active organization, show Lobby. BUT allow super admin to browse dashboard if they want (mock org?) */}
-              {!currentOrganization && !currentUser?.currentOrganizationId ? (
-                  <Route path="*" element={<OrganizationLobby />} />
-              ) : (
-                  <>
-                      {/* Course Flow Routes */}
-                      <Route path="/course/:courseId" element={<CourseIntroPage />} />
-                      <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
-                      
-                      {/* HOTEL ADMIN ROUTES (On-Demand Access) */}
-                      {canAccessHotelAdmin && (
-                          <Route path="/admin" element={<AdminLayout />}>
-                              <Route index element={<Navigate to="requests" replace />} />
-                              <Route path="requests" element={<TeamRequests />} />
-                              <Route path="staff" element={<StaffManager />} />
-                              <Route path="career" element={<CareerBuilder />} />
-                              <Route path="content" element={<ContentStudio />} />
-                              <Route path="reports" element={<TalentRadar />} />
-                              <Route path="settings" element={<HotelSettings />} /> 
-                          </Route>
-                      )}
-
-                      {/* SUPER ADMIN ROUTES (Strictly Protected) */}
-                      <Route path="/super-admin" element={
-                          isSuperAdmin ? <SuperAdminDashboard /> : <Navigate to="/" replace />
-                      } />
-
-                      {/* DEFAULT USER INTERFACE (Everyone starts here) */}
-                      <Route 
-                        path="/*" 
-                        element={
-                        <DashboardLayout>
-                            <Routes>
-                                <Route path="/" element={<DashboardPage />} />
-                                <Route path="/journey" element={<JourneyMap />} />
-                                <Route path="/profile" element={<ProfilePage />} />
-                                <Route path="/user/:userId" element={<PublicProfilePage />} />
-                                <Route path="/operations" element={<OperationsPage />} />
-                                <Route path="/report" element={<ReportPage />} />
-                                <Route path="/explore" element={<ExplorePage />} />
-                                {/* Fallback to lobby to switch orgs if needed */}
-                                <Route path="/lobby" element={<OrganizationLobby />} /> 
-                                <Route path="*" element={<Navigate to="/" replace />} />
-                            </Routes>
-                        </DashboardLayout>
-                        } 
-                    />
-                  </>
+              {/* Course Flow Routes */}
+              <Route path="/course/:courseId" element={<CourseIntroPage />} />
+              <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
+              
+              {/* HOTEL ADMIN ROUTES (On-Demand Access) */}
+              {canAccessHotelAdmin && currentOrganization && (
+                  <Route path="/admin" element={<AdminLayout />}>
+                      <Route index element={<Navigate to="requests" replace />} />
+                      <Route path="requests" element={<TeamRequests />} />
+                      <Route path="staff" element={<StaffManager />} />
+                      <Route path="career" element={<CareerBuilder />} />
+                      <Route path="content" element={<ContentStudio />} />
+                      <Route path="reports" element={<TalentRadar />} />
+                      <Route path="settings" element={<HotelSettings />} /> 
+                  </Route>
               )}
+
+              {/* SUPER ADMIN ROUTES (Strictly Protected) */}
+              <Route path="/super-admin" element={
+                  isSuperAdmin ? <SuperAdminDashboard /> : <Navigate to="/" replace />
+              } />
+
+              {/* DEFAULT USER INTERFACE (Freemium / Freelancer / Staff) */}
+              {/* Removed "If no org -> Lobby" Gatekeeper. Everyone gets the dashboard. */}
+              <Route 
+                path="/*" 
+                element={
+                <DashboardLayout>
+                    <Routes>
+                        <Route path="/" element={<DashboardPage />} />
+                        <Route path="/journey" element={<JourneyMap />} />
+                        <Route path="/profile" element={<ProfilePage />} />
+                        <Route path="/user/:userId" element={<PublicProfilePage />} />
+                        <Route path="/operations" element={<OperationsPage />} />
+                        <Route path="/report" element={<ReportPage />} />
+                        <Route path="/explore" element={<ExplorePage />} />
+                        <Route path="/lobby" element={<OrganizationLobby />} /> 
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                </DashboardLayout>
+                } 
+            />
            </>
         ) : (
            /* Public Login Route */

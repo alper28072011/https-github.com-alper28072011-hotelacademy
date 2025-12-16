@@ -32,9 +32,9 @@ export const ProfilePage: React.FC = () => {
   // Active User Data
   const activeUser = userProfile || currentUser;
 
-  // Listen for real-time updates
+  // Listen for real-time updates (Only if Org Exists)
   useEffect(() => {
-    if (currentUser && currentUser.currentOrganizationId) {
+    if (currentUser && currentUser.currentOrganizationId && currentUser.department) {
       const cleanup = initializeListeners(currentUser.id, currentUser.department, currentUser.currentOrganizationId);
       return cleanup;
     }
@@ -71,6 +71,7 @@ export const ProfilePage: React.FC = () => {
   // Role Checks
   const isSuperAdmin = activeUser.role === 'super_admin';
   const isHotelManager = ['manager', 'admin'].includes(activeUser.role);
+  const isFreelancer = !activeUser.currentOrganizationId;
 
   return (
     <div className="min-h-screen bg-white pb-24">
@@ -128,7 +129,9 @@ export const ProfilePage: React.FC = () => {
             {/* Bio & Details */}
             <div className="mb-6">
                 <h2 className="font-bold text-gray-900">{activeUser.name}</h2>
-                <div className="text-sm text-gray-500 mb-1 capitalize">{activeUser.department.replace('_', ' ')} Specialist</div>
+                <div className="text-sm text-gray-500 mb-1 capitalize">
+                    {isFreelancer ? "Freelancer" : activeUser.department?.replace('_', ' ') + " Specialist"}
+                </div>
                 <p className="text-sm text-gray-800 whitespace-pre-wrap leading-tight">
                     {activeUser.bio || "Henüz bir biyografi eklenmedi."}
                 </p>
@@ -162,7 +165,7 @@ export const ProfilePage: React.FC = () => {
                 )}
 
                 {/* SCENARIO B: HOTEL MANAGER (Business Owner) */}
-                {(isHotelManager || isSuperAdmin) && (
+                {(isHotelManager || isSuperAdmin) && !isFreelancer && (
                     <div 
                         onClick={() => navigate('/admin')}
                         className="bg-blue-50 border border-blue-100 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all"
@@ -174,6 +177,25 @@ export const ProfilePage: React.FC = () => {
                             <div className="flex flex-col">
                                 <span className="text-sm font-bold text-gray-800">İşletme Yönetimi</span>
                                 <span className="text-[10px] text-gray-500">Personel ve İçerik Paneli</span>
+                            </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                    </div>
+                )}
+                
+                {/* SCENARIO C: FREELANCER CTA */}
+                {isFreelancer && (
+                    <div 
+                        onClick={() => navigate('/lobby')}
+                        className="bg-gray-50 border-2 border-dashed border-gray-200 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all group hover:border-accent"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="p-1.5 bg-gray-200 rounded-full group-hover:bg-accent group-hover:text-primary transition-colors">
+                                <Building2 className="w-5 h-5 text-gray-500 group-hover:text-primary" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-sm font-bold text-gray-800">Bir İşletmeye Katıl</span>
+                                <span className="text-[10px] text-gray-500">Kariyerini bir üst seviyeye taşı</span>
                             </div>
                         </div>
                         <ChevronRight className="w-5 h-5 text-gray-400" />

@@ -22,23 +22,17 @@ export const DashboardPage: React.FC = () => {
   const [showGmModal, setShowGmModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // 1. Guard: Redirect to Lobby if no Org is active
+  // 1. Fetch Content (Freelancer friendly: pass null orgId is handled by store now?)
+  // Actually store fetchContent expects string. Let's fix useContentStore later or pass empty string if null.
   useEffect(() => {
-      if (!currentUser?.currentOrganizationId) {
-          navigate('/lobby');
-      }
-  }, [currentUser, navigate]);
-
-  // 2. Fetch Content
-  useEffect(() => {
-    if (currentUser && currentUser.currentOrganizationId) {
-        fetchContent(currentUser.currentOrganizationId);
+    if (currentUser) {
+        fetchContent(currentUser.currentOrganizationId || ''); 
     }
   }, [fetchContent, currentUser]);
 
   useEffect(() => {
     const loadData = async () => {
-        if (!currentUser || !currentUser.currentOrganizationId) return;
+        if (!currentUser) return;
         
         // --- SMART SORTING ALGORITHM FOR STORIES ---
         
@@ -46,8 +40,12 @@ export const DashboardPage: React.FC = () => {
         const myDept = currentUser.department;
         const relevantCourses = courses.filter(course => {
             if (course.categoryId === 'cat_onboarding') return true;
+            // If no org, show global only
+            if (!currentUser.currentOrganizationId) {
+                return course.visibility === 'PUBLIC';
+            }
             if (course.assignmentType === 'GLOBAL') return true;
-            if (course.assignmentType === 'DEPARTMENT' && course.targetDepartments?.includes(myDept)) return true;
+            if (course.assignmentType === 'DEPARTMENT' && course.targetDepartments?.includes(myDept || '')) return true;
             return false;
         });
 
@@ -65,20 +63,21 @@ export const DashboardPage: React.FC = () => {
         const sortedCourses = relevantCourses.sort((a, b) => getScore(b) - getScore(a));
         setStoryCourses(sortedCourses.slice(0, 15)); 
 
-        // --- LOAD FEED POSTS (Scoped to Org) ---
-        const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId);
+        // --- LOAD FEED POSTS ---
+        // Pass null if no org to get Global/Public feed
+        const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId || null);
         setFeedPosts(posts);
     };
 
-    if (courses.length > 0 || currentUser?.currentOrganizationId) {
+    if (courses.length > 0 || currentUser) {
         loadData();
     }
   }, [currentUser, courses]);
 
   const handleRefresh = async () => {
-      if(!currentUser || !currentUser.currentOrganizationId) return;
+      if(!currentUser) return;
       setIsRefreshing(true);
-      const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId);
+      const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId || null);
       setFeedPosts(posts);
       setTimeout(() => setIsRefreshing(false), 500);
   };
@@ -92,10 +91,10 @@ export const DashboardPage: React.FC = () => {
       return 'mandatory'; 
   };
 
-  // Safe Guard Render
-  if (!currentUser?.currentOrganizationId) return null;
+  if (!currentUser) return null;
 
   const isOwner = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'super_admin';
+  const isFreelancer = !currentUser.currentOrganizationId;
 
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen">
@@ -103,15 +102,18 @@ export const DashboardPage: React.FC = () => {
       {/* HEADER */}
       <div className="bg-white sticky top-0 z-40 border-b border-gray-100 px-4 py-3 flex justify-between items-center shadow-sm">
          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
-                <span className="text-primary font-bold text-lg">H</span>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isFreelancer ? 'bg-gray-800' : 'bg-accent'}`}>
+                <span className={`font-bold text-lg ${isFreelancer ? 'text-white' : 'text-primary'}`}>H</span>
             </div>
-            <span className="text-primary font-bold text-xl tracking-tight">Hotelgram</span>
+            <div className="flex flex-col">
+                <span className="text-primary font-bold text-lg tracking-tight leading-none">Hotelgram</span>
+                {isFreelancer && <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Freelancer Mode</span>}
+            </div>
          </div>
          <div className="flex items-center gap-4">
             
             {/* OWNER UI BUTTON */}
-            {isOwner && (
+            {isOwner && !isFreelancer && (
                 <button 
                     onClick={() => navigate('/admin/settings')}
                     className="p-2 bg-gray-100 rounded-full text-gray-600 hover:bg-primary hover:text-white transition-all shadow-sm"
@@ -150,12 +152,14 @@ export const DashboardPage: React.FC = () => {
                 <span className="text-xs font-bold text-gray-800">Yolculuğum</span>
             </div>
 
-            <StoryCircle 
-                label={t('stories_gm')} 
-                image="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=150" 
-                status="urgent"
-                onClick={() => setShowGmModal(true)}
-            />
+            {!isFreelancer && (
+                <StoryCircle 
+                    label={t('stories_gm')} 
+                    image="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=150" 
+                    status="urgent"
+                    onClick={() => setShowGmModal(true)}
+                />
+            )}
 
             {storyCourses.map(course => (
                 <StoryCircle 
@@ -172,9 +176,18 @@ export const DashboardPage: React.FC = () => {
       {/* FEED */}
       <div className="flex-1 max-w-lg mx-auto w-full pb-20">
           {feedPosts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <p>Henüz gönderi yok.</p>
-                  <p className="text-sm">Yöneticin bir şeyler paylaştığında burada görünecek.</p>
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center px-6">
+                  <p className="font-bold mb-1">Akış Boş</p>
+                  <p className="text-sm">
+                      {isFreelancer 
+                        ? "Bir işletmeye katılarak veya diğer profesyonelleri takip ederek akışını canlandır." 
+                        : "Yöneticin bir şeyler paylaştığında burada görünecek."}
+                  </p>
+                  {isFreelancer && (
+                      <button onClick={() => navigate('/lobby')} className="mt-4 text-primary font-bold text-sm bg-white border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50">
+                          İşletme Bul
+                      </button>
+                  )}
               </div>
           ) : (
               <div className="md:pt-6">

@@ -202,20 +202,40 @@ export const getInstructorCourses = async (authorId: string): Promise<Course[]> 
 
 // --- DATA FETCHING ---
 
-export const getFeedPosts = async (userDept: DepartmentType, orgId: string): Promise<FeedPost[]> => {
-    if (!orgId) return [];
+export const getFeedPosts = async (userDept: DepartmentType | null, orgId: string | null): Promise<FeedPost[]> => {
     try {
-        const q = query(
-            postsRef, 
-            where('organizationId', '==', orgId), 
-            limit(50) 
-        );
+        let q;
+        
+        if (orgId) {
+            // Corporate Context: Show Org specific posts
+            q = query(
+                postsRef, 
+                where('organizationId', '==', orgId), 
+                limit(50) 
+            );
+        } else {
+            // Freelancer Context: Show Global/Public posts
+            // Note: Ideally we would filter by 'assignmentType' == 'GLOBAL' across all orgs, 
+            // or use a 'visibility' == 'PUBLIC' field on posts if we added it.
+            // For now, we will fetch recent posts and filter client side for safety, 
+            // or just show nothing if we want strict privacy.
+            // Let's assume we want to show a "Global Feed" of sorts.
+            q = query(postsRef, limit(20), orderBy('createdAt', 'desc'));
+        }
+
         const snapshot = await getDocs(q);
         const posts = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as FeedPost))
-            .filter(p => p.assignmentType === 'GLOBAL' || p.targetDepartments?.includes(userDept));
+            .map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
         
+        // Client-side filter for Department relevance if in Org
+        if (orgId && userDept) {
+            return posts.filter(p => p.assignmentType === 'GLOBAL' || p.targetDepartments?.includes(userDept))
+                        .sort((a,b) => b.createdAt - a.createdAt);
+        }
+
+        // For Freelancer, return all fetched (or filter by Public flag if added later)
         return posts.sort((a,b) => b.createdAt - a.createdAt);
+
     } catch (e) {
         console.warn("Feed Fetch Error:", e);
         return [];
@@ -315,7 +335,7 @@ export const sendJoinRequest = async (userId: string, orgId: string, dept: Depar
     }
 };
 
-export const getJoinRequests = async (orgId: string, department?: DepartmentType): Promise<(JoinRequest & { user?: User })[]> => {
+export const getJoinRequests = async (orgId: string, department?: DepartmentType | null): Promise<(JoinRequest & { user?: User })[]> => {
     try {
         let q;
         if (department && department !== 'management') {
