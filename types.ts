@@ -107,6 +107,12 @@ export interface JoinRequest {
 
 // --- USER TYPE UPDATE ---
 
+export interface UserPrivacySettings {
+    showInSearch: boolean;
+    allowTagging: boolean;
+    isPrivateAccount: boolean;
+}
+
 export interface User {
   id: string;
   email?: string; 
@@ -116,13 +122,15 @@ export interface User {
   
   // Contextual Data (Derived from Active Membership usually, but kept here for cache/display)
   currentOrganizationId: string | null; 
-  department: DepartmentType; // Active Dept in Current Org
+  department: DepartmentType | null; // OPTIONAL: Only set if active in an org
   role: UserRole; // Active Role in Current Org
   isSuperAdmin?: boolean; // GLOBAL FLAG for System Admin
   
   // Lifecycle & Security
   status?: UserStatus; // Default: 'ACTIVE'
+  isSuspended?: boolean; // User triggered suspension
   metadata?: UserMetadata;
+  privacySettings?: UserPrivacySettings; // NEW: Granular privacy
 
   pin: string; 
   xp: number; // Global XP or Org Specific? Let's keep it Global for Career Profile
@@ -135,7 +143,7 @@ export interface User {
   instructorProfile?: InstructorProfile; // NEW: For Marketplace Creators
   
   // Social Graph (Updated)
-  isPrivate?: boolean; // New: Private Account Logic
+  isPrivate?: boolean; // Shortcut for privacySettings.isPrivateAccount
   followers?: string[]; // IDs (Legacy - consider moving to subcollection for scale)
   following?: string[]; // IDs
   followersCount?: number;

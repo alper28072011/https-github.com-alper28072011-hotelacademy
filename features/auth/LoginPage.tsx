@@ -1,14 +1,14 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Loader2, ShieldCheck, User as UserIcon, Building2, CheckCircle2, AlertTriangle, Lock } from 'lucide-react';
+import { ArrowRight, Loader2, ShieldCheck, User as UserIcon, CheckCircle2, AlertTriangle, Lock } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { auth, RecaptchaVerifier } from '../../services/firebase';
 import { checkUserExists, registerUser, initiatePhoneAuth } from '../../services/authService';
 import { getMyMemberships, updateUserProfile } from '../../services/db';
-import { DepartmentType, User } from '../../types';
+import { User } from '../../types';
 import { PhoneInput } from './components/PhoneInput';
 
 // Admin "Backdoor" Number
@@ -30,7 +30,6 @@ export const LoginPage: React.FC = () => {
 
   // Profile Setup State
   const [name, setName] = useState('');
-  const [department, setDepartment] = useState<DepartmentType | null>(null);
   const [otpCode, setOtpCode] = useState('');
 
   // Local cooldown check
@@ -51,11 +50,9 @@ export const LoginPage: React.FC = () => {
     if (step === 'PHONE') {
         const initRecaptcha = async () => {
             try {
-                // Check if element exists
                 const container = document.getElementById('recaptcha-container');
                 if (!container) return;
 
-                // Clear existing instance to prevent "auth/internal-error" or detached DOM issues
                 if ((window as any).recaptchaVerifier) {
                     try {
                         (window as any).recaptchaVerifier.clear();
@@ -63,7 +60,6 @@ export const LoginPage: React.FC = () => {
                     (window as any).recaptchaVerifier = null;
                 }
 
-                // Create new instance
                 (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
                     'size': 'invisible',
                     'callback': () => {
@@ -78,7 +74,6 @@ export const LoginPage: React.FC = () => {
         initRecaptcha();
     }
 
-    // Cleanup
     return () => {
         if ((window as any).recaptchaVerifier) {
             try {
@@ -91,20 +86,13 @@ export const LoginPage: React.FC = () => {
 
   // --- HELPER FOR SMART LOGIN ---
   const handleSmartLogin = async (user: User) => {
-      // Check Memberships
       const memberships = await getMyMemberships(user.id);
       
-      // Auto-Select Logic:
-      // 1. If user already has a 'currentOrganizationId' set in profile, use it.
-      // 2. If user has exactly 1 membership, select it automatically.
-      // 3. Otherwise, let them go to lobby (which happens automatically if currentOrganizationId is null).
-
       if (user.currentOrganizationId) {
-          // Has last active session
           await switchOrganization(user.currentOrganizationId);
           loginSuccess(user);
       } else if (memberships.length === 1) {
-          // Single membership -> Auto-select
+          // Auto-select single membership
           const orgId = memberships[0].organizationId;
           const role = memberships[0].role;
           const dept = memberships[0].department;
@@ -115,12 +103,11 @@ export const LoginPage: React.FC = () => {
               department: dept
           });
           
-          // Update local user object before finishing login
-          const updatedUser = { ...user, currentOrganizationId: orgId, role, department };
+          const updatedUser = { ...user, currentOrganizationId: orgId, role, department: dept };
           await switchOrganization(orgId);
           loginSuccess(updatedUser);
       } else {
-          // Multiple or Zero -> Go to Lobby (default flow)
+          // No active org -> User is Free Agent -> Lobby
           loginSuccess(user);
       }
   };
@@ -135,13 +122,11 @@ export const LoginPage: React.FC = () => {
           return;
       }
 
-      // Basic validation
       if (phoneNumber.length < 10) {
           setError("Lütfen geçerli bir numara girin.");
           return;
       }
 
-      // Rate Limiting Check
       const allowed = recordSmsAttempt();
       if (!allowed) {
           setError("Güvenlik nedeniyle işleminiz 5 dakika durduruldu.");
@@ -152,25 +137,18 @@ export const LoginPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Clean number (whitespace removal is handled in PhoneInput visually, but safeguard here)
       let cleanNumber = phoneNumber.replace(/\s/g, '');
 
       try {
           const appVerifier = (window as any).recaptchaVerifier;
           if (!appVerifier) throw new Error("ReCAPTCHA not initialized");
 
-          // SMART AUTH LOGIC: Check DB before SMS
           const confirmationResult = await initiatePhoneAuth(cleanNumber, authMode, appVerifier);
           
-          // Store ID and Number
           setVerificationId(confirmationResult.verificationId);
           setPhoneNumber(cleanNumber);
-          
-          // Move to next step
           setLoading(false);
           setStep('OTP');
-          
-          // Attach confirmation result to window
           (window as any).confirmationResult = confirmationResult;
 
       } catch (err: any) {
@@ -187,12 +165,10 @@ export const LoginPage: React.FC = () => {
               setError("İşlem başarısız. Lütfen bilgilerinizi kontrol edin.");
           }
 
-          // Reset recaptcha on error to allow retry
           if((window as any).recaptchaVerifier) {
               try {
                   (window as any).recaptchaVerifier.clear();
                   (window as any).recaptchaVerifier = null;
-                  // Re-init happens via useEffect dependency if needed, or simple reload logic
               } catch (e) {}
           }
       }
@@ -211,13 +187,11 @@ export const LoginPage: React.FC = () => {
 
           await confirmationResult.confirm(otpCode);
           
-          // Auth Successful - Check if User Exists in DB (Double Check)
           const existingUser = await checkUserExists(phoneNumber);
 
           if (existingUser) {
               await handleSmartLogin(existingUser);
           } else {
-              // Only if in Register mode should we reach here ideally
               setStep('PROFILE_SETUP');
               setLoading(false);
           }
@@ -230,28 +204,20 @@ export const LoginPage: React.FC = () => {
   };
 
   const handleRegister = async () => {
-      if (!name || !department) {
-          setError("Lütfen tüm alanları doldurun.");
+      if (!name) {
+          setError("Lütfen adınızı girin.");
           return;
       }
       setLoading(true);
 
       try {
-          const role = phoneNumber === ADMIN_PHONE ? 'admin' : 'staff';
           const avatarInitials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
 
           const newUser = await registerUser({
               phoneNumber,
               name,
-              department,
-              role,
               avatar: avatarInitials,
-              xp: 0,
-              completedCourses: [],
-              badges: [],
-              pin: '1234', // Default pin
-              currentOrganizationId: null,
-              organizationHistory: []
+              // Other fields handled by registerUser default values
           });
 
           // Registration successful - go to Lobby
@@ -269,8 +235,6 @@ export const LoginPage: React.FC = () => {
       setError(null);
   };
 
-  // --- RENDER HELPERS ---
-
   return (
     <div className="w-full min-h-[85vh] flex flex-col items-center justify-center p-6 relative">
         <div id="recaptcha-container"></div>
@@ -286,7 +250,7 @@ export const LoginPage: React.FC = () => {
                     <span className="text-4xl font-bold">H</span>
                 </div>
                 <h1 className="text-2xl font-bold text-primary tracking-tight">Hotel Academy</h1>
-                <p className="text-gray-400 text-sm mt-1">Enterprise Staff Access</p>
+                <p className="text-gray-400 text-sm mt-1">Sosyal Öğrenme Platformu</p>
             </div>
 
             {/* Blocked State */}
@@ -349,7 +313,7 @@ export const LoginPage: React.FC = () => {
                                 disabled={isLoading || phoneNumber.length < 10}
                                 className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-lg font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                             >
-                                {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>SMS Gönder <ArrowRight className="w-5 h-5" /></>}
+                                {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Devam Et <ArrowRight className="w-5 h-5" /></>}
                             </button>
                         </form>
                     </motion.div>
@@ -388,7 +352,7 @@ export const LoginPage: React.FC = () => {
                             disabled={isLoading || otpCode.length !== 6}
                             className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 text-white font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                         >
-                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Doğrula & Giriş Yap"}
+                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Doğrula"}
                         </button>
                         
                         <button type="button" onClick={() => setStep('PHONE')} className="text-gray-400 text-sm font-medium hover:text-gray-600 underline">
@@ -397,7 +361,7 @@ export const LoginPage: React.FC = () => {
                     </motion.form>
                 )}
 
-                {/* STEP 3: PROFILE SETUP */}
+                {/* STEP 3: PROFILE SETUP (Simplified) */}
                 {step === 'PROFILE_SETUP' && (
                     <motion.div 
                         key="profile"
@@ -410,7 +374,7 @@ export const LoginPage: React.FC = () => {
                                 <CheckCircle2 className="w-8 h-8" />
                             </div>
                             <h2 className="text-xl font-bold text-gray-800">Hoş Geldin!</h2>
-                            <p className="text-gray-500 text-sm">Hesabını tamamlayalım.</p>
+                            <p className="text-gray-500 text-sm">Seni nasıl hitap edelim?</p>
                         </div>
 
                         <div className="space-y-4">
@@ -424,22 +388,8 @@ export const LoginPage: React.FC = () => {
                                         className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-lg font-bold text-gray-800 placeholder-gray-300 focus:outline-none focus:border-primary transition-all"
                                         value={name}
                                         onChange={(e) => setName(e.target.value)}
+                                        autoFocus
                                     />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Departman</label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {['housekeeping', 'kitchen', 'front_office', 'management'].map(dept => (
-                                        <button
-                                            key={dept}
-                                            onClick={() => setDepartment(dept as any)}
-                                            className={`p-3 rounded-xl border-2 text-sm font-bold transition-all ${department === dept ? 'border-primary bg-primary text-white shadow-lg shadow-primary/20' : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`}
-                                        >
-                                            {dept.toUpperCase().replace('_', ' ')}
-                                        </button>
-                                    ))}
                                 </div>
                             </div>
                         </div>
@@ -451,7 +401,7 @@ export const LoginPage: React.FC = () => {
                             disabled={isLoading}
                             className="w-full bg-primary hover:bg-primary-light text-white text-lg font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4"
                         >
-                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Kaydı Tamamla"}
+                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Platforma Katıl"}
                         </button>
                     </motion.div>
                 )}

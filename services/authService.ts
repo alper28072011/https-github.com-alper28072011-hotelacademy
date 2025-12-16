@@ -89,30 +89,44 @@ export const initiatePhoneAuth = async (
 
 /**
  * Registers a new user in Firestore.
+ * UPDATED: Department is now optional and defaults to null.
  */
-export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> => {
+export const registerUser = async (userData: Omit<User, 'id' | 'department' | 'role' | 'pin' | 'currentOrganizationId' | 'organizationHistory' | 'xp' | 'completedCourses' | 'startedCourses' | 'completedTasks' | 'badges'>): Promise<User> => {
   try {
-    // --- GATEKEEPER PROTOCOL FOR REGISTRATION ---
-    if (userData.phoneNumber.replace(/\s/g, '') === SUPER_ADMIN_PHONE) {
-        userData.role = 'super_admin';
-        userData.isSuperAdmin = true;
-    }
-
-    // Set Default Metadata
-    const finalData = {
+    const role = userData.phoneNumber.replace(/\s/g, '') === SUPER_ADMIN_PHONE ? 'super_admin' : 'staff';
+    
+    // Set Default Metadata & Privacy
+    const finalData: Omit<User, 'id'> = {
         ...userData,
+        role,
+        department: null, // Default
+        currentOrganizationId: null,
+        organizationHistory: [],
+        pin: '1234',
+        xp: 0,
+        completedCourses: [],
+        startedCourses: [],
+        completedTasks: [],
+        badges: [],
+        isSuperAdmin: role === 'super_admin',
+        
         status: 'ACTIVE',
         joinDate: Date.now(),
         metadata: {
             lastLoginAt: Date.now(),
             loginCount: 1,
             deviceInfo: navigator.userAgent
+        },
+        privacySettings: {
+            showInSearch: true,
+            allowTagging: true,
+            isPrivateAccount: false
         }
     };
 
     const usersRef = collection(db, 'users');
     const docRef = await addDoc(usersRef, finalData);
-    return { id: docRef.id, ...finalData as User };
+    return { id: docRef.id, ...finalData };
   } catch (error) {
     console.error("Error registering user:", error);
     throw error;

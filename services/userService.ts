@@ -6,6 +6,63 @@ import { User, Organization } from '../types';
 import { detachUserFromAllOrgs } from './organizationService';
 
 /**
+ * Suspends a user account (Temporary Freeze).
+ */
+export const suspendAccount = async (userId: string): Promise<boolean> => {
+    try {
+        await updateDoc(doc(db, 'users', userId), {
+            status: 'SUSPENDED',
+            isSuspended: true
+        });
+        return true;
+    } catch (e) {
+        console.error("Suspend failed:", e);
+        return false;
+    }
+};
+
+/**
+ * Downloads all user data as a JSON file.
+ * Collects User Profile, Posts, and Memberships.
+ */
+export const downloadUserData = async (userId: string): Promise<Blob | null> => {
+    try {
+        // 1. Fetch Profile
+        const userSnap = await getDoc(doc(db, 'users', userId));
+        const profile = userSnap.exists() ? userSnap.data() : null;
+
+        if (!profile) return null;
+
+        // 2. Fetch Posts
+        const postsQ = query(collection(db, 'posts'), where('authorId', '==', userId));
+        const postsSnap = await getDocs(postsQ);
+        const posts = postsSnap.docs.map(d => ({id: d.id, ...d.data()}));
+
+        // 3. Fetch Memberships
+        const memQ = query(collection(db, 'memberships'), where('userId', '==', userId));
+        const memSnap = await getDocs(memQ);
+        const memberships = memSnap.docs.map(d => d.data());
+
+        // 4. Construct Data Object
+        const fullData = {
+            profile,
+            posts,
+            memberships,
+            exportDate: new Date().toISOString(),
+            platform: "Hotel Academy"
+        };
+
+        // 5. Create Blob
+        const jsonStr = JSON.stringify(fullData, null, 2);
+        return new Blob([jsonStr], { type: "application/json" });
+
+    } catch (e) {
+        console.error("Download failed:", e);
+        return null;
+    }
+};
+
+/**
  * SENARYO 2 & 3B: Smart Delete Protocol
  * Kullanıcıyı silerken hiyerarşiyi korur ve verileri anonimleştirir.
  */

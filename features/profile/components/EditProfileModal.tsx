@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Camera, Save, Loader2, User, Phone, Instagram } from 'lucide-react';
+import { X, Camera, Save, Loader2, User, Phone, Instagram, Check } from 'lucide-react';
 import { User as UserType } from '../../../types';
 import { updateUserProfile } from '../../../services/db';
 import { uploadFile } from '../../../services/storage';
@@ -14,7 +14,7 @@ interface EditProfileModalProps {
 export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose }) => {
   const [name, setName] = useState(user.name);
   const [bio, setBio] = useState(user.bio || '');
-  const [phone, setPhone] = useState(user.phoneNumber || '');
+  const [phone, setPhone] = useState(user.phoneNumber || ''); // Phone should be readonly usually in Edit, requires verification flow to change
   const [instagram, setInstagram] = useState(user.instagramHandle || '');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState(user.avatar);
@@ -40,7 +40,6 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClos
       await updateUserProfile(user.id, {
         name,
         bio,
-        phoneNumber: phone,
         instagramHandle: instagram,
         avatar: photoUrl
       });
@@ -68,18 +67,20 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClos
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 100, opacity: 0 }}
-        className="bg-white w-full max-w-md rounded-3xl overflow-hidden relative z-10 shadow-2xl flex flex-col max-h-[90vh]"
+        className="bg-white w-full max-w-md rounded-[2rem] overflow-hidden relative z-10 shadow-2xl flex flex-col max-h-[90vh]"
       >
         {/* Header */}
         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
-          <button onClick={onClose} className="text-gray-500 font-medium">İptal</button>
-          <h2 className="text-base font-bold text-gray-800">Profili Düzenle</h2>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-500">
+              <X className="w-6 h-6" />
+          </button>
+          <h2 className="text-lg font-bold text-gray-800">Profili Düzenle</h2>
           <button 
             onClick={handleSave} 
             disabled={isSaving}
-            className="text-primary font-bold disabled:opacity-50"
+            className="text-primary hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors font-bold disabled:opacity-50"
           >
-            {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Bitti'}
+            {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-6 h-6 text-blue-600" />}
           </button>
         </div>
 
@@ -87,68 +88,66 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClos
           {/* Avatar Edit */}
           <div className="flex flex-col items-center mb-8">
             <div className="relative group cursor-pointer">
-              <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-100">
+              <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg">
                 {avatarPreview.length > 5 ? (
                     <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
-                    <div className="w-full h-full bg-primary text-white flex items-center justify-center font-bold text-2xl">{avatarPreview}</div>
+                    <div className="w-full h-full bg-primary text-white flex items-center justify-center font-bold text-3xl">{avatarPreview}</div>
                 )}
               </div>
               <div className="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                  <Camera className="w-8 h-8 text-white" />
               </div>
               <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-              {/* Trigger the hidden input via overlay click logic handled by parent div usually or simple label wrap */}
               <label className="absolute inset-0 cursor-pointer">
                   <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
               </label>
             </div>
-            <button className="text-blue-500 text-sm font-bold mt-3">Profil fotoğrafını değiştir</button>
+            <button className="text-blue-600 text-sm font-bold mt-3 hover:underline">Fotoğrafı Değiştir</button>
           </div>
 
           {/* Form Fields */}
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="space-y-1">
-              <label className="text-xs text-gray-500 font-bold uppercase ml-1">Ad Soyad</label>
-              <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+              <label className="text-xs text-gray-400 font-bold uppercase ml-1">Görünen İsim</label>
+              <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100 focus-within:border-primary focus-within:bg-white transition-all">
                 <User className="w-5 h-5 text-gray-400" />
                 <input 
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="bg-transparent w-full outline-none text-gray-800 font-medium"
+                  className="bg-transparent w-full outline-none text-gray-800 font-bold"
                   placeholder="Ad Soyad"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-gray-500 font-bold uppercase ml-1">Biyografi</label>
+              <label className="text-xs text-gray-400 font-bold uppercase ml-1">Hakkımda</label>
               <textarea 
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
-                className="w-full bg-gray-50 p-3 rounded-xl border border-gray-200 outline-none text-gray-800 font-medium resize-none h-24"
-                placeholder="Kendin hakkında bir şeyler yaz..."
+                className="w-full bg-gray-50 p-3 rounded-2xl border border-gray-100 outline-none text-gray-800 font-medium resize-none h-24 focus:border-primary focus:bg-white transition-all"
+                placeholder="Kendini kısaca tanıt..."
                 maxLength={150}
               />
               <div className="text-right text-xs text-gray-400">{bio.length}/150</div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs text-gray-500 font-bold uppercase ml-1">Telefon</label>
-              <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+            <div className="space-y-1 opacity-50">
+              <label className="text-xs text-gray-400 font-bold uppercase ml-1">Telefon (Değiştirilemez)</label>
+              <div className="flex items-center gap-3 bg-gray-100 p-3 rounded-2xl border border-gray-200">
                 <Phone className="w-5 h-5 text-gray-400" />
                 <input 
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="bg-transparent w-full outline-none text-gray-800 font-medium"
-                  placeholder="+90..."
+                  readOnly
+                  className="bg-transparent w-full outline-none text-gray-500 font-medium cursor-not-allowed"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-gray-500 font-bold uppercase ml-1">Instagram (Opsiyonel)</label>
-              <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+              <label className="text-xs text-gray-400 font-bold uppercase ml-1">Sosyal Medya</label>
+              <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100 focus-within:border-primary focus-within:bg-white transition-all">
                 <Instagram className="w-5 h-5 text-gray-400" />
                 <input 
                   value={instagram}
