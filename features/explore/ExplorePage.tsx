@@ -176,7 +176,7 @@ export const ExplorePage: React.FC = () => {
                     {(searchQuery || selectedSector ? displayContent.items : orgs).map((org: any) => (
                         <div 
                             key={org.id} 
-                            onClick={() => navigate(`/hotel/${org.id}`)}
+                            onClick={() => navigate(`/org/${org.id}`)}
                             className="bg-gray-800 rounded-2xl p-4 flex items-center gap-4 border border-white/5 hover:border-accent cursor-pointer group transition-all"
                         >
                             <div className="w-16 h-16 rounded-xl bg-gray-700 overflow-hidden border border-gray-600 group-hover:border-accent">

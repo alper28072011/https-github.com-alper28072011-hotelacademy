@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     Settings, ExternalLink, ShieldCheck, Building2, 
-    ChevronRight, LayoutDashboard, Crown
+    ChevronRight, LayoutDashboard, Crown, Eye
 } from 'lucide-react';
 import { User, Organization } from '../../../types';
 import { getOrganizationDetails } from '../../../services/db';
@@ -31,7 +31,6 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   const [org, setOrg] = useState<Organization | null>(null);
   const [loadingOrg, setLoadingOrg] = useState(false);
 
-  // 1. Fetch Organization Details
   useEffect(() => {
       const fetchOrg = async () => {
           if (user.currentOrganizationId) {
@@ -44,25 +43,26 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       fetchOrg();
   }, [user.currentOrganizationId]);
 
-  // 2. Simplified Navigation Logic
-  const handleActionClick = () => {
-      // If user has NO organization -> Lobby
+  const handleManagementClick = () => {
       if (!user.currentOrganizationId) {
           navigate('/lobby');
-          return;
+      } else {
+          navigate('/admin');
       }
-
-      // If user HAS organization -> Force to Admin
-      // (Auth/Role guards on /admin route will handle permission checks)
-      navigate('/admin');
   };
 
-  // 3. Helper for Role Display
+  const handleViewPageClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (user.currentOrganizationId) {
+          navigate(`/org/${user.currentOrganizationId}`);
+      }
+  };
+
   const getRoleLabel = (role: string) => {
       switch(role) {
           case 'super_admin': return "Platform Sahibi";
           case 'admin': return "Kurucu / İşletme Sahibi";
-          case 'manager': return "Departman Müdürü";
+          case 'manager': return "Yönetici";
           case 'staff': return "Ekip Üyesi";
           default: return "Kullanıcı";
       }
@@ -79,7 +79,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           if (!user.currentOrganizationId) {
               return (
                 <div 
-                    onClick={handleActionClick}
+                    onClick={handleManagementClick}
                     className="bg-gray-50 border-2 border-dashed border-gray-300 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all group hover:border-accent mb-6"
                 >
                     <div className="flex items-center gap-3">
@@ -87,7 +87,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                             <Building2 className="w-5 h-5 text-gray-500 group-hover:text-primary" />
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-sm font-bold text-gray-800">Bir Yapı Oluştur / Katıl</span>
+                            <span className="text-sm font-bold text-gray-800">Bir İşletme Oluştur / Katıl</span>
                             <span className="text-[10px] text-gray-500">Kariyerini bir üst seviyeye taşı</span>
                         </div>
                     </div>
@@ -96,24 +96,32 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
               );
           }
 
-          // B. Manager / Admin
+          // B. Manager / Admin (Dual Actions)
           if (isManagement) {
               return (
-                <div 
-                    onClick={handleActionClick}
-                    className="bg-primary text-white py-4 px-5 rounded-2xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-primary/30 relative overflow-hidden group mb-6"
-                >
-                    <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="flex items-center gap-4 relative z-10">
-                        <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm border border-white/10">
-                            <Crown className="w-6 h-6 text-accent" />
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-base font-bold leading-tight">{orgName} Yönetim Paneli</span>
-                            <span className="text-[11px] text-white/60 font-medium">{roleLabel} olarak yönetiyorsun</span>
+                <div className="flex gap-2 mb-6">
+                    <div 
+                        onClick={handleManagementClick}
+                        className="flex-1 bg-primary text-white py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-primary/30 relative overflow-hidden group"
+                    >
+                        <div className="flex items-center gap-3 relative z-10">
+                            <div className="p-1.5 bg-white/10 rounded-lg backdrop-blur-sm">
+                                <Crown className="w-5 h-5 text-accent" />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-bold opacity-80">Yönetim Paneli</span>
+                                <span className="text-sm font-bold truncate">{orgName}</span>
+                            </div>
                         </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-accent relative z-10" />
+
+                    <div 
+                        onClick={handleViewPageClick}
+                        className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 px-4 rounded-xl flex items-center justify-center cursor-pointer active:scale-[0.98] transition-all"
+                        title="Sayfayı Görüntüle"
+                    >
+                        <Eye className="w-6 h-6" />
+                    </div>
                 </div>
               );
           }
@@ -121,7 +129,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           // C. Staff
           return (
             <div 
-                onClick={handleActionClick}
+                onClick={handleViewPageClick}
                 className="bg-white border border-gray-200 shadow-sm py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all hover:bg-gray-50 mb-6"
             >
                 <div className="flex items-center gap-3">
@@ -142,7 +150,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       if (user.currentOrganizationId) {
           return (
               <div 
-                onClick={() => navigate(`/hotel/${user.currentOrganizationId}`)}
+                onClick={() => navigate(`/org/${user.currentOrganizationId}`)}
                 className="flex items-center gap-2 mb-4 cursor-pointer group w-max"
               >
                   <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-full border border-gray-200 group-hover:border-primary/30 transition-all">

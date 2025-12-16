@@ -60,18 +60,17 @@ export const OrganizationLobby: React.FC = () => {
           await switchOrganization(org.id);
           
           // 2. CRITICAL: Manually update AuthStore User State
-          // We update the local store immediately to prevent routing lag
           const updatedUser: User = {
               ...currentUser,
               currentOrganizationId: org.id,
-              role: 'manager', // Owner starts as manager/admin
+              role: 'manager', 
               department: 'management'
           };
           loginSuccess(updatedUser);
 
-          // 3. FORCE REDIRECT (With small delay to ensure state propagation)
+          // 3. FORCE REDIRECT to Settings with Flag
           setTimeout(() => {
-              navigate('/admin', { replace: true });
+              navigate('/admin/settings', { state: { isNewOrg: true } });
           }, 100);
       } else {
           setIsCreating(false);
@@ -79,7 +78,7 @@ export const OrganizationLobby: React.FC = () => {
   };
 
   const handleSelectMembership = async (orgId: string) => {
-      if (switchingOrgId) return; // Prevent double click
+      if (switchingOrgId) return; 
       setSwitchingOrgId(orgId);
       
       try {
@@ -98,7 +97,7 @@ export const OrganizationLobby: React.FC = () => {
   };
 
   const goToPublicPage = (orgId: string) => {
-      navigate(`/hotel/${orgId}`);
+      navigate(`/org/${orgId}`);
   };
 
   const sectors: { id: OrganizationSector, label: string }[] = [

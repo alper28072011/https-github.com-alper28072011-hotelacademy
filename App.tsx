@@ -7,9 +7,7 @@ import { useAuthStore } from './stores/useAuthStore';
 import { useOrganizationStore } from './stores/useOrganizationStore';
 import { LoginPage } from './features/auth/LoginPage';
 import { OrganizationLobby } from './features/organization/OrganizationLobby';
-// REFACTOR: Use OrganizationProfile instead of HotelPublicPage
 import { OrganizationProfile } from './features/organization/OrganizationProfile';
-// REFACTOR: Use OrganizationSettings instead of HotelSettings
 import { OrganizationSettings } from './features/organization/OrganizationSettings';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ProfilePage } from './features/profile/ProfilePage';
@@ -32,7 +30,6 @@ import { CareerBuilder } from './features/admin/CareerBuilder';
 import { TalentRadar } from './features/admin/TalentRadar';
 import { SuperAdminDashboard } from './features/superadmin/SuperAdminDashboard';
 
-// Simple Layout Wrapper for Login
 const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="min-h-screen bg-surface flex flex-col relative overflow-hidden">
@@ -52,10 +49,19 @@ const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </main>
        <footer className="relative z-10 p-4 text-center text-gray-400 text-xs">
-          <p>v2.2.0 &bull; Global Learning</p>
+          <p>v2.3.0 &bull; Global Business</p>
        </footer>
     </div>
   );
+};
+
+// --- SUPER ADMIN GUARD & REDIRECTOR ---
+const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { currentUser } = useAuthStore();
+    const isSuper = currentUser?.role === 'super_admin' && currentUser?.phoneNumber.replace(/\s/g, '') === '+905417726743';
+    
+    if (!isSuper) return <Navigate to="/" replace />;
+    return <>{children}</>;
 };
 
 const App: React.FC = () => {
@@ -72,28 +78,23 @@ const App: React.FC = () => {
   // Sync Org State & Handle Hydration
   useEffect(() => {
       const sync = async () => {
-          // If user has a preferred org, try to switch to it.
           if (isAuthenticated && currentUser?.currentOrganizationId && !currentOrganization) {
               await switchOrganization(currentUser.currentOrganizationId);
           }
           setIsHydrating(false);
       };
       sync();
-  }, [isAuthenticated, currentUser, currentOrganization]); 
+  }, [isAuthenticated, currentUser]); 
 
-  // Role Checks
-  const canAccessAdmin = ['manager', 'admin', 'super_admin'].includes(currentUser?.role || '');
-  
-  // Strict Super Admin Check (Double Verification)
+  // Strict Super Admin Check for Auto-Redirect
   const isSuperAdmin = currentUser?.role === 'super_admin' && currentUser?.phoneNumber.replace(/\s/g, '') === '+905417726743';
 
-  // 1. Loading Shield
   if (isHydrating && isAuthenticated) {
       return (
           <div className="h-screen flex items-center justify-center bg-primary">
               <div className="text-center">
                   <Loader2 className="w-12 h-12 text-accent animate-spin mx-auto mb-4" />
-                  <p className="text-white/60 font-medium">Profil yükleniyor...</p>
+                  <p className="text-white/60 font-medium">Veriler yükleniyor...</p>
               </div>
           </div>
       );
@@ -102,35 +103,42 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <Routes>
+        {/* SUPER ADMIN ROOT REDIRECT */}
+        {isAuthenticated && isSuperAdmin && (
+             <Route path="/" element={<Navigate to="/super-admin" replace />} />
+        )}
+
         {/* Protected Routes */}
         {isAuthenticated ? (
            <>
-              {/* REFACTOR: Changed path from /hotel/:orgId to explicit route, using OrganizationProfile */}
-              <Route path="/hotel/:orgId" element={<OrganizationProfile />} />
+              {/* REFACTOR: Changed from /hotel to /org for generic business support */}
+              <Route path="/org/:orgId" element={<OrganizationProfile />} />
+              {/* Legacy Support Redirect */}
+              <Route path="/hotel/:orgId" element={<Navigate to={`/org/${window.location.hash.split('/').pop()}`} replace />} />
 
-              {/* Course Flow Routes */}
               <Route path="/course/:courseId" element={<CourseIntroPage />} />
               <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
               
-              {/* ORGANIZATION ADMIN ROUTES */}
-              {canAccessAdmin && currentOrganization && (
-                  <Route path="/admin" element={<AdminLayout />}>
-                      <Route index element={<OrganizationSettings />} /> 
-                      <Route path="requests" element={<TeamRequests />} />
-                      <Route path="staff" element={<StaffManager />} />
-                      <Route path="career" element={<CareerBuilder />} />
-                      <Route path="content" element={<ContentStudio />} />
-                      <Route path="reports" element={<TalentRadar />} />
-                      <Route path="settings" element={<OrganizationSettings />} /> 
-                  </Route>
-              )}
+              {/* ORGANIZATION ADMIN ROUTES - REMOVED CONDITIONAL RENDERING */}
+              {/* The guard logic is now inside AdminLayout to prevent route missing errors */}
+              <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<OrganizationSettings />} /> 
+                  <Route path="requests" element={<TeamRequests />} />
+                  <Route path="staff" element={<StaffManager />} />
+                  <Route path="career" element={<CareerBuilder />} />
+                  <Route path="content" element={<ContentStudio />} />
+                  <Route path="reports" element={<TalentRadar />} />
+                  <Route path="settings" element={<OrganizationSettings />} /> 
+              </Route>
 
-              {/* SUPER ADMIN ROUTES (Strictly Protected) */}
+              {/* SUPER ADMIN ROUTES */}
               <Route path="/super-admin" element={
-                  isSuperAdmin ? <SuperAdminDashboard /> : <Navigate to="/" replace />
+                  <SuperAdminGuard>
+                      <SuperAdminDashboard />
+                  </SuperAdminGuard>
               } />
 
-              {/* DEFAULT USER INTERFACE (Freemium / Freelancer / Staff) */}
+              {/* DEFAULT USER INTERFACE */}
               <Route 
                 path="/*" 
                 element={
