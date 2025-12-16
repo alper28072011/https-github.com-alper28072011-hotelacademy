@@ -98,7 +98,7 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       completedCourses: [], 
       startedCourses: [],
       completedTasks: [],
-      badges: [],
+      badges: [], 
       currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 30000000,
@@ -138,7 +138,14 @@ const MOCK_COURSES: Course[] = [
       popularityScore: 100,
       isNew: true,
       steps: [
-          { id: 's1', type: 'video', title: 'Hoşgeldin', videoUrl: 'https://cdn.coverr.co/videos/coverr-hotel-lobby-4432/1080p.mp4' }
+          { 
+            id: 's1', 
+            type: 'VIDEO', 
+            title: 'Hoşgeldin', 
+            content: 'Aileye hoş geldin! Bu videoda otelimizin genel kurallarını ve kültürünü öğreneceksin.',
+            mediaUrl: 'https://cdn.coverr.co/videos/coverr-hotel-lobby-4432/1080p.mp4',
+            duration: 15
+          }
       ],
       tier: 'OFFICIAL',
       verificationStatus: 'VERIFIED',

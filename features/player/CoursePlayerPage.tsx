@@ -1,316 +1,281 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Volume2, VolumeX, CheckCircle, ArrowRight, RotateCcw, AlertTriangle, Loader2, Globe, Sparkles, Star, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { X, ChevronDown, CheckCircle, AlertCircle, BookOpen, Share2, Heart } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getCourse, updateUserProgress } from '../../services/db';
-import { submitReview } from '../../services/courseService'; // NEW
-import { Course, ReviewTag } from '../../types';
+import { Course, StoryCard } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { useAppStore } from '../../stores/useAppStore';
-import { translateContent } from '../../services/geminiService';
 
 export const CoursePlayerPage: React.FC = () => {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
   const { courseId } = useParams<{ courseId: string }>();
+  const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { currentLanguage } = useAppStore();
   
   const [course, setCourse] = useState<Course | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [isMuted, setIsMuted] = useState(true);
-  const [quizError, setQuizError] = useState(false);
   
-  // Rating State
-  const [showRatingModal, setShowRatingModal] = useState(false);
-  const [userRating, setUserRating] = useState(0);
-  const [selectedTags, setSelectedTags] = useState<ReviewTag[]>([]);
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  // Interaction State
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [isAnswered, setIsAnswered] = useState(false);
+  const [isCorrect, setIsCorrect] = useState(false);
+  
+  // Deep Dive Sheet
+  const [isDeepDiveOpen, setIsDeepDiveOpen] = useState(false);
 
-  // Translation State
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [translatedData, setTranslatedData] = useState<{ title: string; description: string } | null>(null);
-
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Fetch Course Data
   useEffect(() => {
-    const fetchCourseData = async () => {
-      if (!courseId) return;
-      setLoading(true);
-      const data = await getCourse(courseId);
-      if (data) {
-        setCourse(data);
-      } else {
-        console.error("Course not found");
-        setTimeout(() => navigate('/'), 2000);
-      }
-      setLoading(false);
+    const fetch = async () => {
+        if(courseId) {
+            const c = await getCourse(courseId);
+            setCourse(c);
+            setLoading(false);
+        }
     };
-    fetchCourseData();
-  }, [courseId, navigate]);
+    fetch();
+  }, [courseId]);
 
-  const currentStep = course?.steps[currentStepIndex];
-  const totalSteps = course?.steps.length || 0;
-  const progress = ((currentStepIndex + 1) / totalSteps) * 100;
+  if (loading || !course) return <div className="bg-black h-screen" />;
 
-  // Handle Video Autoplay on Step Change
-  useEffect(() => {
-    if (currentStep?.type === 'video' && videoRef.current) {
-        videoRef.current.currentTime = 0;
-        videoRef.current.play().catch(e => console.log("Autoplay blocked:", e));
-        
-        // Reset translation on step change
-        setTranslatedData(null);
-    }
-  }, [currentStepIndex, currentStep?.type]);
+  const currentCard = course.steps[currentIndex] as StoryCard;
+  const isLastCard = currentIndex === course.steps.length - 1;
 
-  const handleNext = async () => {
-    if (currentStepIndex < totalSteps - 1) {
-      setCurrentStepIndex(prev => prev + 1);
-    } else {
-      // Course Finish -> Show Rating Modal
-      if (currentUser && courseId) {
-        await updateUserProgress(currentUser.id, courseId, 150); 
+  const handleNext = () => {
+      if (currentCard.type === 'QUIZ' && !isAnswered) return; // Block unless answered
+      
+      if (currentIndex < course.steps.length - 1) {
+          setCurrentIndex(prev => prev + 1);
+          // Reset Quiz State
+          setSelectedOption(null);
+          setIsAnswered(false);
+          setIsCorrect(false);
+      } else {
+          finishCourse();
       }
-      setShowRatingModal(true);
-      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-    }
   };
 
-  const handleSubmitReview = async () => {
-      if (!courseId || !currentUser) return;
-      setIsSubmittingReview(true);
+  const handlePrev = () => {
+      if (currentIndex > 0) {
+          setCurrentIndex(prev => prev - 1);
+          // Reset Quiz State (Optional: Keep history?)
+          setSelectedOption(null);
+          setIsAnswered(false);
+      }
+  };
+
+  const handleQuizAnswer = (optionIndex: number) => {
+      if (isAnswered) return;
       
-      await submitReview(courseId, currentUser.id, userRating, selectedTags);
+      const correctIndex = currentCard.interaction?.correctOptionIndex;
+      const isRight = optionIndex === correctIndex;
       
-      setIsSubmittingReview(false);
+      setSelectedOption(optionIndex);
+      setIsAnswered(true);
+      setIsCorrect(isRight);
+
+      if (isRight) {
+          confetti({
+              particleCount: 100,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#D4AF37', '#ffffff'] // Gold & White
+          });
+      }
+  };
+
+  const finishCourse = async () => {
+      if (currentUser && courseId) {
+          await updateUserProgress(currentUser.id, courseId, course.xpReward);
+      }
       navigate('/');
   };
 
-  const toggleTag = (tag: ReviewTag) => {
-      if (selectedTags.includes(tag)) {
-          setSelectedTags(selectedTags.filter(t => t !== tag));
-      } else {
-          setSelectedTags([...selectedTags, tag]);
-      }
-  };
-
-  // ... (Existing Translate & Quiz logic remains the same) ...
-  const handleTranslate = async () => {
-      if (!currentStep || isTranslating) return;
-      if (translatedData) { setTranslatedData(null); return; }
-      setIsTranslating(true);
-      const langMap: Record<string, string> = { 'en': 'English', 'tr': 'Turkish', 'ru': 'Russian', 'ar': 'Arabic', 'de': 'German' };
-      const targetLangName = langMap[currentLanguage] || 'English';
-      const tTitle = await translateContent(currentStep.title, targetLangName);
-      const tDesc = currentStep.description ? await translateContent(currentStep.description, targetLangName) : '';
-      setTranslatedData({ title: tTitle, description: tDesc });
-      setIsTranslating(false);
-  };
-
-  const handleQuizAnswer = (isCorrect: boolean) => {
-    if (isCorrect) {
-      handleNext();
-    } else {
-      setQuizError(true);
-      setTimeout(() => {
-        setQuizError(false);
-        if (course) {
-            let prevVideoIndex = currentStepIndex - 1;
-            while(prevVideoIndex >= 0 && course.steps[prevVideoIndex].type !== 'video') {
-                prevVideoIndex--;
-            }
-            if (prevVideoIndex >= 0) setCurrentStepIndex(prevVideoIndex);
-        }
-      }, 2000);
-    }
-  };
-
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
-    if (videoRef.current) videoRef.current.muted = !isMuted;
-  };
-
-  if (loading) {
-    return <div className="fixed inset-0 bg-black z-50 flex items-center justify-center text-white"><Loader2 className="w-10 h-10 animate-spin text-accent" /></div>;
-  }
-
-  if (!currentStep) return null;
-
   return (
-    <div className="fixed inset-0 bg-black z-50 flex flex-col overflow-hidden">
-      
-      {/* Top Bar (Overlay) */}
-      <div className="absolute top-0 left-0 right-0 z-30 p-6 flex justify-between items-start bg-gradient-to-b from-black/60 to-transparent h-32">
-        <div className="absolute top-0 left-0 h-1 bg-accent transition-all duration-500" style={{ width: `${progress}%` }} />
+    <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center">
         
-        <button 
-          onClick={() => navigate('/')}
-          className="bg-white/10 backdrop-blur-md rounded-full p-2 text-white hover:bg-white/20 active:scale-95 transition-all"
-        >
-          <X className="w-6 h-6" />
-        </button>
-
-        <div className="flex gap-2">
-            {currentStep.type === 'video' && (
-                <button 
-                    onClick={handleTranslate}
-                    className={`backdrop-blur-md rounded-full px-3 py-2 text-white transition-all flex items-center gap-2 ${translatedData ? 'bg-accent text-primary font-bold' : 'bg-white/10 hover:bg-white/20'}`}
-                >
-                    {isTranslating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Globe className="w-5 h-5" />}
-                    <span className="text-xs font-bold hidden md:block">
-                        {translatedData ? 'Original' : 'Translate'}
-                    </span>
-                </button>
-            )}
-
-            {currentStep.type === 'video' && (
-            <button 
-                onClick={toggleMute}
-                className="bg-white/10 backdrop-blur-md rounded-full p-2 text-white hover:bg-white/20 active:scale-95 transition-all"
-            >
-                {isMuted ? <VolumeX className="w-6 h-6" /> : <Volume2 className="w-6 h-6" />}
-            </button>
-            )}
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 relative w-full h-full bg-black">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStepIndex}
-            initial={{ y: '100%' }}
-            animate={{ y: '0%' }}
-            exit={{ y: '-100%', opacity: 0.5 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="absolute inset-0 w-full h-full"
-          >
-            {/* RENDER VIDEO STEP */}
-            {currentStep.type === 'video' && (
-              <div className="relative w-full h-full">
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover"
-                  src={currentStep.videoUrl}
-                  poster={currentStep.posterUrl}
-                  playsInline
-                  loop
-                  muted={isMuted}
-                />
-                <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-primary via-primary/80 to-transparent pointer-events-none" />
-                <div className="absolute bottom-32 left-0 right-0 p-6 text-white z-20">
-                  <div className="inline-flex items-center gap-2 bg-accent/20 backdrop-blur-sm px-3 py-1 rounded-full mb-3 border border-accent/30">
-                     <span className="text-accent text-xs font-bold uppercase tracking-wider">
-                       {t('player_step')} {currentStepIndex + 1}/{totalSteps}
-                     </span>
-                  </div>
-                  <motion.div key={translatedData ? 'trans' : 'orig'} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative">
-                     {translatedData && <div className="absolute -top-6 left-0 text-accent text-[10px] font-bold flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI Translated</div>}
-                     <h2 className="text-3xl font-bold mb-2 leading-tight drop-shadow-md">{translatedData ? translatedData.title : currentStep.title}</h2>
-                     <p className="text-gray-200 text-lg leading-relaxed opacity-90 drop-shadow-sm">{translatedData ? translatedData.description : currentStep.description}</p>
-                  </motion.div>
-                </div>
-              </div>
-            )}
-
-            {/* RENDER QUIZ STEP */}
-            {currentStep.type === 'quiz' && (
-              <div className="relative w-full h-full bg-primary flex flex-col items-center justify-center p-6">
-                <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                <div className="relative z-10 w-full max-w-md">
-                    <h2 className="text-accent text-lg font-bold uppercase tracking-widest text-center mb-2">{t('player_quiz_title')}</h2>
-                    <h3 className="text-2xl md:text-3xl text-white font-bold text-center mb-12 leading-tight">{currentStep.question}</h3>
-                    <div className="flex flex-col gap-4">
-                        {currentStep.options?.map((option) => (
-                            <button key={option.id} onClick={() => handleQuizAnswer(option.isCorrect)} className="group relative w-full p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-accent hover:border-accent text-left transition-all active:scale-[0.98] overflow-hidden">
-                                <span className="relative z-10 text-xl font-medium text-white group-hover:text-primary transition-colors">{option.label}</span>
-                            </button>
-                        ))}
+        {/* STORY CONTAINER (Mobile Aspect Ratio) */}
+        <div className="relative w-full h-full md:max-w-md md:h-[90vh] md:rounded-3xl overflow-hidden bg-gray-900 shadow-2xl">
+            
+            {/* 1. PROGRESS BARS */}
+            <div className="absolute top-0 left-0 right-0 z-30 flex gap-1 p-2">
+                {course.steps.map((step, idx) => (
+                    <div key={idx} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
+                        <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: idx < currentIndex ? '100%' : idx === currentIndex ? '100%' : '0%' }}
+                            transition={idx === currentIndex ? { duration: step.duration || 10, ease: 'linear' } : { duration: 0 }}
+                            className="h-full bg-white rounded-full"
+                            onAnimationComplete={() => {
+                                if(idx === currentIndex && step.type !== 'QUIZ') handleNext();
+                            }}
+                        />
                     </div>
+                ))}
+            </div>
+
+            {/* 2. TOP ACTIONS */}
+            <div className="absolute top-6 left-0 right-0 z-30 flex justify-between items-center px-4">
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10">
+                        <img src="https://ui-avatars.com/api/?name=Hotel+Academy&background=random" className="w-full h-full rounded-full" />
+                    </div>
+                    <span className="text-white font-bold text-sm shadow-black drop-shadow-md">Hotel Academy</span>
                 </div>
-                {quizError && (
-                    <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="absolute inset-0 z-50 bg-red-600/90 backdrop-blur-md flex flex-col items-center justify-center text-white">
-                        <AlertTriangle className="w-20 h-20 mb-4 animate-bounce" />
-                        <h3 className="text-2xl font-bold text-center px-8">{t('player_quiz_retry')}</h3>
-                        <RotateCcw className="w-8 h-8 mt-8 animate-spin-slow" />
-                    </motion.div>
+                <div className="flex gap-2">
+                    <button onClick={() => navigate('/')} className="p-2 rounded-full bg-black/20 backdrop-blur-md text-white">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+            </div>
+
+            {/* 3. CARD CONTENT */}
+            <AnimatePresence mode='wait'>
+                <motion.div 
+                    key={currentIndex}
+                    initial={{ opacity: 0, scale: 1.05 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="absolute inset-0 w-full h-full"
+                >
+                    {/* Background Media */}
+                    <img 
+                        src={currentCard.mediaUrl} 
+                        className="w-full h-full object-cover" 
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/90" />
+
+                    {/* TAP ZONES */}
+                    <div className="absolute inset-0 z-10 flex">
+                        <div className="w-1/3 h-full" onClick={handlePrev} />
+                        <div className="w-2/3 h-full" onClick={handleNext} />
+                    </div>
+
+                    {/* CONTENT OVERLAY */}
+                    <div className="absolute bottom-0 left-0 right-0 p-6 pb-24 z-20 pointer-events-none"> {/* Padding for bottom sheet handle */}
+                        <motion.div 
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.2 }}
+                        >
+                            <div className="inline-block px-3 py-1 rounded-lg bg-accent text-primary text-xs font-bold mb-3 uppercase tracking-wider">
+                                {currentCard.type}
+                            </div>
+                            <h1 className="text-3xl font-bold text-white mb-4 leading-tight drop-shadow-xl">
+                                {currentCard.title}
+                            </h1>
+                            <p className="text-lg text-gray-200 mb-8 leading-relaxed font-medium drop-shadow-md whitespace-pre-wrap">
+                                {currentCard.content}
+                            </p>
+
+                            {/* QUIZ INTERACTION */}
+                            {currentCard.type === 'QUIZ' && currentCard.interaction && (
+                                <div className="flex flex-col gap-3 pointer-events-auto">
+                                    {currentCard.interaction.options.map((option, idx) => {
+                                        let bgClass = "bg-white/20 backdrop-blur-md text-white border-white/20";
+                                        if (isAnswered) {
+                                            if (idx === currentCard.interaction?.correctOptionIndex) bgClass = "bg-green-500 text-white border-green-500";
+                                            else if (idx === selectedOption && !isCorrect) bgClass = "bg-red-500 text-white border-red-500";
+                                            else bgClass = "bg-white/10 text-gray-400 border-transparent";
+                                        }
+
+                                        return (
+                                            <button 
+                                                key={idx}
+                                                onClick={() => handleQuizAnswer(idx)}
+                                                disabled={isAnswered}
+                                                className={`p-4 rounded-xl text-left font-bold text-sm border-2 transition-all active:scale-98 ${bgClass}`}
+                                            >
+                                                {option}
+                                                {isAnswered && idx === currentCard.interaction?.correctOptionIndex && <CheckCircle className="inline ml-2 w-4 h-4" />}
+                                            </button>
+                                        );
+                                    })}
+                                    
+                                    {isAnswered && (
+                                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`mt-2 p-3 rounded-lg text-sm font-bold ${isCorrect ? 'bg-green-500/20 text-green-200' : 'bg-red-500/20 text-red-200'}`}>
+                                            {isCorrect ? "Harika! Doğru Cevap." : "Hata! Tekrar dene."}
+                                            {currentCard.interaction.explanation && <div className="mt-1 font-normal opacity-80">{currentCard.interaction.explanation}</div>}
+                                        </motion.div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* REWARD CARD EXTRA */}
+                            {currentCard.type === 'XP_REWARD' && (
+                                <div className="pointer-events-auto mt-4">
+                                    <button onClick={finishCourse} className="w-full bg-accent text-primary font-bold py-4 rounded-xl shadow-xl hover:scale-105 transition-transform">
+                                        Ödülünü Al (+{course.xpReward} XP)
+                                    </button>
+                                </div>
+                            )}
+                        </motion.div>
+                    </div>
+                </motion.div>
+            </AnimatePresence>
+
+            {/* 4. DEEP DIVE SHEET TRIGGER */}
+            <div 
+                className="absolute bottom-0 left-0 right-0 z-40 bg-gradient-to-t from-black to-transparent pt-10 pb-4 flex justify-center cursor-pointer"
+                onClick={() => setIsDeepDiveOpen(true)}
+            >
+                <div className="flex flex-col items-center gap-1 animate-bounce">
+                    <ChevronDown className="w-6 h-6 text-white/50 rotate-180" />
+                    <span className="text-white/80 text-xs font-bold uppercase tracking-widest">Derinlemesine Öğren</span>
+                </div>
+            </div>
+
+            {/* 5. DEEP DIVE SHEET */}
+            <AnimatePresence>
+                {isDeepDiveOpen && (
+                    <>
+                        <motion.div 
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/60 z-40 backdrop-blur-sm"
+                            onClick={() => setIsDeepDiveOpen(false)}
+                        />
+                        <motion.div 
+                            initial={{ y: '100%' }} animate={{ y: '20%' }} exit={{ y: '100%' }}
+                            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                            className="absolute inset-0 bg-white rounded-t-[2rem] z-50 overflow-y-auto p-6 pb-32"
+                        >
+                            <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6" />
+                            
+                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Detaylı Kaynak</h2>
+                            <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
+                                <BookOpen className="w-4 h-4" />
+                                <span>{course.deepDiveResource?.type || "PDF Dokümanı"}</span>
+                            </div>
+
+                            <div className="prose prose-sm max-w-none text-gray-600 leading-relaxed">
+                                <p>{course.description}</p>
+                                <p className="mt-4 font-bold text-gray-800">
+                                    Bu mikro eğitim, aşağıdaki ana kaynaktan özetlenmiştir:
+                                </p>
+                                
+                                {course.deepDiveResource ? (
+                                    <a 
+                                        href={course.deepDiveResource.url} 
+                                        target="_blank" 
+                                        className="block mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-primary transition-colors group"
+                                    >
+                                        <div className="font-bold text-primary group-hover:underline">{course.deepDiveResource.title}</div>
+                                        <div className="text-xs text-gray-400 mt-1">{course.deepDiveResource.url}</div>
+                                    </a>
+                                ) : (
+                                    <div className="p-6 bg-gray-100 rounded-xl text-center text-gray-400 italic">
+                                        Ek kaynak bulunamadı.
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </>
                 )}
-              </div>
-            )}
+            </AnimatePresence>
 
-            {currentStep.type !== 'quiz' && (
-                <div className="absolute bottom-8 left-6 right-6 z-30">
-                  <button onClick={handleNext} className="w-full bg-accent text-primary text-xl font-bold py-5 rounded-2xl shadow-lg shadow-accent/20 active:scale-95 transition-transform flex items-center justify-center gap-3 animate-pulse-slow">
-                    {currentStepIndex === totalSteps - 1 ? <>{t('player_finish_course')} <CheckCircle className="w-6 h-6" /></> : <>{t('player_complete_step')} <ArrowRight className="w-6 h-6" /></>}
-                  </button>
-                </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {/* RATING MODAL */}
-      <AnimatePresence>
-          {showRatingModal && (
-              <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
-                  <motion.div 
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="bg-white rounded-3xl p-8 w-full max-w-md text-center shadow-2xl relative overflow-hidden"
-                  >
-                      <div className="absolute inset-0 bg-gradient-to-b from-accent/10 to-transparent pointer-events-none" />
-                      
-                      <h2 className="text-2xl font-bold text-gray-900 mb-2">Tebrikler! 🎉</h2>
-                      <p className="text-gray-500 mb-6">İçeriği nasıl buldun? Geri bildirimin üreticiye itibar puanı kazandıracak.</p>
-
-                      {/* Stars */}
-                      <div className="flex justify-center gap-2 mb-8">
-                          {[1, 2, 3, 4, 5].map(star => (
-                              <button key={star} onClick={() => setUserRating(star)} className="transition-transform active:scale-125 hover:scale-110">
-                                  <Star className={`w-10 h-10 ${userRating >= star ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200 fill-gray-100'}`} />
-                              </button>
-                          ))}
-                      </div>
-
-                      {/* Tags */}
-                      {userRating > 0 && (
-                          <div className="grid grid-cols-2 gap-3 mb-8 animate-in slide-in-from-bottom-2 fade-in">
-                              {(['ACCURATE', 'ENGAGING', 'MISLEADING', 'BORING'] as ReviewTag[]).map(tag => (
-                                  <button
-                                    key={tag}
-                                    onClick={() => toggleTag(tag)}
-                                    className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
-                                        selectedTags.includes(tag) 
-                                        ? 'border-primary bg-primary text-white shadow-md' 
-                                        : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-200'
-                                    }`}
-                                  >
-                                      {tag === 'ACCURATE' && "✅ Doğru Bilgi"}
-                                      {tag === 'ENGAGING' && "🔥 Çok Akıcı"}
-                                      {tag === 'MISLEADING' && "❌ Hatalı/Yanıltıcı"}
-                                      {tag === 'BORING' && "🥱 Sıkıcı"}
-                                  </button>
-                              ))}
-                          </div>
-                      )}
-
-                      <button 
-                        onClick={handleSubmitReview}
-                        disabled={userRating === 0 || isSubmittingReview}
-                        className="w-full bg-primary text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                          {isSubmittingReview ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : "Değerlendir & Bitir"}
-                      </button>
-                  </motion.div>
-              </div>
-          )}
-      </AnimatePresence>
+        </div>
     </div>
   );
 };

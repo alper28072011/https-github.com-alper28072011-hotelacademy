@@ -5,25 +5,21 @@ export interface Language {
   code: LanguageCode;
   name: string;
   nativeName: string;
-  flag: string; // Emoji flag for simplicity
+  flag: string;
   dir: 'ltr' | 'rtl';
 }
 
-export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management' | 'hr' | 'sales' | 'it' | string; // Extended defaults
-export type UserRole = 'staff' | 'manager' | 'admin' | 'super_admin'; // Added super_admin
+export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management' | 'hr' | 'sales' | 'it' | string;
+export type UserRole = 'staff' | 'manager' | 'admin' | 'super_admin';
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
-// --- PERMISSIONS MATRIX ---
 export type PermissionType = 
-    | 'CAN_CREATE_CONTENT'   // Eğitim/Post atabilir
-    | 'CAN_MANAGE_TEAM'      // Personel onayı/reddi
-    | 'CAN_VIEW_ANALYTICS'   // Raporları görme
-    | 'CAN_EDIT_SETTINGS';   // Kurum ayarları
+    | 'CAN_CREATE_CONTENT'
+    | 'CAN_MANAGE_TEAM'
+    | 'CAN_VIEW_ANALYTICS'
+    | 'CAN_EDIT_SETTINGS';
 
-// --- USER LIFECYCLE TYPES ---
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
-
-// --- NEW: CREATOR ECONOMY TYPES ---
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
 
 export interface UserMetadata {
@@ -32,16 +28,14 @@ export interface UserMetadata {
     deviceInfo?: string;
 }
 
-// --- SOCIAL & INSTRUCTOR TYPES ---
 export interface InstructorProfile {
     bio: string;
-    expertise: string[]; // ["Hospitality", "Culinary"]
+    expertise: string[];
     totalStudents: number;
     averageRating: number;
-    earnings: number; // Virtual currency or Real
+    earnings: number;
 }
 
-// NEW: Social Graph Logic
 export type FollowStatus = 'NONE' | 'PENDING' | 'FOLLOWING';
 
 export interface Relationship {
@@ -52,14 +46,12 @@ export interface Relationship {
     createdAt: number;
 }
 
-// --- MULTI-TENANCY TYPES ---
-
 export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
 export type OrganizationSize = '1-10' | '11-50' | '50-200' | '200+';
 
 export interface OrganizationSettings {
-    allowStaffContentCreation: boolean; // Can staff post to feed?
-    customDepartments: string[]; // ["Spa", "Security", "Animation"] - DYNAMIC DEPARTMENTS
+    allowStaffContentCreation: boolean;
+    customDepartments: string[];
     primaryColor?: string;
 }
 
@@ -69,28 +61,22 @@ export interface Organization {
   id: string;
   name: string;
   logoUrl: string;
-  // Brand Assets & Info
-  coverUrl?: string; // Large Hero Image
-  description?: string; // "About Us"
-  location?: string; // City, Country
+  coverUrl?: string;
+  description?: string;
+  location?: string;
   website?: string;
-  linkedinUrl?: string; // NEW
-  
-  sector: OrganizationSector; // NEW
-  size?: OrganizationSize; // NEW
-
-  ownerId: string; // The GM or Creator
-  legacyOwnerId?: string; // The previous owner (for logs/history)
-  status?: OrganizationStatus; // Lifecycle status
-
-  code: string; // Unique Invite Code (e.g. "RUBI-2024")
+  linkedinUrl?: string;
+  sector: OrganizationSector;
+  size?: OrganizationSize;
+  ownerId: string;
+  legacyOwnerId?: string;
+  status?: OrganizationStatus;
+  code: string;
   createdAt: number;
-  
-  // Settings
   settings?: OrganizationSettings;
-  memberCount?: number; // Employees
-  followersCount?: number; // Social Followers (News & Updates)
-  publicContentEnabled?: boolean; // Is the page public to the world?
+  memberCount?: number;
+  followersCount?: number;
+  publicContentEnabled?: boolean;
   subGroups?: string[];
 }
 
@@ -100,11 +86,9 @@ export interface Membership {
   id: string;
   userId: string;
   organizationId: string;
-  
-  role: UserRole; // System Level Role (Admin/Manager/Staff)
-  roleTitle?: string; // Display Title (e.g. "Executive Chef", "Shift Leader")
-  permissions?: PermissionType[]; // Granular Capabilities
-  
+  role: UserRole;
+  roleTitle?: string;
+  permissions?: PermissionType[];
   department: DepartmentType;
   status: MembershipStatus;
   joinedAt: number;
@@ -117,16 +101,11 @@ export interface JoinRequest {
   type: RequestType;
   userId: string;
   organizationId: string;
-  
-  // Application Details
   targetDepartment: DepartmentType;
-  requestedRoleTitle?: string; // e.g. "Demi Chef" (Optional input from user)
-  
+  requestedRoleTitle?: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
 }
-
-// --- USER TYPE UPDATE ---
 
 export interface UserPrivacySettings {
     showInSearch: boolean;
@@ -137,55 +116,39 @@ export interface UserPrivacySettings {
 export interface User {
   id: string;
   email?: string; 
-  phoneNumber: string; // Global ID
+  phoneNumber: string;
   name: string;
   avatar: string; 
-  
-  // Contextual Data (Derived from Active Membership usually, but kept here for cache/display)
   currentOrganizationId: string | null; 
-  department: DepartmentType | null; // OPTIONAL: Only set if active in an org
-  role: UserRole; // Active Role in Current Org
-  isSuperAdmin?: boolean; // GLOBAL FLAG for System Admin
-  
-  // Lifecycle & Security
-  status?: UserStatus; // Default: 'ACTIVE'
-  isSuspended?: boolean; // User triggered suspension
+  department: DepartmentType | null;
+  role: UserRole;
+  isSuperAdmin?: boolean;
+  status?: UserStatus;
+  isSuspended?: boolean;
   metadata?: UserMetadata;
-  privacySettings?: UserPrivacySettings; // NEW: Granular privacy
-
+  privacySettings?: UserPrivacySettings;
   pin: string; 
-  xp: number; // Global XP or Org Specific? Let's keep it Global for Career Profile
-  
-  // NEW: Creator Economy Fields
-  creatorLevel: CreatorLevel; // Determines what content they can make
-  reputationPoints: number; // Gained via quality ratings
-  
-  // Profile & Career
+  xp: number;
+  creatorLevel: CreatorLevel;
+  reputationPoints: number;
   bio?: string; 
   joinDate?: number; 
   instagramHandle?: string;
-  organizationHistory: string[]; // List of Org IDs they worked at
-  instructorProfile?: InstructorProfile; // NEW: For Marketplace Creators
-  
-  // Social Graph (Updated)
-  isPrivate?: boolean; // Shortcut for privacySettings.isPrivateAccount
-  followers?: string[]; // IDs (Legacy - consider moving to subcollection for scale)
-  following?: string[]; // IDs
+  organizationHistory: string[];
+  instructorProfile?: InstructorProfile;
+  isPrivate?: boolean;
+  followers?: string[];
+  following?: string[];
   followersCount?: number;
   followingCount?: number;
-
-  // Progress
   completedCourses: string[];
   startedCourses?: string[]; 
   savedCourses?: string[]; 
   completedTasks?: string[]; 
   badges?: Badge[]; 
-  
-  // Career Module
   assignedPathId?: string; 
 }
 
-// --- KUDOS / GAMIFICATION TYPES ---
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
 
 export interface Badge {
@@ -194,40 +157,39 @@ export interface Badge {
     lastReceivedAt: number;
 }
 
-export type StepType = 'video' | 'quiz';
+// --- MICRO-LEARNING & STORY TYPES ---
 
-// --- INTERACTION TYPES ---
-export type InteractionType = 'POLL' | 'QUIZ' | 'LINK' | 'XP_BOOST';
+export type StoryCardType = 'INFO' | 'QUIZ' | 'VIDEO' | 'XP_REWARD' | 'POLL';
+export type InteractionType = 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'POLL';
 
 export interface Interaction {
-  id: string;
   type: InteractionType;
-  data: {
-    question?: string;
-    options?: string[];
-    correctOptionIndex?: number;
-    url?: string;
-    label?: string;
-    xpAmount?: number;
-  };
-  style?: {
-    x: number;
-    y: number;
-    scale: number;
-  };
+  question: string;
+  options: string[];
+  correctOptionIndex?: number; // For Quiz
+  explanation?: string; // Shown after answer
 }
 
-export interface CourseStep {
+export interface StoryCard {
   id: string;
-  type: StepType;
+  type: StoryCardType;
   title: string;
-  description?: string;
-  videoUrl?: string;
-  posterUrl?: string;
-  question?: string;
-  options?: { id: string; label: string; isCorrect: boolean }[];
-  interactions?: Interaction[]; 
+  content: string; // Markdown supported
+  mediaUrl?: string; // Image or Short Video
+  duration: number; // Estimated read time in seconds (for progress bar)
+  interaction?: Interaction;
+  gradient?: string; // Visual style
 }
+
+export interface DeepDiveResource {
+  title: string;
+  type: 'PDF' | 'VIDEO' | 'ARTICLE';
+  url: string;
+  description?: string;
+}
+
+// Legacy support for CourseStep (mapped to StoryCard now)
+export type CourseStep = StoryCard; 
 
 export interface Category {
   id: string;
@@ -236,13 +198,10 @@ export interface Category {
   color?: string;
 }
 
-// --- NEW TARGETING & MARKETPLACE TYPES ---
 export type AssignmentType = 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
 export type ContentPriority = 'HIGH' | 'NORMAL';
-export type CourseVisibility = 'PRIVATE' | 'PUBLIC' | 'FOLLOWERS_ONLY'; // Expanded
-export type OwnerType = 'USER' | 'ORGANIZATION'; // New: Who owns this content?
-
-// NEW: Content Quality & Tier System
+export type CourseVisibility = 'PRIVATE' | 'PUBLIC' | 'FOLLOWERS_ONLY';
+export type OwnerType = 'USER' | 'ORGANIZATION';
 export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'UNDER_REVIEW';
 export type PriceType = 'FREE' | 'PAID';
@@ -250,47 +209,43 @@ export type ReviewTag = 'ACCURATE' | 'ENGAGING' | 'BORING' | 'MISLEADING' | 'OUT
 
 export interface Course {
   id: string;
-  organizationId?: string; // If OwnerType is ORGANIZATION
-  authorId: string; // The user who physically created it
-  
-  // Marketplace & Ownership Fields
-  ownerType: OwnerType; // NEW
-  tier: ContentTier; // NEW
-  verificationStatus: VerificationStatus; // NEW: Quality Gate
-  qualityScore: number; // 0-5
-  priceType: PriceType; // NEW
+  organizationId?: string;
+  authorId: string;
+  ownerType: OwnerType;
+  tier: ContentTier;
+  verificationStatus: VerificationStatus;
+  qualityScore: number;
+  priceType: PriceType;
   visibility: CourseVisibility;
-  
-  price: number; // 0 = Free
-  rating?: number; // 0-5
+  price: number;
+  rating?: number;
   studentCount?: number;
   discussionBoardId?: string; 
-  flagCount?: number; // Auto-moderation
-
+  flagCount?: number;
   categoryId: string;
   title: string;
   description: string;
   thumbnailUrl: string;
   videoUrl?: string; 
-  duration: number; 
+  duration: number; // Total estimated minutes
   xpReward: number;
   isFeatured?: boolean;
   coverQuote?: string; 
   tags?: string[]; 
   popularityScore?: number; 
   isNew?: boolean;
-  
-  // Assignments (Only relevant if ownerType == ORGANIZATION)
   assignmentType?: AssignmentType; 
   targetDepartments?: DepartmentType[]; 
   priority?: ContentPriority; 
   
-  steps: CourseStep[];
+  // NEW: Micro-Learning Core
+  steps: StoryCard[]; 
+  deepDiveResource?: DeepDiveResource; // Optional long-form content
 }
 
 export interface FeedPost {
   id: string;
-  organizationId: string; // Tenant Scoped
+  organizationId: string;
   authorId: string;
   authorName: string;
   authorAvatar: string;
@@ -309,13 +264,13 @@ export interface FeedPost {
       recipientAvatar: string;
       badgeType: KudosType;
   };
-  interactions?: Interaction[];
+  interactions?: any[];
   scheduledFor?: number; 
 }
 
 export interface CareerPath {
   id: string;
-  organizationId: string; // Tenant Scoped
+  organizationId: string;
   title: string;
   description: string;
   targetRole: string; 
@@ -327,7 +282,7 @@ export type TaskType = 'checklist' | 'photo';
 
 export interface Task {
   id: string;
-  organizationId: string; // Tenant Scoped
+  organizationId: string;
   department: DepartmentType;
   title: string;
   xpReward: number;
@@ -340,7 +295,7 @@ export type IssueStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
 
 export interface Issue {
   id?: string;
-  organizationId: string; // Tenant Scoped
+  organizationId: string;
   userId: string;
   userName: string; 
   department: DepartmentType;

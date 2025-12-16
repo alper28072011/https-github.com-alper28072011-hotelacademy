@@ -1,107 +1,112 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
+import { StoryCard, StoryCardType, InteractionType } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// --- TEXT GENERATION (Gemini 3 Pro Preview - Thinking Model) ---
-
-export type ContentMode = 'single' | 'series';
-
-interface GeneratedCourseData {
+interface GeneratedMicroCourse {
   title: string;
   description: string;
-  imagePrompt: string;
-  modules?: { title: string; description: string }[]; // Optional for single mode
-  tags?: string[];
+  cards: StoryCard[];
+  tags: string[];
 }
 
-export const generateCourseDraft = async (
-  topic: string, 
-  language: string, 
-  mode: ContentMode,
-  contextData: string = ""
-): Promise<GeneratedCourseData | null> => {
+/**
+ * GENERATE MICRO COURSE
+ * Converts raw text/source into a gamified Instagram Story-like course.
+ */
+export const generateMicroCourse = async (
+  sourceContent: string,
+  params: {
+    targetAudience: string;
+    tone: 'PROFESSIONAL' | 'FUN' | 'STRICT';
+    language: string;
+  }
+): Promise<GeneratedMicroCourse | null> => {
   try {
-    let prompt = "";
-    let schema = {};
+    const prompt = `
+      Act as a world-class Instructional Designer and Gamification Expert for Hotel Staff Training.
+      
+      YOUR TASK:
+      Convert the provided [SOURCE MATERIAL] into an interactive "Micro-Learning Story" (like Instagram Stories or Duolingo).
+      
+      AUDIENCE: ${params.targetAudience}
+      TONE: ${params.tone}
+      LANGUAGE: ${params.language}
+      
+      STRUCTURE RULES:
+      1. Break the content into 5-10 "Story Cards".
+      2. Card 1 must be a 'VIDEO' or 'INFO' card acting as an exciting hook/intro.
+      3. Mix 'INFO' cards (short, punchy text) with 'QUIZ' cards (checking understanding).
+      4. Every 2-3 info cards MUST be followed by a Quiz.
+      5. The last card must be 'XP_REWARD' type with a congratulatory message.
+      6. Content must be extremely concise (max 280 chars per card). Use emojis.
+      7. For 'mediaUrl', provide a relevant English search keyword for a stock photo (e.g., "hotel receptionist smiling").
+      
+      SOURCE MATERIAL:
+      "${sourceContent.substring(0, 10000)}" 
+    `;
 
-    if (mode === 'single') {
-        // Prompt for Single Post (Instagram Story style)
-        prompt = `
-          Act as an expert Hotel Social Media Manager and Trainer.
-          Create a content draft for a SINGLE training post (byte-sized learning) about: "${topic}".
-          Context/Source Material: "${contextData}".
-          Output Language: ${language}.
-          
-          CRITICAL INSTRUCTIONS:
-          1. Title: MUST be short, catchy, and under 10 words. Do NOT put the full content here.
-          2. Description: A concise, engaging paragraph explaining the tip or concept (max 300 characters).
-          3. Image Prompt: 3 English keywords for a stock photo.
-          4. Tags: 3 relevant hashtags.
-        `;
-
-        schema = {
+    // Define the exact schema for the UI to render
+    const schema = {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING, description: "Catchy course title" },
+        description: { type: Type.STRING, description: "Short summary" },
+        tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+        cards: {
+          type: Type.ARRAY,
+          items: {
             type: Type.OBJECT,
             properties: {
-              title: { type: Type.STRING, description: "Max 10 words catchy headline" },
-              description: { type: Type.STRING, description: "The main content body" },
-              imagePrompt: { type: Type.STRING },
-              tags: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ["title", "description", "imagePrompt"]
-        };
-
-    } else {
-        // Prompt for Series (Full Course)
-        prompt = `
-          Act as an expert Hotel Operations Manager and Instructional Designer.
-          Create a comprehensive training course outline about: "${topic}".
-          Context/Source Material: "${contextData}".
-          Output Language: ${language}.
-          
-          CRITICAL INSTRUCTIONS:
-          1. Title: Professional course title (max 10 words).
-          2. Description: Motivating course summary (max 2 sentences).
-          3. Modules: Break down the topic into 3-5 distinct learning modules/steps.
-          4. Image Prompt: 3 English keywords for a stock photo.
-        `;
-
-        schema = {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING, description: "Short professional title" },
-              description: { type: Type.STRING },
-              imagePrompt: { type: Type.STRING },
-              modules: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                  }
-                }
+              id: { type: Type.STRING },
+              type: { type: Type.STRING, enum: ['INFO', 'QUIZ', 'VIDEO', 'XP_REWARD'] },
+              title: { type: Type.STRING },
+              content: { type: Type.STRING, description: "Main text, use markdown for emphasis" },
+              mediaUrl: { type: Type.STRING, description: "Keyword for stock image" },
+              duration: { type: Type.NUMBER, description: "Estimated seconds to read (5-15)" },
+              interaction: {
+                type: Type.OBJECT,
+                properties: {
+                  type: { type: Type.STRING, enum: ['MULTIPLE_CHOICE', 'TRUE_FALSE'] },
+                  question: { type: Type.STRING },
+                  options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  correctOptionIndex: { type: Type.NUMBER },
+                  explanation: { type: Type.STRING, description: "Why is this correct?" }
+                },
+                nullable: true
               }
             },
-            required: ["title", "description", "modules", "imagePrompt"]
-        };
-    }
+            required: ["id", "type", "title", "content", "mediaUrl", "duration"]
+          }
+        }
+      },
+      required: ["title", "description", "cards", "tags"]
+    };
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 2048 },
+        thinkingConfig: { thinkingBudget: 2048 }, // Allow it to think about pedagogical structure
         responseMimeType: "application/json",
         responseSchema: schema
       }
     });
 
     if (response.text) {
-      return JSON.parse(response.text) as GeneratedCourseData;
+      const data = JSON.parse(response.text) as GeneratedMicroCourse;
+      // Post-process: Convert keywords to Unsplash URLs for demo
+      data.cards = data.cards.map(card => ({
+          ...card,
+          mediaUrl: `https://source.unsplash.com/800x1200/?${encodeURIComponent(card.mediaUrl || 'hotel')}`
+      }));
+      return data;
     }
     return null;
+
   } catch (error) {
-    console.error("Gemini Course Gen Error:", error);
+    console.error("Gemini Micro-Course Generation Error:", error);
     return null;
   }
 };
@@ -110,22 +115,10 @@ export const translateContent = async (text: string, targetLanguage: string): Pr
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Translate the following hotel training content into ${targetLanguage}. Maintain a professional, hospitable tone. \n\nContent: ${text}`,
+      contents: `Translate to ${targetLanguage}: ${text}`,
     });
     return response.text || text;
   } catch (error) {
-    console.error("Translation Error:", error);
     return text;
-  }
-};
-
-// --- IMAGE GENERATION (REMOVED AI - Using Stock Search) ---
-
-export const generateCourseImage = async (keywords: string): Promise<string | null> => {
-  try {
-    const safeKeywords = (typeof keywords === 'string' && keywords) ? keywords.split(' ')[0] : "hotel";
-    return `https://source.unsplash.com/800x1200/?hotel,${encodeURIComponent(safeKeywords)}`; 
-  } catch (error) {
-    return `https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80`;
   }
 };

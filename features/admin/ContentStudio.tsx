@@ -1,417 +1,278 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-    Upload, Loader2, Send, Trash2, 
-    BarChart2, Zap, Heart, 
-    Users, Globe, Lock, DollarSign, BookOpen, Award, Star, Building2, User, CheckCircle2, Shield, Video
+    Wand2, FileText, Link, Type, Loader2, Play, 
+    CheckCircle2, Save, RotateCcw, Smartphone, Image as ImageIcon
 } from 'lucide-react';
-import { DepartmentType, FeedPost, Interaction, InteractionType, AssignmentType, ContentPriority, KudosType, User as UserType, Course, CourseVisibility, CourseStep, OwnerType } from '../../types';
-import { uploadFile } from '../../services/storage';
-import { createInteractivePost, getUsersByDepartment, sendKudos } from '../../services/db';
-import { publishContent } from '../../services/courseService'; // NEW SERVICE
+import { generateMicroCourse } from '../../services/geminiService';
+import { publishContent } from '../../services/courseService';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
+import { StoryCard, Course } from '../../types';
 
 export const ContentStudio: React.FC = () => {
   const { currentUser } = useAuthStore();
   const { currentOrganization } = useOrganizationStore();
-  
-  // --- IDENTITY SWITCHER STATE ---
-  const [postingAs, setPostingAs] = useState<OwnerType>('USER');
 
-  // State
-  const [activeTab, setActiveTab] = useState<'feed' | 'course' | 'kudos'>('feed');
+  // STAGE: 'INPUT' -> 'GENERATING' -> 'PREVIEW' -> 'PUBLISHED'
+  const [stage, setStage] = useState<'INPUT' | 'GENERATING' | 'PREVIEW' | 'PUBLISHED'>('INPUT');
   
-  // Feed/Story State
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [caption, setCaption] = useState('');
-  const [interactions, setInteractions] = useState<Interaction[]>([]);
+  // INPUT STATE
+  const [inputType, setInputType] = useState<'TEXT' | 'URL'>('TEXT');
+  const [sourceText, setSourceText] = useState('');
+  const [topic, setTopic] = useState('');
   
-  // Course State
-  const [courseTitle, setCourseTitle] = useState('');
-  const [courseDesc, setCourseDesc] = useState('');
-  const [courseVisibility, setCourseVisibility] = useState<CourseVisibility>('PUBLIC');
-  const [coursePrice, setCoursePrice] = useState(0);
-  const [steps, setSteps] = useState<CourseStep[]>([]);
-  const [currentStepFile, setCurrentStepFile] = useState<File | null>(null);
-  const [currentStepTitle, setCurrentStepTitle] = useState('');
-  
-  // Targeting
-  const [showWizard, setShowWizard] = useState(false);
-  const [assignmentType, setAssignmentType] = useState<AssignmentType>('DEPARTMENT');
-  const [targetDepts, setTargetDepts] = useState<DepartmentType[]>(['housekeeping']);
-  const [priority, setPriority] = useState<ContentPriority>('NORMAL');
-  
-  // Kudos
-  const [kudosDept, setKudosDept] = useState<DepartmentType>('housekeeping');
-  const [deptUsers, setDeptUsers] = useState<UserType[]>([]);
-  const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
-  const [selectedBadge, setSelectedBadge] = useState<KudosType>('STAR_PERFORMER');
-  
-  // UI
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [activeInteractionId, setActiveInteractionId] = useState<string | null>(null);
+  // GENERATED DATA
+  const [generatedCourse, setGeneratedCourse] = useState<{
+      title: string;
+      description: string;
+      cards: StoryCard[];
+      tags: string[];
+  } | null>(null);
 
-  // Load users when department changes in Kudos mode
-  useEffect(() => {
-      if (activeTab === 'kudos' && currentUser && currentUser.currentOrganizationId) {
-          getUsersByDepartment(kudosDept, currentUser.currentOrganizationId).then(setDeptUsers);
-      }
-  }, [kudosDept, activeTab, currentUser]);
+  // SETTINGS
+  const [targetAudience, setTargetAudience] = useState('New Staff');
+  const [tone, setTone] = useState<'PROFESSIONAL' | 'FUN'>('FUN');
 
-  // Effect: Reset visibility defaults when switching identity
-  useEffect(() => {
-      if (postingAs === 'USER') {
-          setCourseVisibility('PUBLIC');
+  // PREVIEW STATE
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
+
+  const handleMagicGenerate = async () => {
+      if (!sourceText && !topic) return;
+      setStage('GENERATING');
+
+      // Combine Topic + Source for context
+      const fullContext = `TOPIC: ${topic}\n\nCONTENT:\n${sourceText}`;
+
+      const result = await generateMicroCourse(fullContext, {
+          targetAudience,
+          tone,
+          language: 'Turkish' // Hardcoded for demo, can be dynamic
+      });
+
+      if (result) {
+          setGeneratedCourse(result);
+          setStage('PREVIEW');
       } else {
-          setCourseVisibility('PRIVATE');
-      }
-  }, [postingAs]);
-
-  // Determine Creator Capability
-  const isExpert = currentUser?.creatorLevel === 'EXPERT' || currentUser?.creatorLevel === 'MASTER';
-  const isNovice = !isExpert;
-
-  // Handlers
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files?.[0]) {
-          const f = e.target.files[0];
-          setFile(f);
-          setPreviewUrl(URL.createObjectURL(f));
+          alert("AI Üretimi Başarısız Oldu. Lütfen tekrar deneyin.");
+          setStage('INPUT');
       }
   };
 
-  const handleStepFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files?.[0]) {
-          setCurrentStepFile(e.target.files[0]);
-      }
-  };
-
-  const addStep = async () => {
-      if(!currentStepFile || !currentStepTitle) return;
+  const handlePublish = async () => {
+      if (!generatedCourse || !currentUser) return;
       
-      const newStep: CourseStep = {
-          id: Date.now().toString(),
-          type: currentStepFile.type.startsWith('video') ? 'video' : 'quiz', // Simplified
-          title: currentStepTitle,
-          description: '',
+      const newCourse: any = {
+          organizationId: currentOrganization?.id,
+          authorId: currentUser.id,
+          ownerType: currentOrganization ? 'ORGANIZATION' : 'USER',
+          visibility: 'PUBLIC', // Default
+          title: generatedCourse.title,
+          description: generatedCourse.description,
+          thumbnailUrl: generatedCourse.cards[0].mediaUrl || 'https://via.placeholder.com/400',
+          duration: Math.ceil(generatedCourse.cards.reduce((acc, c) => acc + c.duration, 0) / 60),
+          xpReward: 500,
+          steps: generatedCourse.cards, // Map StoryCards to Steps
+          tags: generatedCourse.tags,
+          priority: 'NORMAL',
+          price: 0,
+          priceType: 'FREE'
       };
-      
-      setSteps([...steps, newStep]);
-      setCurrentStepTitle('');
-      setCurrentStepFile(null);
-  };
 
-  const handlePublishKudos = async () => {
-      if (!selectedUser || !currentUser) return;
-      setIsPublishing(true);
-      const success = await sendKudos(
-          currentUser,
-          selectedUser.id,
-          selectedUser.name,
-          selectedUser.avatar,
-          selectedBadge,
-          caption || `Tebrikler ${selectedUser.name}! Harika iş çıkardın.`
-      );
+      const success = await publishContent(newCourse, currentUser);
       if (success) {
-          setIsSuccess(true);
-          setTimeout(() => { setIsSuccess(false); setCaption(''); setSelectedUser(null); }, 2000);
-      }
-      setIsPublishing(false);
-  };
-
-  const handlePublishCourse = async () => {
-      if (!currentUser) return;
-      if (postingAs === 'ORGANIZATION' && !currentUser.currentOrganizationId) return;
-
-      setIsPublishing(true);
-
-      try {
-          // Upload Thumbnail (using `file` state for cover)
-          let thumbUrl = '';
-          if (file) thumbUrl = await uploadFile(file, 'course_covers');
-
-          const newCourse: any = {
-              organizationId: postingAs === 'ORGANIZATION' ? currentUser.currentOrganizationId! : undefined,
-              authorId: currentUser.id,
-              ownerType: postingAs,
-              visibility: courseVisibility,
-              price: courseVisibility === 'PUBLIC' ? coursePrice : 0,
-              priceType: coursePrice > 0 ? 'PAID' : 'FREE',
-              categoryId: 'cat_onboarding', // Default for now
-              title: courseTitle,
-              description: courseDesc,
-              thumbnailUrl: thumbUrl || 'https://via.placeholder.com/400',
-              duration: steps.length * 5, // Estimate
-              xpReward: 500,
-              // Only apply targeting if Corporate Private
-              assignmentType: (postingAs === 'ORGANIZATION' && courseVisibility === 'PRIVATE') ? 'DEPARTMENT' : 'OPTIONAL',
-              targetDepartments: (postingAs === 'ORGANIZATION' && courseVisibility === 'PRIVATE') ? ['housekeeping'] : [],
-              priority: priority,
-              steps: steps,
-              discussionBoardId: `discuss_${Date.now()}` // Auto-create ID
-          };
-
-          // Use the new Service that handles Tiers & Verification
-          await publishContent(newCourse, currentUser);
-          
-          setIsSuccess(true);
-          setTimeout(() => {
-              setIsSuccess(false);
-              setCourseTitle('');
-              setCourseDesc('');
-              setSteps([]);
-              setFile(null);
-          }, 2000);
-
-      } catch (e) {
-          console.error(e);
-          alert("Kurs oluşturulamadı.");
-      } finally {
-          setIsPublishing(false);
+          setStage('PUBLISHED');
       }
   };
 
-  const handlePublishFeed = async () => {
-      if (!file || !currentUser || !currentUser.currentOrganizationId) return;
-      setIsPublishing(true);
-      try {
-          const url = await uploadFile(file, 'feed_posts');
-          const newPost: Omit<FeedPost, 'id'> = {
-              organizationId: currentUser.currentOrganizationId,
-              authorId: currentUser.id,
-              authorName: currentUser.name,
-              authorAvatar: currentUser.avatar,
-              assignmentType: assignmentType,
-              targetDepartments: assignmentType === 'GLOBAL' ? ['housekeeping', 'kitchen', 'front_office', 'management'] : targetDepts,
-              priority: priority,
-              type: file.type.startsWith('video') ? 'video' : 'image',
-              mediaUrl: url,
-              caption: caption,
-              likes: 0,
-              createdAt: Date.now(),
-              likedBy: [],
-              interactions: interactions
-          };
-          await createInteractivePost(newPost);
-          setIsSuccess(true);
-          setTimeout(() => {
-              setIsSuccess(false);
-              setShowWizard(false);
-              setFile(null);
-              setPreviewUrl(null);
-              setCaption('');
-              setInteractions([]);
-          }, 2000);
-      } catch (error) { console.error(error); alert("Yayınlama hatası"); } finally { setIsPublishing(false); }
-  };
+  // --- RENDER STAGES ---
 
-  // --- IDENTITY SWITCHER UI ---
-  const renderIdentitySwitcher = () => (
-      <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
-          <button 
-            onClick={() => setPostingAs('USER')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-all ${postingAs === 'USER' ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}
-          >
-              <User className="w-4 h-4" /> Bireysel
-          </button>
-          {currentOrganization && (currentUser?.role === 'manager' || currentUser?.role === 'admin') && (
-              <button 
-                onClick={() => setPostingAs('ORGANIZATION')}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-bold transition-all ${postingAs === 'ORGANIZATION' ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}
-              >
-                  <Building2 className="w-4 h-4" /> {currentOrganization.name}
-              </button>
-          )}
-      </div>
-  );
-
-  if (isSuccess) {
+  if (stage === 'PUBLISHED') {
       return (
-          <div className="flex flex-col items-center justify-center h-[70vh] animate-in zoom-in">
+          <div className="flex flex-col items-center justify-center h-[80vh] animate-in zoom-in">
               <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-6">
                   <CheckCircle2 className="w-12 h-12" />
               </div>
-              <h2 className="text-3xl font-bold text-gray-800">Yayında!</h2>
-              <p className="text-gray-500 mt-2">İçerik başarıyla paylaşıldı.</p>
+              <h2 className="text-3xl font-bold text-gray-800">Harika İş!</h2>
+              <p className="text-gray-500 mt-2">Mikro-Eğitim başarıyla yayınlandı.</p>
+              <button onClick={() => window.location.reload()} className="mt-8 bg-gray-100 px-6 py-3 rounded-xl font-bold text-gray-700">Yeni Oluştur</button>
           </div>
       );
   }
 
   return (
-    <div className="flex flex-col xl:flex-row gap-8 h-[calc(100vh-100px)] relative">
+    <div className="flex h-[calc(100vh-100px)] gap-8">
         
-        {/* LEFT PANEL: EDITOR & TOOLS */}
+        {/* LEFT PANEL: CONTROLS */}
         <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2">
             
-            {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-gray-800">İçerik Stüdyosu</h1>
-                <p className="text-gray-500 text-sm">İçeriği tasarla, etkileşim ekle ve yayınla.</p>
+            <div className="mb-2">
+                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <Wand2 className="w-6 h-6 text-accent" />
+                    Sihirli Stüdyo
+                </h1>
+                <p className="text-gray-500 text-sm">Ham içeriği saniyeler içinde etkileşimli bir Story serisine dönüştürün.</p>
             </div>
 
-            {/* IDENTITY SWITCHER */}
-            {renderIdentitySwitcher()}
+            {stage === 'INPUT' && (
+                <div className="flex flex-col gap-6 animate-in slide-in-from-left-4">
+                    {/* Source Selector */}
+                    <div className="bg-gray-50 p-1 rounded-xl flex">
+                        <button onClick={() => setInputType('TEXT')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${inputType === 'TEXT' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}>
+                            <Type className="w-4 h-4" /> Metin / Konu
+                        </button>
+                        <button onClick={() => setInputType('URL')} className={`flex-1 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${inputType === 'URL' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}>
+                            <Link className="w-4 h-4" /> Link / PDF
+                        </button>
+                    </div>
 
-            {/* Mode Switcher */}
-            <div className="flex bg-gray-100 p-1 rounded-xl w-max overflow-x-auto">
-                {postingAs === 'ORGANIZATION' && (
-                    <button onClick={() => setActiveTab('feed')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'feed' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Haber Akışı</button>
-                )}
-                
-                {/* Course Tab: Logic for Novices */}
-                <button 
-                    onClick={() => setActiveTab('course')} 
-                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'course' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                    {isNovice && postingAs === 'USER' ? (
-                        <><Video className="w-4 h-4" /> Shorts / İpucu</>
-                    ) : (
-                        <><BookOpen className="w-4 h-4" /> Tam Kurs</>
-                    )}
-                </button>
-
-                {postingAs === 'ORGANIZATION' && (
-                    <button onClick={() => setActiveTab('kudos')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'kudos' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                        <Award className="w-4 h-4" /> Takdir
-                    </button>
-                )}
-            </div>
-
-            {/* --- COURSE MODE --- */}
-            {activeTab === 'course' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                    
-                    {/* NOVICE WARNING */}
-                    {isNovice && postingAs === 'USER' && (
-                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex gap-3 text-sm text-blue-700">
-                            <Shield className="w-5 h-5 shrink-0" />
-                            <div>
-                                <span className="font-bold block">Başlangıç Seviyesi</span>
-                                Şu anda sadece maksimum 5 dakikalık "Shorts" veya "Hızlı İpucu" paylaşabilirsin. İtibar puanın arttıkça Uzman Kursları açılacaktır.
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 1. Visibility Logic */}
-                    {postingAs === 'USER' ? (
-                        <div className="p-4 bg-gray-50 border-gray-200 border rounded-xl flex items-center gap-3 text-gray-700">
-                            <Globe className="w-5 h-5" />
-                            <div className="text-xs">
-                                <span className="font-bold block">Topluluk Akışı</span>
-                                Bu içerik "Keşfet" sayfasında yayınlanacak ve topluluk tarafından oylanacaktır.
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 gap-4">
-                            <button 
-                                onClick={() => { setCourseVisibility('PRIVATE'); setCoursePrice(0); }}
-                                className={`p-4 rounded-2xl border-2 text-left transition-all ${courseVisibility === 'PRIVATE' ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'border-gray-100 bg-white hover:border-gray-200'}`}
-                            >
-                                <div className="flex items-center gap-2 mb-2 font-bold text-gray-800">
-                                    <Lock className="w-5 h-5 text-gray-600" />
-                                    Şirket İçi
-                                </div>
-                                <p className="text-xs text-gray-500">Sadece personel görür. Zorunlu atama yapılabilir.</p>
-                            </button>
-                            
-                            <button 
-                                onClick={() => setCourseVisibility('PUBLIC')}
-                                className={`p-4 rounded-2xl border-2 text-left transition-all ${courseVisibility === 'PUBLIC' ? 'border-accent bg-accent/5 ring-2 ring-accent/20' : 'border-gray-100 bg-white hover:border-gray-200'}`}
-                            >
-                                <div className="flex items-center gap-2 mb-2 font-bold text-gray-800">
-                                    <Globe className="w-5 h-5 text-accent" />
-                                    Marketplace
-                                </div>
-                                <p className="text-xs text-gray-500">Şirket adına satılabilir içerik.</p>
-                            </button>
-                        </div>
-                    )}
-
-                    {courseVisibility === 'PUBLIC' && !isNovice && (
-                        <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex items-center gap-4 animate-in fade-in">
-                            <div className="p-2 bg-green-100 rounded-full text-green-600"><DollarSign className="w-5 h-5" /></div>
-                            <div className="flex-1">
-                                <label className="text-xs font-bold text-green-800 uppercase">Ücret ($)</label>
-                                <input 
-                                    type="number" 
-                                    value={coursePrice} 
-                                    onChange={e => setCoursePrice(Number(e.target.value))}
-                                    className="w-full bg-transparent border-none text-xl font-bold text-green-900 outline-none p-0"
-                                    placeholder="0"
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 2. Course Details */}
+                    {/* Inputs */}
                     <div className="space-y-4">
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase">Başlık</label>
+                            <label className="text-xs font-bold text-gray-400 uppercase mb-1">Eğitim Konusu</label>
                             <input 
-                                value={courseTitle} 
-                                onChange={e => setCourseTitle(e.target.value)}
-                                className="w-full p-3 bg-white border border-gray-200 rounded-xl" 
-                                placeholder={isNovice ? "Örn: 30 Saniyede Yatak Yapımı" : "Örn: İleri Seviye Kahve Teknikleri"}
+                                value={topic}
+                                onChange={e => setTopic(e.target.value)}
+                                placeholder="Örn: Müşteri Karşılama Teknikleri"
+                                className="w-full p-4 bg-white border-2 border-gray-100 rounded-xl font-bold text-gray-800 focus:border-accent outline-none"
                             />
                         </div>
+                        
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase">Kapak Görseli</label>
-                            <input type="file" className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" onChange={handleFileSelect} />
+                            <label className="text-xs font-bold text-gray-400 uppercase mb-1">Kaynak İçerik</label>
+                            <textarea 
+                                value={sourceText}
+                                onChange={e => setSourceText(e.target.value)}
+                                placeholder={inputType === 'TEXT' ? "Eğitim metnini buraya yapıştırın veya anahtar noktaları yazın..." : "Web sitesi linkini veya PDF metnini buraya yapıştırın..."}
+                                className="w-full p-4 bg-white border-2 border-gray-100 rounded-xl font-medium text-gray-600 focus:border-accent outline-none h-40 resize-none"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Settings */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 uppercase mb-1">Hedef Kitle</label>
+                            <select value={targetAudience} onChange={e => setTargetAudience(e.target.value)} className="w-full p-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-700">
+                                <option>Yeni Başlayanlar</option>
+                                <option>Uzman Personel</option>
+                                <option>Yöneticiler</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 uppercase mb-1">Ton</label>
+                            <select value={tone} onChange={e => setTone(e.target.value as any)} className="w-full p-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-700">
+                                <option value="FUN">Eğlenceli & Samimi</option>
+                                <option value="PROFESSIONAL">Kurumsal & Ciddi</option>
+                            </select>
                         </div>
                     </div>
 
                     <button 
-                        onClick={handlePublishCourse}
-                        disabled={isPublishing || !courseTitle}
-                        className="w-full bg-primary hover:bg-primary-light text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 transition-all active:scale-[0.98]"
+                        onClick={handleMagicGenerate}
+                        disabled={!topic}
+                        className="w-full bg-gradient-to-r from-accent to-accent-dark text-primary py-4 rounded-xl font-bold text-lg shadow-xl shadow-accent/20 hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
                     >
-                        {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                        {isNovice ? 'Shorts Paylaş' : 'Kursu Yayınla'}
+                        <Wand2 className="w-6 h-6" /> Sihirli Oluştur
                     </button>
                 </div>
             )}
 
-            {/* --- KUDOS MODE (Org Only) --- */}
-            {activeTab === 'kudos' && postingAs === 'ORGANIZATION' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                    {/* ... Kudos Logic Same as Before ... */}
-                    <div className="mt-auto border-t border-gray-100 pt-4">
-                        <button 
-                            onClick={handlePublishKudos}
-                            disabled={!selectedUser || isPublishing}
-                            className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 transition-all active:scale-[0.98]"
-                        >
-                            {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                            Takdir Gönder & Yayınla
-                        </button>
+            {stage === 'GENERATING' && (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                    <div className="relative mb-6">
+                        <div className="w-24 h-24 border-4 border-gray-100 rounded-full animate-spin border-t-accent" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <Wand2 className="w-8 h-8 text-accent animate-pulse" />
+                        </div>
                     </div>
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">Yapay Zeka Çalışıyor...</h3>
+                    <p className="text-gray-500 max-w-xs">İçeriğiniz analiz ediliyor, sorular hazırlanıyor ve story kartları oluşturuluyor.</p>
                 </div>
             )}
 
-            {/* --- FEED MODE (Org Only) --- */}
-            {activeTab === 'feed' && postingAs === 'ORGANIZATION' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                    {/* ... Feed Logic Same as Before ... */}
-                    <div className="mt-auto border-t border-gray-100 pt-4">
-                        <button 
-                            onClick={() => setShowWizard(true)}
-                            disabled={!file}
-                            className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 transition-all active:scale-[0.98]"
-                        >
-                            Devam Et
+            {stage === 'PREVIEW' && generatedCourse && (
+                <div className="flex flex-col gap-6 animate-in slide-in-from-bottom-8">
+                    <div className="bg-green-50 border border-green-100 p-4 rounded-xl flex items-start gap-3">
+                        <CheckCircle2 className="w-6 h-6 text-green-600 shrink-0" />
+                        <div>
+                            <h3 className="font-bold text-green-800">Hazır!</h3>
+                            <p className="text-green-700 text-sm">AI, {generatedCourse.cards.length} kartlık bir seri oluşturdu. Sağ taraftan önizleyebilirsiniz.</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase">Kart Listesi</label>
+                        <div className="flex flex-col gap-2 max-h-[400px] overflow-y-auto pr-1">
+                            {generatedCourse.cards.map((card, idx) => (
+                                <div 
+                                    key={idx}
+                                    onClick={() => setActiveCardIndex(idx)}
+                                    className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${activeCardIndex === idx ? 'bg-primary text-white border-primary shadow-md' : 'bg-white border-gray-100 hover:border-gray-300'}`}
+                                >
+                                    <div className="font-mono text-xs opacity-50">{idx + 1}</div>
+                                    <div className="flex-1 font-bold text-sm truncate">{card.title}</div>
+                                    <div className="text-[10px] uppercase font-bold opacity-70 border border-current px-1 rounded">{card.type}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 mt-auto">
+                        <button onClick={() => setStage('INPUT')} className="flex-1 py-3 border-2 border-gray-200 text-gray-500 font-bold rounded-xl hover:bg-gray-50 flex items-center justify-center gap-2">
+                            <RotateCcw className="w-4 h-4" /> Vazgeç
+                        </button>
+                        <button onClick={handlePublish} className="flex-[2] bg-primary text-white py-3 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-primary-light">
+                            <Save className="w-4 h-4" /> Yayınla
                         </button>
                     </div>
                 </div>
             )}
         </div>
 
-        {/* RIGHT PANEL PREVIEW */}
+        {/* RIGHT PANEL: PHONE SIMULATOR */}
         <div className="flex-1 bg-gray-100 rounded-[2.5rem] p-8 flex items-center justify-center relative overflow-hidden border border-gray-200 shadow-inner">
-             <div className="text-center text-gray-400">Canlı Önizleme</div>
+             {stage === 'PREVIEW' && generatedCourse ? (
+                 <div className="w-[300px] h-[600px] bg-black rounded-[2rem] border-8 border-gray-800 shadow-2xl overflow-hidden relative">
+                     {/* Header Bar */}
+                     <div className="absolute top-0 left-0 right-0 h-1 z-20 flex gap-1 px-2 pt-2">
+                         {generatedCourse.cards.map((_, i) => (
+                             <div key={i} className={`h-1 flex-1 rounded-full ${i === activeCardIndex ? 'bg-white' : i < activeCardIndex ? 'bg-white' : 'bg-white/30'}`} />
+                         ))}
+                     </div>
+
+                     {/* Content */}
+                     <div className="relative w-full h-full">
+                         <img 
+                            src={generatedCourse.cards[activeCardIndex].mediaUrl} 
+                            className="w-full h-full object-cover opacity-60" 
+                         />
+                         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80" />
+                         
+                         <div className="absolute bottom-0 left-0 right-0 p-6 pb-12 text-white">
+                             <div className="inline-block px-2 py-1 rounded bg-accent text-primary text-[10px] font-bold mb-2 uppercase">{generatedCourse.cards[activeCardIndex].type}</div>
+                             <h2 className="text-2xl font-bold mb-2 leading-tight">{generatedCourse.cards[activeCardIndex].title}</h2>
+                             <p className="text-sm opacity-90 leading-relaxed">{generatedCourse.cards[activeCardIndex].content}</p>
+                             
+                             {generatedCourse.cards[activeCardIndex].interaction && (
+                                 <div className="mt-4 flex flex-col gap-2">
+                                     {generatedCourse.cards[activeCardIndex].interaction?.options.map((opt, i) => (
+                                         <div key={i} className="bg-white/20 backdrop-blur-sm p-3 rounded-lg text-xs font-bold border border-white/10">
+                                             {opt}
+                                         </div>
+                                     ))}
+                                 </div>
+                             )}
+                         </div>
+                     </div>
+                 </div>
+             ) : (
+                 <div className="flex flex-col items-center text-gray-400">
+                     <Smartphone className="w-16 h-16 mb-4 opacity-20" />
+                     <p>Önizleme burada görünecek</p>
+                 </div>
+             )}
         </div>
     </div>
   );
