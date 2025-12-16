@@ -56,26 +56,39 @@ export const updateCourse = async (courseId: string, data: Partial<Course>): Pro
 };
 
 /**
- * FIX 1: Comprehensive Admin Fetcher
- * Fetches courses where user is Author OR courses belonging to their Organization.
+ * FIX: Safe Data Mapping to prevent crashes on undefined fields.
  */
 export const getAdminCourses = async (userId: string, orgId?: string | null): Promise<Course[]> => {
     try {
         const results = new Map<string, Course>();
 
+        // Helper to safely map Doc to Course
+        const safeMap = (d: any): Course => {
+            const data = d.data();
+            return {
+                id: d.id,
+                ...data,
+                title: data.title || 'Untitled Course',
+                thumbnailUrl: data.thumbnailUrl || 'https://via.placeholder.com/400',
+                categoryId: data.categoryId || 'cat_general',
+                createdAt: data.createdAt || Date.now(),
+                // Fill other potentially missing fields
+            } as Course;
+        };
+
         // 1. Fetch "My Created Courses"
-        const authorQ = query(coursesRef, where('authorId', '==', userId), orderBy('createdAt', 'desc'));
+        const authorQ = query(coursesRef, where('authorId', '==', userId));
         const authorSnap = await getDocs(authorQ);
-        authorSnap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() } as Course));
+        authorSnap.docs.forEach(d => results.set(d.id, safeMap(d)));
 
         // 2. Fetch "Organization Courses" (if org exists)
         if (orgId) {
-            const orgQ = query(coursesRef, where('organizationId', '==', orgId), orderBy('createdAt', 'desc'));
+            const orgQ = query(coursesRef, where('organizationId', '==', orgId));
             const orgSnap = await getDocs(orgQ);
-            orgSnap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() } as Course));
+            orgSnap.docs.forEach(d => results.set(d.id, safeMap(d)));
         }
 
-        // Return deduplicated list sorted by date
+        // 3. Client-Side Sort (Newest First)
         return Array.from(results.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (e) {
         console.error("Get Admin Courses Error:", e);
@@ -85,9 +98,13 @@ export const getAdminCourses = async (userId: string, orgId?: string | null): Pr
 
 export const getOrgCourses = async (orgId: string): Promise<Course[]> => {
     try {
-        const q = query(coursesRef, where('organizationId', '==', orgId), orderBy('createdAt', 'desc'));
+        // Removed orderBy
+        const q = query(coursesRef, where('organizationId', '==', orgId));
         const snap = await getDocs(q);
-        return snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+        // Client-side sort
+        return snap.docs
+            .map(d => ({id: d.id, ...d.data()} as Course))
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (e) {
         return [];
     }
@@ -96,15 +113,15 @@ export const getOrgCourses = async (orgId: string): Promise<Course[]> => {
 // --- HYBRID FEED ALGORITHMS ---
 
 /**
- * FIX 2: Ensures Public content is visible in the feed alongside Org content.
+ * FIX: Removed orderBy to ensure Public/Private content appears without complex indexing.
  */
 export const getHybridContent = async (user: User): Promise<Course[]> => {
     try {
         const results = new Map<string, Course>();
 
-        // 1. Fetch Public Content (Global Marketplace)
-        // Note: 'visibility' index needed in Firestore
-        const publicQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), orderBy('createdAt', 'desc'), limit(50));
+        // 1. Fetch Public Content
+        // Removed orderBy('createdAt') to prevent crash if index missing
+        const publicQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), limit(50));
         const publicSnap = await getDocs(publicQ);
         publicSnap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() } as Course));
 
@@ -112,17 +129,14 @@ export const getHybridContent = async (user: User): Promise<Course[]> => {
         if (user.currentOrganizationId) {
             const privateQ = query(
                 coursesRef, 
-                where('organizationId', '==', user.currentOrganizationId), 
-                // We fetch all org content, client can filter PRIVATE later if needed, but usually org members see all org content.
-                // Optimally: where('visibility', '==', 'PRIVATE') but some org content might be public too.
-                orderBy('createdAt', 'desc'), 
+                where('organizationId', '==', user.currentOrganizationId),
                 limit(50)
             );
             const privateSnap = await getDocs(privateQ);
             privateSnap.docs.forEach(d => results.set(d.id, { id: d.id, ...d.data() } as Course));
         }
 
-        // 3. Convert Map to Array & Sort
+        // 3. Client-Side Sort (Newest First)
         return Array.from(results.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     } catch (error) {
@@ -135,15 +149,17 @@ export const getFeedPosts = async (dept: DepartmentType | null, orgId: string | 
     try {
         if (!orgId) return [];
 
+        // Removed orderBy
         const q = query(
             postsRef, 
             where('organizationId', '==', orgId),
-            orderBy('createdAt', 'desc'),
             limit(50)
         );
 
         const snap = await getDocs(q);
-        const allPosts = snap.docs.map(d => ({id: d.id, ...d.data()} as FeedPost));
+        const allPosts = snap.docs
+            .map(d => ({id: d.id, ...d.data()} as FeedPost))
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // Sort here
 
         if (dept) {
              return allPosts.filter(p => {
@@ -187,9 +203,11 @@ export const searchOrganizations = async (searchTerm: string): Promise<Organizat
 
 export const getAllPublicOrganizations = async (): Promise<Organization[]> => {
     try {
-        const q = query(orgsRef, limit(20), orderBy('createdAt', 'desc'));
+        const q = query(orgsRef, limit(20)); // Removed orderBy
         const snap = await getDocs(q);
-        return snap.docs.map(d => ({id: d.id, ...d.data()} as Organization));
+        return snap.docs
+            .map(d => ({id: d.id, ...d.data()} as Organization))
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (e) { return []; }
 };
 
@@ -539,9 +557,12 @@ export const getUserById = async (userId: string): Promise<User | null> => {
 };
 export const getUserPosts = async (userId: string): Promise<FeedPost[]> => {
     try {
-        const q = query(postsRef, where('authorId', '==', userId), orderBy('createdAt', 'desc'), limit(20));
+        // Removed orderBy
+        const q = query(postsRef, where('authorId', '==', userId), limit(20));
         const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
+        return snapshot.docs
+            .map(d => ({ id: doc.id, ...doc.data() } as FeedPost))
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (e) { return []; }
 };
 export const findOrganizationByCode = async (code: string): Promise<Organization | null> => {
@@ -645,7 +666,9 @@ export const getInstructorCourses = async (authorId: string): Promise<Course[]> 
     try {
         const q = query(coursesRef, where('authorId', '==', authorId));
         const snap = await getDocs(q);
-        return snap.docs.map(d => ({ id: d.id, ...d.data() } as Course));
+        return snap.docs
+            .map(d => ({ id: d.id, ...d.data() } as Course))
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (e) { return []; }
 };
 export const getCourses = async (orgId?: string): Promise<Course[]> => {

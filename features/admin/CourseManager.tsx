@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-    Loader2, Search, MoreVertical, Edit, Globe, Lock, Trash2, 
+    Loader2, Search, MoreVertical, Pencil, Globe, Lock, Trash2, 
     Eye, AlertCircle, CheckCircle2, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -32,13 +32,21 @@ export const CourseManager: React.FC = () => {
   const fetchCourses = async () => {
       if (!currentUser) return;
       setLoading(true);
-      // FIX 1: Use getAdminCourses to fetch both personal and org content
-      const data = await getAdminCourses(currentUser.id, currentOrganization?.id);
-      setCourses(data);
-      setLoading(false);
+      try {
+          const data = await getAdminCourses(currentUser.id, currentOrganization?.id);
+          setCourses(data || []);
+      } catch (error) {
+          console.error("Course fetch error:", error);
+          setCourses([]);
+      } finally {
+          setLoading(false);
+      }
   };
 
-  const filteredCourses = courses.filter(c => c.title.toLowerCase().includes(searchTerm.toLowerCase()));
+  // CRASH FIX: Safe filtering. If title is missing, fallback to empty string so toLowerCase() doesn't crash.
+  const filteredCourses = courses.filter(c => 
+      (c.title || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const handleDelete = async () => {
       if (!deleteTarget) return;
@@ -108,8 +116,12 @@ export const CourseManager: React.FC = () => {
                         className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden group hover:shadow-md transition-shadow relative"
                     >
                         {/* Image */}
-                        <div className="aspect-video relative">
-                            <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
+                        <div className="aspect-video relative bg-gray-100">
+                            <img 
+                                src={course.thumbnailUrl || 'https://via.placeholder.com/400'} 
+                                className="w-full h-full object-cover" 
+                                alt={course.title || 'Course'}
+                            />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                             <div className="absolute top-3 right-3">
                                 {course.visibility === 'PUBLIC' ? (
@@ -124,16 +136,20 @@ export const CourseManager: React.FC = () => {
                             </div>
                             <div className="absolute bottom-3 left-3 text-white text-xs font-bold flex items-center gap-2">
                                 <span className="bg-black/30 px-2 py-1 rounded backdrop-blur-sm flex items-center gap-1">
-                                    <Clock className="w-3 h-3" /> {course.duration} dk
+                                    <Clock className="w-3 h-3" /> {course.duration || 0} dk
                                 </span>
                             </div>
                         </div>
 
                         {/* Content */}
                         <div className="p-5">
-                            <h3 className="font-bold text-gray-800 text-lg leading-tight mb-2 line-clamp-1">{course.title}</h3>
+                            <h3 className="font-bold text-gray-800 text-lg leading-tight mb-2 line-clamp-1">
+                                {course.title || "Adsız İçerik"}
+                            </h3>
                             <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
-                                <span className="bg-gray-100 px-2 py-0.5 rounded capitalize">{course.categoryId.replace('cat_', '')}</span>
+                                <span className="bg-gray-100 px-2 py-0.5 rounded capitalize">
+                                    {(course.categoryId || 'Genel').replace('cat_', '')}
+                                </span>
                                 <span>•</span>
                                 <span>{new Date(course.createdAt || Date.now()).toLocaleDateString()}</span>
                             </div>
@@ -162,7 +178,7 @@ export const CourseManager: React.FC = () => {
                                                     className="absolute bottom-full right-0 mb-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-20 overflow-hidden"
                                                 >
                                                     <button onClick={() => handleEdit(course)} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-2 text-sm text-gray-700 font-medium">
-                                                        <Edit className="w-4 h-4" /> Düzenle
+                                                        <Pencil className="w-4 h-4" /> Düzenle
                                                     </button>
                                                     <button onClick={() => handleTogglePrivacy(course)} className="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-2 text-sm text-gray-700 font-medium border-t border-gray-50">
                                                         {course.visibility === 'PUBLIC' ? <Lock className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
