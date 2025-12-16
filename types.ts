@@ -13,6 +13,13 @@ export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'mana
 export type UserRole = 'staff' | 'manager' | 'admin' | 'super_admin'; // Added super_admin
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
+// --- PERMISSIONS MATRIX ---
+export type PermissionType = 
+    | 'CAN_CREATE_CONTENT'   // Eğitim/Post atabilir
+    | 'CAN_MANAGE_TEAM'      // Personel onayı/reddi
+    | 'CAN_VIEW_ANALYTICS'   // Raporları görme
+    | 'CAN_EDIT_SETTINGS';   // Kurum ayarları
+
 // --- USER LIFECYCLE TYPES ---
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 
@@ -49,7 +56,7 @@ export type OrganizationSize = '1-10' | '11-50' | '50-200' | '200+';
 
 export interface OrganizationSettings {
     allowStaffContentCreation: boolean; // Can staff post to feed?
-    customDepartments: string[]; // ["Spa", "Security", "Animation"]
+    customDepartments: string[]; // ["Spa", "Security", "Animation"] - DYNAMIC DEPARTMENTS
     primaryColor?: string;
 }
 
@@ -90,7 +97,11 @@ export interface Membership {
   id: string;
   userId: string;
   organizationId: string;
-  role: UserRole;
+  
+  role: UserRole; // System Level Role (Admin/Manager/Staff)
+  roleTitle?: string; // Display Title (e.g. "Executive Chef", "Shift Leader")
+  permissions?: PermissionType[]; // Granular Capabilities
+  
   department: DepartmentType;
   status: MembershipStatus;
   joinedAt: number;

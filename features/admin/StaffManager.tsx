@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Plus, User as UserIcon, Loader2, CheckCircle2, ArrowRight } from 'lucide-react';
-import { DepartmentType, User } from '../../types';
+import { Search, Plus, User as UserIcon, Loader2, CheckCircle2, ArrowRight, Shield, BadgeCheck, Briefcase } from 'lucide-react';
+import { DepartmentType, User, PermissionType } from '../../types';
 import { getUsersByDepartment, searchUserByPhone, inviteUserToOrg } from '../../services/db';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
@@ -14,26 +14,39 @@ export const StaffManager: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
-  const [selectedDept, setSelectedDept] = useState<DepartmentType | 'all'>('all');
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
 
   // Invite Flow State
   const [searchPhone, setSearchPhone] = useState('');
   const [foundUser, setFoundUser] = useState<User | null>(null);
-  const [inviteDept, setInviteDept] = useState<DepartmentType>('housekeeping');
+  const [inviteDept, setInviteDept] = useState<string>('');
+  const [inviteRoleTitle, setInviteRoleTitle] = useState('');
+  const [invitePermissions, setInvitePermissions] = useState<PermissionType[]>([]);
   const [isInviting, setIsInviting] = useState(false);
 
-  // Fetch Users for current org
+  // Available Permissions Config
+  const AVAILABLE_PERMISSIONS: { id: PermissionType; label: string; desc: string }[] = [
+      { id: 'CAN_CREATE_CONTENT', label: 'İçerik Üreticisi', desc: 'Eğitim ve post paylaşabilir.' },
+      { id: 'CAN_MANAGE_TEAM', label: 'Takım Yöneticisi', desc: 'Personel onaylayıp çıkarabilir.' },
+      { id: 'CAN_VIEW_ANALYTICS', label: 'Analist', desc: 'Raporları görüntüleyebilir.' },
+      { id: 'CAN_EDIT_SETTINGS', label: 'Kurum Yöneticisi', desc: 'Kurum ayarlarını değiştirebilir.' },
+  ];
+
+  // Fetch Users
   useEffect(() => {
     const fetchAll = async () => {
         if (!currentOrganization) return;
         setLoading(true);
-        const depts: DepartmentType[] = ['housekeeping', 'kitchen', 'front_office', 'management'];
+        // Get dynamic departments + standard ones
+        const depts = currentOrganization.settings?.customDepartments || ['housekeeping', 'kitchen'];
+        
         let allUsers: User[] = [];
+        // Note: For simplicity in this demo, we iterate. In prod, use a "collectionGroup" query.
         for (const d of depts) {
             const u = await getUsersByDepartment(d, currentOrganization.id);
             allUsers = [...allUsers, ...u];
         }
-        // Remove duplicates just in case
+        
         const uniqueUsers = Array.from(new Map(allUsers.map(item => [item.id, item])).values());
         setUsers(uniqueUsers);
         setLoading(false);
@@ -41,38 +54,51 @@ export const StaffManager: React.FC = () => {
     fetchAll();
   }, [currentOrganization, isAdding]);
 
-  const filteredUsers = selectedDept === 'all' ? users : users.filter(u => u.department === selectedDept);
+  const filteredUsers = selectedDeptFilter === 'all' ? users : users.filter(u => u.department === selectedDeptFilter);
+  const departmentsList = currentOrganization?.settings?.customDepartments || ['housekeeping', 'kitchen'];
 
   const handleSearch = async () => {
       if(!searchPhone) return;
       setIsInviting(true);
-      // Ensure phone format matches DB standard
       let cleanPhone = searchPhone.replace(/\s/g, '');
-      if (!cleanPhone.startsWith('+')) cleanPhone = '+90' + cleanPhone; // Default assumption for demo
+      if (!cleanPhone.startsWith('+')) cleanPhone = '+90' + cleanPhone; 
       
       const user = await searchUserByPhone(cleanPhone);
       setFoundUser(user);
       setIsInviting(false);
   };
 
+  const togglePermission = (perm: PermissionType) => {
+      if (invitePermissions.includes(perm)) {
+          setInvitePermissions(invitePermissions.filter(p => p !== perm));
+      } else {
+          setInvitePermissions([...invitePermissions, perm]);
+      }
+  };
+
   const handleInvite = async () => {
-      if (!foundUser || !currentOrganization) return;
+      if (!foundUser || !currentOrganization || !inviteDept || !inviteRoleTitle) return;
       setIsInviting(true);
-      const success = await inviteUserToOrg(foundUser, currentOrganization.id, inviteDept);
+      
+      const success = await inviteUserToOrg(
+          foundUser, 
+          currentOrganization.id, 
+          inviteDept, 
+          inviteRoleTitle,
+          invitePermissions
+      );
+
       if (success) {
           setIsAdding(false);
           setFoundUser(null);
           setSearchPhone('');
-          alert("Personel başarıyla eklendi.");
+          setInvitePermissions([]);
+          setInviteRoleTitle('');
+          alert("Personel başarıyla davet edildi.");
       } else {
           alert("Bir hata oluştu.");
       }
       setIsInviting(false);
-  };
-
-  const getDeptLabel = (dept?: string | null) => {
-      if (!dept) return 'Departman Yok';
-      return dept.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
   return (
@@ -80,7 +106,7 @@ export const StaffManager: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
             <h1 className="text-2xl font-bold text-gray-800">Personel Yönetimi</h1>
-            <p className="text-gray-500">Ekibe yeni üye davet et.</p>
+            <p className="text-gray-500">Ekibe yeni üye davet et ve yetkilendir.</p>
         </div>
         <button 
             onClick={() => setIsAdding(true)}
@@ -91,18 +117,20 @@ export const StaffManager: React.FC = () => {
         </button>
       </div>
 
+      {/* Filter Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2">
-         {['all', 'housekeeping', 'kitchen', 'front_office', 'management'].map((d) => (
+         <button onClick={() => setSelectedDeptFilter('all')} className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${selectedDeptFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white border border-gray-200 text-gray-600'}`}>Tümü</button>
+         {departmentsList.map((d) => (
              <button
                 key={d}
-                onClick={() => setSelectedDept(d as any)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                    selectedDept === d 
+                onClick={() => setSelectedDeptFilter(d)}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                    selectedDeptFilter === d 
                     ? 'bg-gray-800 text-white' 
                     : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
                 }`}
              >
-                 {d.charAt(0).toUpperCase() + d.slice(1).replace('_', ' ')}
+                 {d}
              </button>
          ))}
       </div>
@@ -122,7 +150,10 @@ export const StaffManager: React.FC = () => {
                     </div>
                     <div>
                         <h3 className="font-bold text-gray-800 leading-tight">{user.name}</h3>
-                        <div className="text-xs text-gray-500">{getDeptLabel(user.department)}</div>
+                        <div className="text-xs text-gray-500 font-bold uppercase mb-1">{user.department}</div>
+                        <div className="text-xs text-primary bg-primary/10 px-2 py-0.5 rounded w-max">
+                            {user.role === 'manager' ? 'Yönetici' : 'Personel'}
+                        </div>
                     </div>
                 </div>
             ))}
@@ -134,18 +165,18 @@ export const StaffManager: React.FC = () => {
 
       {/* INVITE USER MODAL */}
       {isAdding && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <motion.div 
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden"
+                className="bg-white w-full max-w-2xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
               >
-                  <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                      <h2 className="text-xl font-bold text-primary">Personel Davet Et</h2>
+                  <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                      <h2 className="text-xl font-bold text-gray-800">Personel Davet Et</h2>
                       <button onClick={() => { setIsAdding(false); setFoundUser(null); }} className="text-gray-400 hover:text-gray-600 font-medium">İptal</button>
                   </div>
 
-                  <div className="p-8">
+                  <div className="p-8 overflow-y-auto">
                       {!foundUser ? (
                           <div className="space-y-4">
                               <p className="text-gray-500 text-sm">Personelin telefon numarasını girerek sistemde arayın.</p>
@@ -154,12 +185,12 @@ export const StaffManager: React.FC = () => {
                                     value={searchPhone}
                                     onChange={(e) => setSearchPhone(e.target.value)}
                                     placeholder="+90 5XX XXX XX XX"
-                                    className="flex-1 bg-gray-50 border-2 border-gray-100 rounded-xl py-3 px-4 font-bold text-gray-800 focus:border-accent focus:outline-none"
+                                    className="flex-1 bg-white border-2 border-gray-200 rounded-xl py-4 px-6 font-bold text-gray-800 focus:border-primary focus:outline-none text-lg"
                                   />
                                   <button 
                                     onClick={handleSearch}
                                     disabled={isInviting || !searchPhone}
-                                    className="bg-primary text-white px-6 rounded-xl font-bold hover:bg-primary-light transition-colors"
+                                    className="bg-primary text-white px-8 rounded-xl font-bold hover:bg-primary-light transition-colors"
                                   >
                                       {isInviting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
                                   </button>
@@ -167,44 +198,83 @@ export const StaffManager: React.FC = () => {
                               {searchPhone && !isInviting && !foundUser && <p className="text-red-500 text-sm">Kullanıcı bulunamadı.</p>}
                           </div>
                       ) : (
-                          <div className="flex flex-col gap-6 animate-in slide-in-from-bottom-2">
-                              <div className="flex items-center gap-4 bg-green-50 p-4 rounded-2xl border border-green-100">
-                                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center border-2 border-green-200 overflow-hidden">
+                          <div className="flex flex-col gap-8 animate-in slide-in-from-bottom-4">
+                              {/* 1. User Card */}
+                              <div className="flex items-center gap-4 bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center border-2 border-blue-200 overflow-hidden">
                                       {foundUser.avatar.length > 4 ? <img src={foundUser.avatar} className="w-full h-full object-cover" /> : foundUser.avatar}
                                   </div>
                                   <div>
-                                      <h3 className="font-bold text-green-900 text-lg">{foundUser.name}</h3>
-                                      <div className="flex items-center gap-1 text-green-600 text-sm">
+                                      <h3 className="font-bold text-blue-900 text-lg">{foundUser.name}</h3>
+                                      <div className="flex items-center gap-1 text-blue-600 text-sm">
                                           <CheckCircle2 className="w-4 h-4" /> Sistemde Kayıtlı
                                       </div>
                                   </div>
                               </div>
 
-                              <div>
-                                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Atanacak Departman</label>
-                                  <div className="grid grid-cols-2 gap-2">
-                                      {['housekeeping', 'kitchen', 'front_office', 'management'].map(d => (
-                                          <button
-                                            key={d}
-                                            onClick={() => setInviteDept(d as any)}
-                                            className={`p-3 rounded-xl border text-sm font-medium transition-all ${
-                                                inviteDept === d 
-                                                ? 'bg-primary text-white border-primary' 
-                                                : 'bg-white border-gray-200 text-gray-600'
+                              {/* 2. Role & Department */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Departman Seç</label>
+                                      <select 
+                                          value={inviteDept}
+                                          onChange={(e) => setInviteDept(e.target.value)}
+                                          className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:border-primary"
+                                      >
+                                          <option value="">Seçiniz...</option>
+                                          {departmentsList.map(d => (
+                                              <option key={d} value={d}>{d}</option>
+                                          ))}
+                                      </select>
+                                  </div>
+                                  <div>
+                                      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Ünvan / Pozisyon</label>
+                                      <div className="relative">
+                                          <Briefcase className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                                          <input 
+                                              value={inviteRoleTitle}
+                                              onChange={(e) => setInviteRoleTitle(e.target.value)}
+                                              placeholder="Örn: Sous Chef"
+                                              className="w-full p-4 pl-12 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 outline-none focus:border-primary"
+                                          />
+                                      </div>
+                                  </div>
+                              </div>
+
+                              {/* 3. Permissions Matrix */}
+                              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                                  <label className="block text-xs font-bold text-gray-400 uppercase mb-4 flex items-center gap-2">
+                                      <Shield className="w-4 h-4" /> Yetkilendirme Matrisi
+                                  </label>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                      {AVAILABLE_PERMISSIONS.map(perm => (
+                                          <div 
+                                            key={perm.id}
+                                            onClick={() => togglePermission(perm.id)}
+                                            className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${
+                                                invitePermissions.includes(perm.id) 
+                                                ? 'bg-white border-primary shadow-sm' 
+                                                : 'bg-transparent border-gray-200 opacity-60 hover:opacity-100'
                                             }`}
                                           >
-                                              {d.replace('_', ' ').toUpperCase()}
-                                          </button>
+                                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${invitePermissions.includes(perm.id) ? 'border-primary bg-primary text-white' : 'border-gray-300'}`}>
+                                                  {invitePermissions.includes(perm.id) && <CheckCircle2 className="w-3 h-3" />}
+                                              </div>
+                                              <div>
+                                                  <div className={`text-sm font-bold ${invitePermissions.includes(perm.id) ? 'text-primary' : 'text-gray-600'}`}>{perm.label}</div>
+                                                  <div className="text-[10px] text-gray-400">{perm.desc}</div>
+                                              </div>
+                                          </div>
                                       ))}
                                   </div>
                               </div>
 
                               <button 
                                 onClick={handleInvite}
-                                disabled={isInviting}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-green-600/20 flex items-center justify-center gap-2"
+                                disabled={isInviting || !inviteDept || !inviteRoleTitle}
+                                className="w-full bg-primary hover:bg-primary-light text-white py-4 rounded-xl font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                  {isInviting ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Onayla ve Ekle <ArrowRight className="w-5 h-5" /></>}
+                                  {isInviting ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Onayla ve Davet Et <ArrowRight className="w-5 h-5" /></>}
                               </button>
                           </div>
                       )}

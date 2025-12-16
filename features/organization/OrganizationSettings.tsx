@@ -1,7 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Save, Upload, Loader2, Palette, Shield, List, Trash2, Plus, AlertTriangle, XCircle, CheckCircle2, ArrowRight, Briefcase } from 'lucide-react';
+import { 
+    Building2, Save, Upload, Loader2, Palette, Shield, List, 
+    Trash2, Plus, AlertTriangle, XCircle, CheckCircle2, 
+    ArrowRight, Globe, MapPin, X
+} from 'lucide-react';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { updateOrganization } from '../../services/db';
 import { deleteOrganizationFully } from '../../services/organizationService';
@@ -17,23 +21,23 @@ export const OrganizationSettings: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  const [activeTab, setActiveTab] = useState<'BRAND' | 'DEPTS' | 'PERMS' | 'DANGER'>('BRAND');
+  const [activeTab, setActiveTab] = useState<'BRAND' | 'DEPTS' | 'DANGER'>('BRAND');
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false); 
   const [deleteConfirm, setDeleteConfirm] = useState('');
-  const [showWelcome, setShowWelcome] = useState(false); // Onboarding State
+  const [showWelcome, setShowWelcome] = useState(false);
 
-  // Form State
-  const [name, setName] = useState(currentOrganization?.name || '');
-  const [description, setDescription] = useState(currentOrganization?.description || '');
-  const [locationStr, setLocationStr] = useState(currentOrganization?.location || '');
-  const [website, setWebsite] = useState(currentOrganization?.website || '');
-  const [sector, setSector] = useState<OrganizationSector>(currentOrganization?.sector || 'other');
-  const [size, setSize] = useState<OrganizationSize>(currentOrganization?.size || '1-10');
+  // Form State - Brand
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [locationStr, setLocationStr] = useState('');
+  const [website, setWebsite] = useState('');
+  const [sector, setSector] = useState<OrganizationSector>('other');
+  const [size, setSize] = useState<OrganizationSize>('1-10');
   
-  const [allowContent, setAllowContent] = useState(currentOrganization?.settings?.allowStaffContentCreation || false);
-  const [departments, setDepartments] = useState<string[]>(currentOrganization?.settings?.customDepartments || []);
-  const [newDept, setNewDept] = useState('');
+  // Form State - Departments
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [newDeptInput, setNewDeptInput] = useState('');
 
   // Sync state when org loads
   useEffect(() => {
@@ -69,7 +73,6 @@ export const OrganizationSettings: React.FC = () => {
           size,
           settings: {
               ...currentOrganization.settings,
-              allowStaffContentCreation: allowContent,
               customDepartments: departments,
               primaryColor: currentOrganization.settings?.primaryColor || '#0B1E3B'
           }
@@ -79,7 +82,7 @@ export const OrganizationSettings: React.FC = () => {
       await switchOrganization(currentOrganization.id); // Refresh store
       
       setIsSaving(false);
-      if (showWelcome) setShowWelcome(false); // Close wizard if open
+      if (showWelcome) setShowWelcome(false);
       alert('Ayarlar kaydedildi.');
   };
 
@@ -93,6 +96,27 @@ export const OrganizationSettings: React.FC = () => {
       }
   };
 
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files?.[0] && currentOrganization) {
+          setIsSaving(true);
+          const url = await uploadFile(e.target.files[0], 'org_covers');
+          await updateOrganization(currentOrganization.id, { coverUrl: url });
+          await switchOrganization(currentOrganization.id);
+          setIsSaving(false);
+      }
+  };
+
+  const addDepartment = () => {
+      if(newDeptInput.trim() && !departments.includes(newDeptInput.trim())) {
+          setDepartments([...departments, newDeptInput.trim()]);
+          setNewDeptInput('');
+      }
+  };
+
+  const removeDepartment = (dept: string) => {
+      setDepartments(departments.filter(d => d !== dept));
+  };
+
   const handleDeleteOrg = async () => {
       if (!currentOrganization || !currentUser) return;
       if (deleteConfirm !== currentOrganization.name) return;
@@ -102,8 +126,8 @@ export const OrganizationSettings: React.FC = () => {
       
       if (success) {
           alert("Kurum kalıcı olarak silindi. Tüm personel serbest kaldı.");
-          navigate('/'); // Go to Dashboard (which handles No Org state)
-          window.location.reload(); // Force reload to clear cache
+          navigate('/');
+          window.location.reload();
       } else {
           alert("Silme işlemi başarısız oldu.");
           setIsDeleting(false);
@@ -114,7 +138,7 @@ export const OrganizationSettings: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-50 pb-20 relative">
-        {/* ONBOARDING MODAL OVERLAY */}
+        {/* ONBOARDING MODAL */}
         <AnimatePresence>
             {showWelcome && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
@@ -138,11 +162,11 @@ export const OrganizationSettings: React.FC = () => {
                             <div className="flex flex-col gap-4 mb-8">
                                 <div className="flex items-center gap-4">
                                     <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">1</div>
-                                    <div className="text-sm text-gray-600">Kurumsal logonu yükle.</div>
+                                    <div className="text-sm text-gray-600">Marka ve Sektör bilgilerini gir.</div>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">2</div>
-                                    <div className="text-sm text-gray-600">Sektör ve büyüklük bilgisini gir.</div>
+                                    <div className="text-sm text-gray-600">Departmanlarını yapılandır.</div>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">3</div>
@@ -167,7 +191,7 @@ export const OrganizationSettings: React.FC = () => {
             <button 
                 onClick={handleSave}
                 disabled={isSaving}
-                className="bg-primary text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary-light transition-all"
+                className="bg-primary text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary-light transition-all active:scale-95"
             >
                 {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                 Kaydet
@@ -181,9 +205,6 @@ export const OrganizationSettings: React.FC = () => {
             </button>
             <button onClick={() => setActiveTab('DEPTS')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'DEPTS' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
                 <List className="w-4 h-4" /> Departmanlar
-            </button>
-            <button onClick={() => setActiveTab('PERMS')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'PERMS' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
-                <Shield className="w-4 h-4" /> İzinler
             </button>
             <button onClick={() => setActiveTab('DANGER')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'DANGER' ? 'bg-red-50 text-red-600 border border-red-100' : 'text-gray-500 hover:bg-gray-200'}`}>
                 <AlertTriangle className="w-4 h-4" /> Risk Bölgesi
@@ -200,14 +221,33 @@ export const OrganizationSettings: React.FC = () => {
                 {/* BRAND SETTINGS */}
                 {activeTab === 'BRAND' && (
                     <div className="space-y-6">
-                        <div className="flex items-center gap-6">
-                            <div className="relative group cursor-pointer w-24 h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-primary">
-                                {currentOrganization.logoUrl ? <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" /> : <Upload className="w-8 h-8 text-gray-400" />}
-                                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleLogoUpload} />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Logo Upload */}
+                            <div className="flex items-center gap-6">
+                                <div className="relative group cursor-pointer w-24 h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-primary">
+                                    {currentOrganization.logoUrl ? <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" /> : <Upload className="w-8 h-8 text-gray-400" />}
+                                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleLogoUpload} />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-gray-800">Kurum Logosu</h3>
+                                    <p className="text-xs text-gray-500">Önerilen: 500x500px PNG</p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="font-bold text-gray-800">Kurum Logosu</h3>
-                                <p className="text-xs text-gray-500">Önerilen: 500x500px PNG</p>
+
+                            {/* Cover Upload */}
+                            <div className="flex flex-col gap-2">
+                                <label className="text-xs font-bold text-gray-500 uppercase">Kapak Fotoğrafı</label>
+                                <div className="relative group cursor-pointer w-full h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-primary">
+                                    {currentOrganization.coverUrl ? (
+                                        <>
+                                            <img src={currentOrganization.coverUrl} className="w-full h-full object-cover opacity-80" />
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Upload className="w-6 h-6 text-white" />
+                                            </div>
+                                        </>
+                                    ) : <Upload className="w-8 h-8 text-gray-400" />}
+                                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleCoverUpload} />
+                                </div>
                             </div>
                         </div>
                         
@@ -218,7 +258,18 @@ export const OrganizationSettings: React.FC = () => {
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Konum</label>
-                                <input value={locationStr} onChange={e => setLocationStr(e.target.value)} placeholder="Şehir, Ülke" className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
+                                <div className="relative">
+                                    <MapPin className="absolute left-3 top-3.5 w-4 h-4 text-gray-400" />
+                                    <input value={locationStr} onChange={e => setLocationStr(e.target.value)} placeholder="Şehir, Ülke" className="w-full p-3 pl-10 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Web Sitesi</label>
+                            <div className="relative">
+                                <Globe className="absolute left-3 top-3.5 w-4 h-4 text-gray-400" />
+                                <input value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." className="w-full p-3 pl-10 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
                             </div>
                         </div>
 
@@ -262,10 +313,45 @@ export const OrganizationSettings: React.FC = () => {
                     </div>
                 )}
 
-                {/* Other Tabs Placeholder Logic */}
-                {(activeTab === 'DEPTS' || activeTab === 'PERMS') && (
-                    <div className="text-gray-500 text-sm text-center py-4">
-                        (Standart ayar alanları - Değişiklik yok)
+                {/* DEPARTMENTS SETTINGS */}
+                {activeTab === 'DEPTS' && (
+                    <div className="space-y-6">
+                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3 text-blue-700 text-sm">
+                            <List className="w-5 h-5 shrink-0" />
+                            <div>
+                                <span className="font-bold block">Departman Yapısı</span>
+                                İşletmenize özgü departmanları buraya ekleyin. Bunlar personel atamalarında ve görev dağılımlarında kullanılacaktır.
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <input 
+                                value={newDeptInput}
+                                onChange={e => setNewDeptInput(e.target.value)}
+                                placeholder="Yeni departman adı (örn: Spa, Vale)"
+                                className="flex-1 p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary"
+                                onKeyDown={e => e.key === 'Enter' && addDepartment()}
+                            />
+                            <button 
+                                onClick={addDepartment}
+                                disabled={!newDeptInput.trim()}
+                                className="bg-gray-900 text-white px-6 rounded-xl font-bold hover:bg-gray-800 disabled:opacity-50"
+                            >
+                                Ekle
+                            </button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                            {departments.map(dept => (
+                                <div key={dept} className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-3 rounded-xl shadow-sm group hover:border-primary transition-colors">
+                                    <span className="font-bold text-gray-700">{dept}</span>
+                                    <button onClick={() => removeDepartment(dept)} className="text-gray-400 hover:text-red-500 p-1">
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                            {departments.length === 0 && <div className="text-gray-400 text-sm italic py-4">Henüz departman eklenmedi.</div>}
+                        </div>
                     </div>
                 )}
 

@@ -19,7 +19,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector } from '../types';
+import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector, PermissionType } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -38,8 +38,6 @@ const careerPathsRef = collection(db, 'careerPaths');
 export const switchUserActiveOrganization = async (userId: string, orgId: string): Promise<boolean> => {
     try {
         const userRef = doc(db, 'users', userId);
-        // We also need to fetch the membership to get the correct role/department for this context
-        // But for speed, we assume the UI store handles the context switch, DB just persists the ID.
         await updateDoc(userRef, { currentOrganizationId: orgId });
         return true;
     } catch (e) {
@@ -84,7 +82,7 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
             name,
             sector,
             logoUrl: '',
-            coverUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200', // Generic office
+            coverUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200',
             description: `Welcome to ${name}.`,
             location: 'Global',
             ownerId: owner.id,
@@ -92,7 +90,7 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
             createdAt: Date.now(),
             settings: {
                 allowStaffContentCreation: false,
-                customDepartments: ['management', 'hr', 'sales'],
+                customDepartments: ['Yönetim', 'Operasyon', 'Mutfak'], // Start with custom localized defaults
                 primaryColor: '#0B1E3B'
             }
         };
@@ -105,6 +103,8 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
             userId: owner.id,
             organizationId: orgId,
             role: 'manager', 
+            roleTitle: 'Kurucu', // Founder title
+            permissions: ['CAN_MANAGE_TEAM', 'CAN_CREATE_CONTENT', 'CAN_VIEW_ANALYTICS', 'CAN_EDIT_SETTINGS'], // God mode
             department: 'management',
             status: 'ACTIVE',
             joinedAt: Date.now()
@@ -139,16 +139,50 @@ export const updateOrganization = async (orgId: string, data: Partial<Organizati
     } catch (e) { return false; }
 };
 
-// --- UNIFIED FEED ALGORITHM ---
+// ... (Feed/Course functions) ...
+
+export const getFeedPosts = async (dept: DepartmentType | null, orgId: string | null): Promise<FeedPost[]> => {
+    try {
+        let q;
+        if (orgId) {
+            // Fetch organization posts
+            q = query(
+                postsRef, 
+                where('organizationId', '==', orgId),
+                orderBy('createdAt', 'desc'),
+                limit(50)
+            );
+        } else {
+            // Fetch global posts for freelancers
+            q = query(postsRef, orderBy('createdAt', 'desc'), limit(20));
+        }
+
+        const snap = await getDocs(q);
+        const allPosts = snap.docs.map(d => ({id: d.id, ...d.data()} as FeedPost));
+
+        // Filter by Department if in an Org
+        if (orgId && dept) {
+             return allPosts.filter(p => {
+                if (p.assignmentType === 'GLOBAL') return true;
+                if (p.targetDepartments?.includes(dept)) return true;
+                if (p.type === 'kudos') return true;
+                return false;
+            });
+        }
+        
+        return allPosts;
+    } catch (e) {
+        console.error("Error fetching feed:", e);
+        return [];
+    }
+};
 
 export const getUnifiedFeed = async (user: User): Promise<Course[]> => {
     try {
-        // 1. Fetch Public Courses (Global)
         const publicQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), limit(20));
         const publicSnap = await getDocs(publicQ);
         const publicCourses = publicSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
 
-        // 2. Fetch Corporate Courses (If in Org)
         let corpCourses: Course[] = [];
         if (user.currentOrganizationId) {
             const corpQ = query(coursesRef, where('organizationId', '==', user.currentOrganizationId), where('visibility', '==', 'PRIVATE'));
@@ -156,61 +190,17 @@ export const getUnifiedFeed = async (user: User): Promise<Course[]> => {
             corpCourses = corpSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
         }
         
-        // MERGE & DEDUPLICATE
         const allMap = new Map<string, Course>();
-        
         corpCourses.forEach(c => allMap.set(c.id, c));
         publicCourses.forEach(c => {
             if(!allMap.has(c.id)) allMap.set(c.id, c);
         });
 
         return Array.from(allMap.values());
-
-    } catch (error) {
-        console.error("Feed Error:", error);
-        return [];
-    }
+    } catch (error) { return []; }
 };
 
-export const getCourses = async (orgId?: string): Promise<Course[]> => {
-  return getUnifiedFeed({ currentOrganizationId: orgId } as User); 
-};
-
-export const getInstructorCourses = async (authorId: string): Promise<Course[]> => {
-    try {
-        const q = query(coursesRef, where('authorId', '==', authorId));
-        const snap = await getDocs(q);
-        return snap.docs.map(d => ({ id: d.id, ...d.data() } as Course));
-    } catch (e) { return []; }
-};
-
-// --- DATA FETCHING ---
-
-export const getFeedPosts = async (userDept: DepartmentType | null, orgId: string | null): Promise<FeedPost[]> => {
-    try {
-        let q;
-        
-        if (orgId) {
-            q = query(postsRef, where('organizationId', '==', orgId), limit(50));
-        } else {
-            q = query(postsRef, limit(20), orderBy('createdAt', 'desc'));
-        }
-
-        const snapshot = await getDocs(q);
-        const posts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedPost));
-        
-        if (orgId && userDept) {
-            return posts.filter(p => p.assignmentType === 'GLOBAL' || p.targetDepartments?.includes(userDept))
-                        .sort((a,b) => b.createdAt - a.createdAt);
-        }
-
-        return posts.sort((a,b) => b.createdAt - a.createdAt);
-
-    } catch (e) {
-        console.warn("Feed Fetch Error:", e);
-        return [];
-    }
-};
+// ... (Rest of existing functions) ...
 
 export const getUsersByDepartment = async (dept: DepartmentType, orgId: string): Promise<User[]> => {
   if (!orgId) return [];
@@ -229,119 +219,87 @@ export const getUsersByDepartment = async (dept: DepartmentType, orgId: string):
     const usersQ = query(usersRef, where('__name__', 'in', userIds.slice(0, 10)));
     const userSnap = await getDocs(usersQ);
     
-    // CRITICAL FIX: Merge the department from membership, because User doc might be stale or belong to another org
     return userSnap.docs.map(doc => {
         const userData = doc.data() as User;
         return { 
             id: doc.id, 
             ...userData,
-            department: dept // FORCE override from membership context
+            department: dept 
         };
     });
   } catch (error) { return []; }
 };
 
-export const getDailyTasks = async (dept: DepartmentType, orgId: string): Promise<Task[]> => {
-  if (!orgId) return [];
-  try {
-    const q = query(
-        tasksRef, 
-        where('organizationId', '==', orgId),
-        where('department', '==', dept)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
-  } catch (error) { return []; }
-};
+// ... (Tasks, Career, etc.) ...
 
-export const getCareerPathByDepartment = async (dept: DepartmentType, orgId: string): Promise<CareerPath | null> => {
-    if (!orgId) return null;
+// --- UPDATED INVITE LOGIC ---
+export const inviteUserToOrg = async (
+    user: User, 
+    orgId: string, 
+    dept: DepartmentType, 
+    roleTitle: string = 'Staff',
+    permissions: PermissionType[] = []
+): Promise<boolean> => {
     try {
-        const q = query(
-            careerPathsRef, 
-            where('organizationId', '==', orgId),
-            where('department', '==', dept)
-        );
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-            return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as CareerPath;
-        }
-        return null;
-    } catch (e) { return null; }
-};
+        await runTransaction(db, async (transaction) => {
+            const membershipId = `${user.id}_${orgId}`;
+            const memRef = doc(db, 'memberships', membershipId);
+            
+            // Determine System Role based on permissions
+            // If they can manage team or edit settings, they are effectively a 'manager' in system eyes for RBAC
+            const systemRole = (permissions.includes('CAN_MANAGE_TEAM') || permissions.includes('CAN_EDIT_SETTINGS')) ? 'manager' : 'staff';
 
-export const getCareerPaths = async (orgId: string): Promise<CareerPath[]> => {
-    if (!orgId) return [];
-    try {
-        const q = query(careerPathsRef, where('organizationId', '==', orgId));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CareerPath));
-    } catch (e) { return []; }
-};
+            // 1. Create Membership with Matrix
+            transaction.set(memRef, {
+                id: membershipId,
+                userId: user.id,
+                organizationId: orgId,
+                role: systemRole,
+                roleTitle: roleTitle,
+                permissions: permissions,
+                department: dept,
+                status: 'ACTIVE', 
+                joinedAt: Date.now()
+            });
 
-// --- GENERIC FUNCTIONS ---
-
-export const sendJoinRequest = async (userId: string, orgId: string, dept: DepartmentType, roleTitle?: string): Promise<{success: boolean, message?: string}> => {
-    try {
-        const memberships = await getMyMemberships(userId);
-        const hasActiveStaffRole = memberships.some(m => m.role === 'staff' && m.status === 'ACTIVE');
-        
-        if (hasActiveStaffRole) {
-            return { success: false, message: "Zaten bir işletmede aktif personel kaydınız var." };
-        }
-
-        const q = query(requestsRef, where('userId', '==', userId), where('organizationId', '==', orgId), where('status', '==', 'PENDING'));
-        const snap = await getDocs(q);
-        if (!snap.empty) return { success: true, message: "İstek zaten gönderilmiş." };
-
-        await addDoc(requestsRef, {
-            type: 'REQUEST_TO_JOIN',
-            userId,
-            organizationId: orgId,
-            targetDepartment: dept,
-            requestedRoleTitle: roleTitle || '',
-            status: 'PENDING',
-            createdAt: Date.now()
+            // 2. Update User Context
+            const userRef = doc(db, 'users', user.id);
+            transaction.update(userRef, {
+                currentOrganizationId: orgId,
+                department: dept,
+                role: systemRole,
+                organizationHistory: arrayUnion(orgId)
+            });
         });
-        return { success: true };
+        return true;
     } catch (e) { 
         console.error(e);
-        return { success: false, message: "Bir hata oluştu." }; 
+        return false; 
     }
 };
 
-export const getJoinRequests = async (orgId: string, department?: DepartmentType | null): Promise<(JoinRequest & { user?: User })[]> => {
-    try {
-        let q;
-        if (department && department !== 'management') {
-            q = query(requestsRef, where('organizationId', '==', orgId), where('targetDepartment', '==', department), where('status', '==', 'PENDING'));
-        } else {
-            q = query(requestsRef, where('organizationId', '==', orgId), where('status', '==', 'PENDING'));
-        }
-        
-        const snap = await getDocs(q);
-        const requests = snap.docs.map(d => ({ id: d.id, ...d.data() } as JoinRequest));
-
-        const hydrated = await Promise.all(requests.map(async (req) => {
-            const user = await getUserById(req.userId);
-            return { ...req, user: user || undefined };
-        }));
-
-        return hydrated;
-    } catch (e) { return []; }
-};
-
-export const approveJoinRequest = async (requestId: string, joinRequest: JoinRequest): Promise<boolean> => {
+// --- UPDATED APPROVAL LOGIC ---
+export const approveJoinRequest = async (
+    requestId: string, 
+    joinRequest: JoinRequest,
+    assignedRoleTitle: string,
+    assignedPermissions: PermissionType[]
+): Promise<boolean> => {
     try {
         await runTransaction(db, async (transaction) => {
             const membershipId = `${joinRequest.userId}_${joinRequest.organizationId}`;
             const memRef = doc(db, 'memberships', membershipId);
+            
+            const systemRole = (assignedPermissions.includes('CAN_MANAGE_TEAM') || assignedPermissions.includes('CAN_EDIT_SETTINGS')) ? 'manager' : 'staff';
+
             const membershipData: Membership = {
                 id: membershipId,
                 userId: joinRequest.userId,
                 organizationId: joinRequest.organizationId,
                 department: joinRequest.targetDepartment,
-                role: 'staff',
+                role: systemRole,
+                roleTitle: assignedRoleTitle,
+                permissions: assignedPermissions,
                 status: 'ACTIVE',
                 joinedAt: Date.now()
             };
@@ -351,6 +309,7 @@ export const approveJoinRequest = async (requestId: string, joinRequest: JoinReq
             transaction.update(userRef, {
                 currentOrganizationId: joinRequest.organizationId,
                 department: joinRequest.targetDepartment,
+                role: systemRole,
                 organizationHistory: arrayUnion(joinRequest.organizationId)
             });
 
@@ -361,14 +320,14 @@ export const approveJoinRequest = async (requestId: string, joinRequest: JoinReq
     } catch (e) { return false; }
 };
 
-export const rejectJoinRequest = async (requestId: string): Promise<boolean> => {
+// ... (Rest of existing small functions) ...
+export const getMyMemberships = async (userId: string): Promise<Membership[]> => {
     try {
-        await updateDoc(doc(db, 'requests', requestId), { status: 'REJECTED' });
-        return true;
-    } catch (e) { return false; }
+        const q = query(membershipsRef, where('userId', '==', userId));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => d.data() as Membership);
+    } catch (e) { return []; }
 };
-
-// ... existing small functions ...
 export const createPost = async (post: Omit<FeedPost, 'id'>) => {
     try { await addDoc(postsRef, post); return true; } catch (e) { return false; }
 };
@@ -504,38 +463,6 @@ export const searchUserByPhone = async (phone: string): Promise<User | null> => 
         return null;
     } catch (e) { return null; }
 };
-export const inviteUserToOrg = async (user: User, orgId: string, dept: DepartmentType): Promise<boolean> => {
-    try {
-        await runTransaction(db, async (transaction) => {
-            const membershipId = `${user.id}_${orgId}`;
-            const memRef = doc(db, 'memberships', membershipId);
-            
-            // 1. Create Membership
-            transaction.set(memRef, {
-                id: membershipId,
-                userId: user.id,
-                organizationId: orgId,
-                role: 'staff',
-                department: dept,
-                status: 'ACTIVE', 
-                joinedAt: Date.now()
-            });
-
-            // 2. Update User Context (Important for immediate access)
-            const userRef = doc(db, 'users', user.id);
-            transaction.update(userRef, {
-                currentOrganizationId: orgId,
-                department: dept,
-                role: 'staff',
-                organizationHistory: arrayUnion(orgId)
-            });
-        });
-        return true;
-    } catch (e) { 
-        console.error(e);
-        return false; 
-    }
-};
 export const followUser = async (currentUserId: string, targetUserId: string): Promise<boolean> => {
     try {
         await runTransaction(db, async (transaction) => {
@@ -580,10 +507,102 @@ export const findOrganizationByCode = async (code: string): Promise<Organization
         return null;
     } catch (e) { return null; }
 };
-export const getMyMemberships = async (userId: string): Promise<Membership[]> => {
+export const getDailyTasks = async (dept: DepartmentType, orgId: string): Promise<Task[]> => {
+  if (!orgId) return [];
+  try {
+    const q = query(
+        tasksRef, 
+        where('organizationId', '==', orgId),
+        where('department', '==', dept)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task));
+  } catch (error) { return []; }
+};
+export const getCareerPathByDepartment = async (dept: DepartmentType, orgId: string): Promise<CareerPath | null> => {
+    if (!orgId) return null;
     try {
-        const q = query(membershipsRef, where('userId', '==', userId));
-        const snap = await getDocs(q);
-        return snap.docs.map(d => d.data() as Membership);
+        const q = query(
+            careerPathsRef, 
+            where('organizationId', '==', orgId),
+            where('department', '==', dept)
+        );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as CareerPath;
+        }
+        return null;
+    } catch (e) { return null; }
+};
+export const getCareerPaths = async (orgId: string): Promise<CareerPath[]> => {
+    if (!orgId) return [];
+    try {
+        const q = query(careerPathsRef, where('organizationId', '==', orgId));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CareerPath));
     } catch (e) { return []; }
+};
+export const sendJoinRequest = async (userId: string, orgId: string, dept: DepartmentType, roleTitle?: string): Promise<{success: boolean, message?: string}> => {
+    try {
+        const memberships = await getMyMemberships(userId);
+        const hasActiveStaffRole = memberships.some(m => m.role === 'staff' && m.status === 'ACTIVE');
+        
+        if (hasActiveStaffRole) {
+            return { success: false, message: "Zaten bir işletmede aktif personel kaydınız var." };
+        }
+
+        const q = query(requestsRef, where('userId', '==', userId), where('organizationId', '==', orgId), where('status', '==', 'PENDING'));
+        const snap = await getDocs(q);
+        if (!snap.empty) return { success: true, message: "İstek zaten gönderilmiş." };
+
+        await addDoc(requestsRef, {
+            type: 'REQUEST_TO_JOIN',
+            userId,
+            organizationId: orgId,
+            targetDepartment: dept,
+            requestedRoleTitle: roleTitle || '',
+            status: 'PENDING',
+            createdAt: Date.now()
+        });
+        return { success: true };
+    } catch (e) { 
+        console.error(e);
+        return { success: false, message: "Bir hata oluştu." }; 
+    }
+};
+export const getJoinRequests = async (orgId: string, department?: DepartmentType | null): Promise<(JoinRequest & { user?: User })[]> => {
+    try {
+        let q;
+        if (department && department !== 'management') {
+            q = query(requestsRef, where('organizationId', '==', orgId), where('targetDepartment', '==', department), where('status', '==', 'PENDING'));
+        } else {
+            q = query(requestsRef, where('organizationId', '==', orgId), where('status', '==', 'PENDING'));
+        }
+        
+        const snap = await getDocs(q);
+        const requests = snap.docs.map(d => ({ id: d.id, ...d.data() } as JoinRequest));
+
+        const hydrated = await Promise.all(requests.map(async (req) => {
+            const user = await getUserById(req.userId);
+            return { ...req, user: user || undefined };
+        }));
+
+        return hydrated;
+    } catch (e) { return []; }
+};
+export const rejectJoinRequest = async (requestId: string): Promise<boolean> => {
+    try {
+        await updateDoc(doc(db, 'requests', requestId), { status: 'REJECTED' });
+        return true;
+    } catch (e) { return false; }
+};
+export const getInstructorCourses = async (authorId: string): Promise<Course[]> => {
+    try {
+        const q = query(coursesRef, where('authorId', '==', authorId));
+        const snap = await getDocs(q);
+        return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Course));
+    } catch (e) { return []; }
+};
+export const getCourses = async (orgId?: string): Promise<Course[]> => {
+  return getUnifiedFeed({ currentOrganizationId: orgId } as User); 
 };
