@@ -92,6 +92,9 @@ export const CoursePlayerPage: React.FC = () => {
 
   const finishCourse = async () => {
       if (currentUser && courseId) {
+          // Marking progress will update the User object.
+          // Since the Dashboard 'stories' query filters by `completedCourses`, 
+          // this course will automatically disappear from the Stories bar on return.
           await updateUserProgress(currentUser.id, courseId, course.xpReward);
       }
       navigate('/');

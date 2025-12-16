@@ -4,10 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useContentStore } from '../../stores/useContentStore';
-import { getFeedPosts, getHybridContent } from '../../services/db';
-import { StoryCircle, StoryStatus } from './components/StoryCircle';
+import { getDashboardFeed, getDashboardStories } from '../../services/db';
+import { StoryCircle } from './components/StoryCircle';
 import { FeedPostCard } from './components/FeedPostCard';
-import { X, Quote, Map, Settings, Building } from 'lucide-react';
+import { X, Quote, Map, Settings, Building, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Course, FeedPost } from '../../types';
 
@@ -17,65 +17,45 @@ export const DashboardPage: React.FC = () => {
   const { currentUser } = useAuthStore();
   const { fetchContent } = useContentStore();
   
-  const [storyCourses, setStoryCourses] = useState<Course[]>([]);
-  const [feedPosts, setFeedPosts] = useState<FeedPost[]>([]);
+  // Separate State for Stories and Feed
+  const [stories, setStories] = useState<Course[]>([]);
+  const [feedItems, setFeedItems] = useState<(Course | FeedPost)[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showGmModal, setShowGmModal] = useState(false);
 
+  // Initial Sync (Categories, etc.)
   useEffect(() => {
     if (currentUser) {
         fetchContent(currentUser.currentOrganizationId || ''); 
     }
   }, [fetchContent, currentUser]);
 
+  // Main Data Fetcher
   useEffect(() => {
-    const loadData = async () => {
+    const loadDashboardData = async () => {
         if (!currentUser) return;
-        
-        // --- 1. HYBRID CONTENT ALGORITHM (STORIES) ---
-        // Fetch everything available to the user (Public + Their Org)
-        const allCourses = await getHybridContent(currentUser);
-        
-        // Filter based on relevance (Department/Assignment)
-        const myDept = currentUser.department;
-        const relevantCourses = allCourses.filter(course => {
-            if (course.visibility === 'PUBLIC') return true; // Show all public stuff in stories
-            if (course.assignmentType === 'GLOBAL') return true; // Show all global org stuff
-            if (course.assignmentType === 'DEPARTMENT' && course.targetDepartments?.includes(myDept || '')) return true;
-            return false;
-        });
+        setLoading(true);
 
-        // 2. Assign Scores for Sorting
-        const getScore = (c: Course) => {
-            const isCompleted = currentUser.completedCourses.includes(c.id);
-            if (isCompleted) return 0;
-            let score = 50; 
-            if (c.categoryId === 'cat_onboarding') score += 100;
-            if (currentUser.startedCourses?.includes(c.id)) score += 60;
-            if (c.priority === 'HIGH') score += 50;
-            return score;
-        };
+        try {
+            // Parallel Fetching for Speed
+            const [storiesData, feedData] = await Promise.all([
+                getDashboardStories(currentUser),
+                getDashboardFeed(currentUser)
+            ]);
 
-        const sortedCourses = relevantCourses.sort((a, b) => getScore(b) - getScore(a));
-        setStoryCourses(sortedCourses.slice(0, 15)); 
-
-        // --- 3. LOAD FEED POSTS (Social Updates) ---
-        const posts = await getFeedPosts(currentUser.department, currentUser.currentOrganizationId || null);
-        setFeedPosts(posts);
+            setStories(storiesData);
+            setFeedItems(feedData);
+        } catch (error) {
+            console.error("Dashboard Load Error:", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (currentUser) {
-        loadData();
+        loadDashboardData();
     }
   }, [currentUser]);
-
-  const getStoryStatus = (course: Course): StoryStatus => {
-      if (!currentUser) return 'viewed';
-      if (currentUser.completedCourses.includes(course.id)) return 'viewed';
-      if (currentUser.startedCourses?.includes(course.id)) return 'progress';
-      if (course.categoryId === 'cat_onboarding') return 'fiery';
-      if (course.priority === 'HIGH') return 'urgent';
-      return 'mandatory'; 
-  };
 
   if (!currentUser) return null;
 
@@ -84,9 +64,11 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen">
       
-      {/* STORIES */}
-      <div className="bg-white py-4 border-b border-gray-100 overflow-x-auto no-scrollbar">
+      {/* 1. STORIES AREA (Top Horizontal Scroll) */}
+      <div className="bg-white py-4 border-b border-gray-100 overflow-x-auto no-scrollbar sticky top-[60px] z-20 shadow-sm">
          <div className="flex gap-4 px-4 min-w-max">
+            
+            {/* My Journey (Fixed Item) */}
             <div className="flex flex-col items-center gap-2 min-w-[72px] cursor-pointer group" onClick={() => navigate('/journey')}>
                 <div className="relative p-[3px] rounded-full bg-gradient-to-tr from-blue-400 to-indigo-600 animate-pulse-slow">
                     <div className="bg-white rounded-full p-[2px]">
@@ -98,6 +80,7 @@ export const DashboardPage: React.FC = () => {
                 <span className="text-xs font-bold text-gray-800">Yolculuğum</span>
             </div>
 
+            {/* GM Message (Conditional) */}
             {!isFreelancer && (
                 <StoryCircle 
                     label={t('stories_gm')} 
@@ -107,27 +90,34 @@ export const DashboardPage: React.FC = () => {
                 />
             )}
 
-            {storyCourses.map(course => (
+            {/* Dynamic Stories (Private/Assigned Content) */}
+            {stories.map(course => (
                 <StoryCircle 
                     key={course.id} 
-                    label={course.title.substring(0, 10) + "..."} 
-                    image={course.thumbnailUrl} 
-                    status={getStoryStatus(course)}
-                    onClick={() => navigate(`/course/${course.id}`)} 
+                    course={course}
                 />
             ))}
+
+            {/* Empty State for Stories */}
+            {stories.length === 0 && !isFreelancer && (
+                <div className="flex flex-col items-center justify-center opacity-40 min-w-[72px]">
+                    <div className="w-16 h-16 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center">
+                        <span className="text-[10px] text-center px-1">Tüm Görevler Tamam</span>
+                    </div>
+                </div>
+            )}
          </div>
       </div>
 
-      {/* FEED */}
-      <div className="flex-1 max-w-lg mx-auto w-full pb-20">
-          {feedPosts.length === 0 ? (
+      {/* 2. FEED AREA (Main Scroll) */}
+      <div className="flex-1 max-w-lg mx-auto w-full pb-20 pt-4">
+          {feedItems.length === 0 && !loading ? (
               <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center px-6">
                   <p className="font-bold mb-1">Akış Boş</p>
                   <p className="text-sm">
                       {isFreelancer 
                         ? "Bir işletmeye katılarak veya diğer profesyonelleri takip ederek akışını canlandır." 
-                        : "Yöneticin bir şeyler paylaştığında burada görünecek."}
+                        : "Henüz bir içerik paylaşılmamış."}
                   </p>
                   {isFreelancer && (
                       <button onClick={() => navigate('/lobby')} className="mt-4 text-primary font-bold text-sm bg-white border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50">
@@ -136,11 +126,15 @@ export const DashboardPage: React.FC = () => {
                   )}
               </div>
           ) : (
-              <div className="md:pt-6">
-                  {feedPosts.map(post => (
-                      <FeedPostCard key={post.id} post={post} />
+              <div className="md:pt-0">
+                  {feedItems.map(item => (
+                      <FeedPostCard key={item.id} post={item as any} />
                   ))}
               </div>
+          )}
+          
+          {loading && (
+              <div className="p-10 text-center text-gray-400 text-sm">Yükleniyor...</div>
           )}
       </div>
 
