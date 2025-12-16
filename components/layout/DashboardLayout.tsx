@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, ArrowLeft, Settings, Menu, Search } from 'lucide-react';
+import { Bell, ArrowLeft, Menu, Search } from 'lucide-react';
 import { BottomNavigation } from './BottomNavigation';
 import { SettingsDrawer } from '../../features/profile/components/SettingsDrawer';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -83,45 +83,49 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const config = getHeaderConfig();
 
   return (
-    <div className="h-[100dvh] w-full bg-surface flex flex-col relative overflow-hidden">
+    <div className="flex flex-col h-screen w-full bg-surface overflow-hidden supports-[height:100dvh]:h-[100dvh]">
       
-      {/* GLOBAL HEADER (Native Feel) */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-4 py-3 min-h-[60px] flex items-center justify-between transition-all duration-300">
-          
-          {/* LEFT AREA */}
-          <div className="flex items-center gap-3">
-              {config.showBack ? (
-                  <button 
-                    onClick={() => navigate(-1)} 
-                    className="p-2 -ml-2 text-gray-800 hover:bg-black/5 rounded-full transition-colors"
-                  >
-                      <ArrowLeft className="w-6 h-6" />
-                  </button>
-              ) : null}
+      {/* 1. Header Area - Fixed at top via Flex Flow */}
+      {/* shrink-0 ensures header doesn't collapse if content is huge */}
+      <div className="shrink-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 transition-all duration-300">
+          <header className="px-4 py-3 min-h-[60px] flex items-center justify-between">
               
-              {config.titleComponent}
-          </div>
+              {/* LEFT AREA */}
+              <div className="flex items-center gap-3">
+                  {config.showBack ? (
+                      <button 
+                        onClick={() => navigate(-1)} 
+                        className="p-2 -ml-2 text-gray-800 hover:bg-black/5 rounded-full transition-colors"
+                      >
+                          <ArrowLeft className="w-6 h-6" />
+                      </button>
+                  ) : null}
+                  
+                  {config.titleComponent}
+              </div>
 
-          {/* RIGHT AREA */}
-          <div className="flex items-center gap-2">
-              {config.rightAction}
-          </div>
-      </header>
+              {/* RIGHT AREA */}
+              <div className="flex items-center gap-2">
+                  {config.rightAction}
+              </div>
+          </header>
+      </div>
       
-      {/* MAIN CONTENT AREA */}
-      {/* pb-24 ensures content isn't hidden behind the bottom nav */}
-      <main className="relative z-10 flex-1 flex flex-col pb-24 overflow-y-auto overflow-x-hidden scroll-smooth">
+      {/* 2. Main Content Area - Scrollable */}
+      {/* flex-1 takes remaining space. overflow-y-auto enables scrolling inside this box. */}
+      {/* pb-24 adds padding at bottom so content isn't hidden behind fixed BottomNav */}
+      <main className="flex-1 overflow-y-auto pb-24 scroll-smooth no-scrollbar relative w-full">
         {children}
       </main>
 
-      {/* GLOBAL DRAWERS/MODALS */}
+      {/* 3. Global Drawers */}
       <AnimatePresence>
         {isSettingsOpen && (
             <SettingsDrawer onClose={() => setIsSettingsOpen(false)} />
         )}
       </AnimatePresence>
 
-      {/* BOTTOM NAVIGATION */}
+      {/* 4. Bottom Navigation - Fixed */}
       <BottomNavigation />
     </div>
   );

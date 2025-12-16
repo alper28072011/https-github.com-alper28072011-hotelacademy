@@ -62,10 +62,11 @@ export const DashboardPage: React.FC = () => {
   const isFreelancer = !currentUser.currentOrganizationId;
 
   return (
-    <div className="flex flex-col bg-gray-50 min-h-screen">
+    <div className="flex flex-col bg-gray-50 min-h-full">
       
       {/* 1. STORIES AREA (Top Horizontal Scroll) */}
-      <div className="bg-white py-4 border-b border-gray-100 overflow-x-auto no-scrollbar sticky top-[60px] z-20 shadow-sm">
+      {/* Changed sticky top-[60px] to top-0 because parent container (Main) is now the scrollable area and starts at 0 */}
+      <div className="bg-white py-4 border-b border-gray-100 overflow-x-auto no-scrollbar sticky top-0 z-20 shadow-sm">
          <div className="flex gap-4 px-4 min-w-max">
             
             {/* My Journey (Fixed Item) */}
@@ -110,7 +111,7 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* 2. FEED AREA (Main Scroll) */}
-      <div className="flex-1 max-w-lg mx-auto w-full pb-20 pt-4">
+      <div className="flex-1 max-w-lg mx-auto w-full pt-4">
           {feedItems.length === 0 && !loading ? (
               <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-center px-6">
                   <p className="font-bold mb-1">Akış Boş</p>
