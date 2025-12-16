@@ -12,8 +12,8 @@ import { useProfileStore } from '../../stores/useProfileStore';
 import { useContentStore } from '../../stores/useContentStore';
 import { EditProfileModal } from './components/EditProfileModal';
 import { SettingsDrawer } from './components/SettingsDrawer';
-import { ProfileHeader } from './components/ProfileHeader'; // New Component
-import { Course, KudosType } from '../../types';
+import { ProfileHeader } from './components/ProfileHeader';
+import { Course, KudosType, FeedPost } from '../../types';
 import { getInstructorCourses, getUserPosts } from '../../services/db';
 
 export const ProfilePage: React.FC = () => {
@@ -23,11 +23,14 @@ export const ProfilePage: React.FC = () => {
   const { userProfile, initializeListeners } = useProfileStore();
   const { courses } = useContentStore(); 
 
-  // UI State
-  const [activeTab, setActiveTab] = useState<'collection' | 'certificates' | 'saved' | 'channel'>('collection');
+  // UI State - Updated Default to 'collection' but added 'posts'
+  const [activeTab, setActiveTab] = useState<'collection' | 'posts' | 'certificates' | 'saved' | 'channel'>('collection');
   const [isEditing, setIsEditing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  
+  // Data State
   const [myCreatedCourses, setMyCreatedCourses] = useState<Course[]>([]);
+  const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
   const [postCount, setPostCount] = useState(0);
 
   // Active User Data
@@ -44,7 +47,10 @@ export const ProfilePage: React.FC = () => {
   useEffect(() => {
       if (currentUser) {
           getInstructorCourses(currentUser.id).then(setMyCreatedCourses);
-          getUserPosts(currentUser.id).then(posts => setPostCount(posts.length));
+          getUserPosts(currentUser.id).then(posts => {
+              setMyPosts(posts);
+              setPostCount(posts.length);
+          });
       }
   }, [currentUser]);
 
@@ -85,6 +91,12 @@ export const ProfilePage: React.FC = () => {
             <button 
                 onClick={() => setActiveTab('collection')}
                 className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'collection' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
+            >
+                <Award className="w-6 h-6" />
+            </button>
+            <button 
+                onClick={() => setActiveTab('posts')}
+                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'posts' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
             >
                 <Grid className="w-6 h-6" />
             </button>
@@ -130,6 +142,31 @@ export const ProfilePage: React.FC = () => {
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {activeTab === 'posts' && (
+                <div className="grid grid-cols-3 gap-0.5 mt-0.5">
+                    {myPosts.map(post => (
+                        <div key={post.id} className="aspect-square bg-gray-200 relative group overflow-hidden cursor-pointer">
+                            {post.type === 'video' ? (
+                                <video src={post.mediaUrl} className="w-full h-full object-cover" />
+                            ) : (
+                                <img src={post.mediaUrl || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
+                            )}
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex items-center gap-1 text-white font-bold">
+                                    <Heart className="w-5 h-5 fill-white" /> {post.likes}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {myPosts.length === 0 && (
+                        <div className="col-span-3 py-12 text-center text-gray-400 text-sm flex flex-col items-center">
+                            <Grid className="w-10 h-10 mb-2 opacity-30" />
+                            Henüz gönderi yok.
+                        </div>
+                    )}
                 </div>
             )}
             

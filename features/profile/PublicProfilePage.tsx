@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, UserPlus, UserCheck, Grid, Heart, BookOpen, Lock, MoreHorizontal } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { User, FeedPost, Course, FollowStatus } from '../../types';
@@ -25,6 +25,12 @@ export const PublicProfilePage: React.FC = () => {
   const [followStatus, setFollowStatus] = useState<FollowStatus>('NONE');
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'POSTS' | 'COURSES'>('POSTS');
+
+  // --- ARCHITECTURE FIX: REDIRECT IF SELF ---
+  // If the user tries to view their own "public" profile, redirect to the main "Me" dashboard.
+  if (currentUser && userId === currentUser.id) {
+      return <Navigate to="/profile" replace />;
+  }
 
   const isMe = currentUser?.id === userId;
 
@@ -55,7 +61,7 @@ export const PublicProfilePage: React.FC = () => {
       setLoading(false);
     };
     fetchData();
-  }, [userId, currentUser]);
+  }, [userId, currentUser, isMe]);
 
   const handleFollowToggle = async () => {
       if (!currentUser || !profileUser || isActionLoading) return;
