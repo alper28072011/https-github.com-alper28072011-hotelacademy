@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Building2, ArrowRight, Loader2, LogOut, MapPin } from 'lucide-react';
+import { Plus, Search, Building2, ArrowRight, Loader2, LogOut, MapPin, Briefcase } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { createOrganization, searchOrganizations } from '../../services/db';
-import { Organization } from '../../types';
+import { Organization, OrganizationSector } from '../../types';
 
 export const OrganizationLobby: React.FC = () => {
   const navigate = useNavigate();
@@ -21,7 +21,10 @@ export const OrganizationLobby: React.FC = () => {
 
   // Loading States
   const [switchingOrgId, setSwitchingOrgId] = useState<string | null>(null);
+  
+  // Creation State
   const [newOrgName, setNewOrgName] = useState('');
+  const [newOrgSector, setNewOrgSector] = useState<OrganizationSector>('tourism');
   const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
@@ -49,7 +52,7 @@ export const OrganizationLobby: React.FC = () => {
   const handleCreate = async () => {
       if (!newOrgName || !currentUser) return;
       setIsCreating(true);
-      const org = await createOrganization(newOrgName, currentUser, '');
+      const org = await createOrganization(newOrgName, newOrgSector, currentUser);
       if (org) {
           // Explicit await to ensure state is synced before navigation
           await switchOrganization(org.id);
@@ -84,6 +87,16 @@ export const OrganizationLobby: React.FC = () => {
   const goToPublicPage = (orgId: string) => {
       navigate(`/hotel/${orgId}`);
   };
+
+  const sectors: { id: OrganizationSector, label: string }[] = [
+      { id: 'tourism', label: 'Turizm & Otelcilik' },
+      { id: 'technology', label: 'Teknoloji & Yazılım' },
+      { id: 'health', label: 'Sağlık Hizmetleri' },
+      { id: 'education', label: 'Eğitim & Akademi' },
+      { id: 'retail', label: 'Perakende & Mağazacılık' },
+      { id: 'finance', label: 'Finans & Danışmanlık' },
+      { id: 'other', label: 'Diğer' },
+  ];
 
   return (
     <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -123,13 +136,13 @@ export const OrganizationLobby: React.FC = () => {
                                 {switchingOrgId === mem.organizationId ? <Loader2 className="w-5 h-5 animate-spin text-green-600" /> : <Building2 className="w-5 h-5 text-gray-500" />}
                             </div>
                             <div className="text-left flex-1 min-w-0">
-                                <div className="font-bold text-gray-800 truncate text-sm">Hotel {mem.organizationId.substring(0,4)}...</div>
+                                <div className="font-bold text-gray-800 truncate text-sm">Org {mem.organizationId.substring(0,4)}...</div>
                                 <div className="text-xs text-gray-500 capitalize">{mem.role}</div>
                             </div>
                             {switchingOrgId !== mem.organizationId && <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-accent" />}
                         </button>
                     ))}
-                    {myMemberships.length === 0 && <div className="text-center py-10 text-gray-400 text-sm">Henüz bir otele üye değilsiniz.</div>}
+                    {myMemberships.length === 0 && <div className="text-center py-10 text-gray-400 text-sm">Henüz bir kuruma üye değilsiniz.</div>}
                 </div>
 
                 <button onClick={logout} className="mt-4 flex items-center gap-2 text-red-500 text-sm font-bold hover:bg-red-50 p-3 rounded-xl transition-colors">
@@ -140,8 +153,8 @@ export const OrganizationLobby: React.FC = () => {
             {/* Main Area */}
             <div className="flex-1 p-8 md:p-12 flex flex-col">
                 <div className="flex gap-4 mb-8">
-                    <button onClick={() => setActiveTab('FIND')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'FIND' ? 'bg-primary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Otel Bul</button>
-                    <button onClick={() => setActiveTab('CREATE')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'CREATE' ? 'bg-primary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Otel Kur</button>
+                    <button onClick={() => setActiveTab('FIND')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'FIND' ? 'bg-primary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Kurum Bul</button>
+                    <button onClick={() => setActiveTab('CREATE')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'CREATE' ? 'bg-primary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Kurum Oluştur</button>
                 </div>
 
                 <AnimatePresence mode="wait">
@@ -155,7 +168,7 @@ export const OrganizationLobby: React.FC = () => {
                                 <input 
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Otel Adı Ara..." 
+                                    placeholder="Kurum Adı Ara..." 
                                     className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 font-bold text-gray-800 focus:border-accent focus:outline-none transition-all"
                                 />
                                 {isSearching && <Loader2 className="absolute right-4 top-4 w-5 h-5 animate-spin text-accent" />}
@@ -183,15 +196,32 @@ export const OrganizationLobby: React.FC = () => {
                         </motion.div>
                     ) : (
                         <motion.div key="create" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex-1 flex flex-col">
-                            <h2 className="text-2xl font-bold text-gray-800 mb-2">Kendi Otelini Kur</h2>
+                            <h2 className="text-2xl font-bold text-gray-800 mb-2">Kendi Yapını Kur</h2>
                             <p className="text-gray-500 text-sm mb-6">Yönetici paneline erişim sağla.</p>
                             <div className="space-y-4">
                                 <input 
                                     value={newOrgName}
                                     onChange={(e) => setNewOrgName(e.target.value)}
-                                    placeholder="İşletme Adı"
+                                    placeholder="İşletme/Kurum Adı"
                                     className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 px-4 font-bold text-gray-800 focus:border-accent focus:outline-none"
                                 />
+                                
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Faaliyet Sektörü</label>
+                                    <div className="relative">
+                                        <Briefcase className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                                        <select 
+                                            value={newOrgSector}
+                                            onChange={(e) => setNewOrgSector(e.target.value as OrganizationSector)}
+                                            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 font-bold text-gray-800 focus:border-accent focus:outline-none appearance-none"
+                                        >
+                                            {sectors.map(s => (
+                                                <option key={s.id} value={s.id}>{s.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <button 
                                     onClick={handleCreate}
                                     disabled={!newOrgName || isCreating}

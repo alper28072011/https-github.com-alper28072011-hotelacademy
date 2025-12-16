@@ -10,11 +10,11 @@ export const AdminLayout: React.FC = () => {
 
   const navItems = [
     { path: '/admin/requests', icon: Inbox, label: 'İstekler' }, 
-    { path: '/admin/staff', icon: Users, label: 'Personel' },
-    { path: '/admin/career', icon: Map, label: 'Kariyer Yolları' },
-    { path: '/admin/content', icon: Film, label: 'İçerik Stüdyosu' },
-    { path: '/admin/reports', icon: BarChart2, label: 'Yetenek Analitiği' },
-    { path: '/admin/settings', icon: Settings, label: 'Otel Ayarları' }, // New
+    { path: '/admin/staff', icon: Users, label: 'Ekip' },
+    { path: '/admin/career', icon: Map, label: 'Kariyer' },
+    { path: '/admin/content', icon: Film, label: 'İçerik' },
+    { path: '/admin/reports', icon: BarChart2, label: 'Analiz' },
+    { path: '/admin/settings', icon: Settings, label: 'Kurum Ayarları' }, // Updated Label
   ];
 
   return (
@@ -23,7 +23,7 @@ export const AdminLayout: React.FC = () => {
       <aside className="w-20 md:w-64 bg-primary text-white flex flex-col sticky top-0 h-screen">
         <div className="p-4 md:p-6 flex items-center justify-center md:justify-start gap-3 border-b border-white/10">
             <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center shadow-lg shrink-0">
-               <span className="text-primary font-bold text-xl">H</span>
+               <span className="text-primary font-bold text-xl">M</span>
             </div>
             <span className="hidden md:block font-bold text-lg tracking-wide uppercase">Manager</span>
         </div>

@@ -19,7 +19,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest } from '../types';
+import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -74,7 +74,7 @@ export const getAllPublicOrganizations = async (): Promise<Organization[]> => {
     }
 };
 
-export const createOrganization = async (name: string, owner: User, logoUrl: string): Promise<Organization | null> => {
+export const createOrganization = async (name: string, sector: OrganizationSector, owner: User): Promise<Organization | null> => {
     try {
         const orgId = name.toLowerCase().replace(/\s/g, '_') + '_' + Math.floor(Math.random() * 1000);
         const code = name.substring(0, 3).toUpperCase() + Math.floor(1000 + Math.random() * 9000); 
@@ -82,16 +82,17 @@ export const createOrganization = async (name: string, owner: User, logoUrl: str
         const newOrg: Organization = {
             id: orgId,
             name,
-            logoUrl,
-            coverUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1200',
-            description: 'Welcome to our team.',
-            location: 'Turkiye',
+            sector,
+            logoUrl: '',
+            coverUrl: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200', // Generic office
+            description: `Welcome to ${name}.`,
+            location: 'Global',
             ownerId: owner.id,
             code,
             createdAt: Date.now(),
             settings: {
                 allowStaffContentCreation: false,
-                customDepartments: [],
+                customDepartments: ['management', 'hr', 'sales'],
                 primaryColor: '#0B1E3B'
             }
         };

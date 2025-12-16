@@ -9,7 +9,7 @@ export interface Language {
   dir: 'ltr' | 'rtl';
 }
 
-export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management' | string; // Dynamic string support
+export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management' | 'hr' | 'sales' | 'it' | string; // Extended defaults
 export type UserRole = 'staff' | 'manager' | 'admin' | 'super_admin'; // Added super_admin
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
@@ -44,6 +44,9 @@ export interface Relationship {
 
 // --- MULTI-TENANCY TYPES ---
 
+export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
+export type OrganizationSize = '1-10' | '11-50' | '50-200' | '200+';
+
 export interface OrganizationSettings {
     allowStaffContentCreation: boolean; // Can staff post to feed?
     customDepartments: string[]; // ["Spa", "Security", "Animation"]
@@ -61,7 +64,11 @@ export interface Organization {
   description?: string; // "About Us"
   location?: string; // City, Country
   website?: string;
+  linkedinUrl?: string; // NEW
   
+  sector: OrganizationSector; // NEW
+  size?: OrganizationSize; // NEW
+
   ownerId: string; // The GM or Creator
   legacyOwnerId?: string; // The previous owner (for logs/history)
   status?: OrganizationStatus; // Lifecycle status

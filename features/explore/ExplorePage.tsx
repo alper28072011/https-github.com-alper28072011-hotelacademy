@@ -2,11 +2,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Search, Loader2, Sparkles, Building2, MapPin, ArrowRight } from 'lucide-react';
+import { Search, Loader2, Sparkles, Building2, MapPin, ArrowRight, Laptop, Heart, GraduationCap, ShoppingBag } from 'lucide-react';
 import { useContentStore } from '../../stores/useContentStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { getAllPublicOrganizations } from '../../services/db';
-import { Organization } from '../../types';
+import { Organization, OrganizationSector } from '../../types';
 import { FilterPills } from './components/FilterPills';
 import { HeroCourseCard } from './components/HeroCourseCard';
 import { TopicSection } from './components/TopicSection';
@@ -26,16 +26,17 @@ export const ExplorePage: React.FC = () => {
     courses 
   } = useContentStore();
 
-  const [activeTab, setActiveTab] = useState<'LEARNING' | 'HOTELS'>('LEARNING');
+  const [activeTab, setActiveTab] = useState<'LEARNING' | 'ORGS'>('LEARNING');
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
-  const [hotels, setHotels] = useState<Organization[]>([]);
+  const [selectedSector, setSelectedSector] = useState<OrganizationSector | null>(null);
+  const [orgs, setOrgs] = useState<Organization[]>([]);
 
   useEffect(() => {
     if (currentUser?.currentOrganizationId) {
         fetchContent(currentUser.currentOrganizationId);
     }
-    // Fetch hotels separately
-    getAllPublicOrganizations().then(setHotels);
+    // Fetch organizations
+    getAllPublicOrganizations().then(setOrgs);
   }, [fetchContent, currentUser]);
 
   // Derived State: The Feed
@@ -57,17 +58,25 @@ export const ExplorePage: React.FC = () => {
               };
           } else {
               return {
-                  mode: 'search_hotels',
-                  items: hotels.filter(h => h.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  mode: 'search_orgs',
+                  items: orgs.filter(h => h.name.toLowerCase().includes(searchQuery.toLowerCase()))
               };
           }
       }
 
-      // If Category Selected
+      // If Learning Category Selected
       if (selectedCatId && activeTab === 'LEARNING') {
           return {
               mode: 'category',
               items: courses.filter(c => c.categoryId === selectedCatId)
+          };
+      }
+
+      // If Org Sector Selected
+      if (selectedSector && activeTab === 'ORGS') {
+          return {
+              mode: 'sector',
+              items: orgs.filter(o => o.sector === selectedSector)
           };
       }
 
@@ -77,7 +86,15 @@ export const ExplorePage: React.FC = () => {
           feed: feed
       };
 
-  }, [feed, searchQuery, selectedCatId, courses, hotels, activeTab]);
+  }, [feed, searchQuery, selectedCatId, selectedSector, courses, orgs, activeTab]);
+
+  const sectors: { id: OrganizationSector, label: string }[] = [
+      { id: 'tourism', label: 'Turizm' },
+      { id: 'technology', label: 'Teknoloji' },
+      { id: 'health', label: 'Sağlık' },
+      { id: 'education', label: 'Eğitim' },
+      { id: 'retail', label: 'Perakende' },
+  ];
 
   if (isLoading || !displayContent) {
       return (
@@ -103,10 +120,10 @@ export const ExplorePage: React.FC = () => {
                         Eğitim
                     </button>
                     <button 
-                        onClick={() => setActiveTab('HOTELS')}
-                        className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'HOTELS' ? 'bg-accent text-primary shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                        onClick={() => setActiveTab('ORGS')}
+                        className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'ORGS' ? 'bg-accent text-primary shadow-lg' : 'text-gray-400 hover:text-white'}`}
                     >
-                        İşletmeler
+                        Kurumlar
                     </button>
                 </div>
             </div>
@@ -116,15 +133,15 @@ export const ExplorePage: React.FC = () => {
                     <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-accent transition-colors" />
                     <input 
                         type="text"
-                        placeholder={activeTab === 'LEARNING' ? "Eğitim ara..." : "Otel ara..."}
+                        placeholder={activeTab === 'LEARNING' ? "Eğitim ara..." : "Kurum ara..."}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-white/10 rounded-2xl py-3 pl-12 pr-4 text-white placeholder-gray-400 font-medium focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all border border-white/10"
+                        className="w-full bg-white/10 rounded-2xl py-3 pl-12 pr-4 text-white placeholder-gray-400 font-medium focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/50 transition-all border border-white/10"
                     />
                 </div>
             </div>
             
-            {/* Filter Pills (Only for Learning) */}
+            {/* Filter Pills (Learning) */}
             {activeTab === 'LEARNING' && (
                 <FilterPills 
                     categories={categories} 
@@ -132,27 +149,44 @@ export const ExplorePage: React.FC = () => {
                     onSelect={setSelectedCatId} 
                 />
             )}
+
+            {/* Filter Pills (Orgs) */}
+            {activeTab === 'ORGS' && (
+                <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 pb-2 pt-2">
+                    <button onClick={() => setSelectedSector(null)} className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${!selectedSector ? 'bg-white text-primary' : 'bg-white/10 border-white/10 text-white/70'}`}>Tümü</button>
+                    {sectors.map(s => (
+                        <button 
+                            key={s.id}
+                            onClick={() => setSelectedSector(s.id)}
+                            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${selectedSector === s.id ? 'bg-white text-primary' : 'bg-white/10 border-white/10 text-white/70'}`}
+                        >
+                            {s.label}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
 
         {/* CONTENT AREA */}
         <div className="p-4 flex flex-col gap-8">
             
-            {/* --- HOTELS TAB --- */}
-            {activeTab === 'HOTELS' && (
+            {/* --- ORGS TAB --- */}
+            {activeTab === 'ORGS' && (
                 <div className="grid grid-cols-1 gap-4">
-                    {(searchQuery ? displayContent.items : hotels).map((hotel: any) => (
+                    {(searchQuery || selectedSector ? displayContent.items : orgs).map((org: any) => (
                         <div 
-                            key={hotel.id} 
-                            onClick={() => navigate(`/hotel/${hotel.id}`)}
+                            key={org.id} 
+                            onClick={() => navigate(`/hotel/${org.id}`)}
                             className="bg-gray-800 rounded-2xl p-4 flex items-center gap-4 border border-white/5 hover:border-accent cursor-pointer group transition-all"
                         >
                             <div className="w-16 h-16 rounded-xl bg-gray-700 overflow-hidden border border-gray-600 group-hover:border-accent">
-                                {hotel.logoUrl ? <img src={hotel.logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-full h-full p-4 text-gray-500" />}
+                                {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-full h-full p-4 text-gray-500" />}
                             </div>
                             <div className="flex-1">
-                                <h3 className="font-bold text-lg text-white group-hover:text-accent transition-colors">{hotel.name}</h3>
-                                <div className="flex items-center gap-2 text-xs text-gray-400">
-                                    <MapPin className="w-3 h-3" /> {hotel.location || 'Konum yok'}
+                                <h3 className="font-bold text-lg text-white group-hover:text-accent transition-colors">{org.name}</h3>
+                                <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
+                                    <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {org.location || '-'}</span>
+                                    <span className="flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded capitalize">{org.sector}</span>
                                 </div>
                             </div>
                             <ArrowRight className="w-5 h-5 text-gray-600 group-hover:text-accent" />
@@ -193,7 +227,7 @@ export const ExplorePage: React.FC = () => {
                             {/* POOL B: TRENDING */}
                             {displayContent.feed.trending.length > 0 && (
                                 <TopicSection 
-                                    title="Herkes Bunu İzliyor" 
+                                    title="Trend Olanlar" 
                                     courses={displayContent.feed.trending} 
                                 />
                             )}

@@ -1,0 +1,293 @@
+
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+    ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, 
+    Users, Utensils, BedDouble, ConciergeBell, Settings, ShieldCheck, 
+    BarChart3, Edit, Megaphone, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark
+} from 'lucide-react';
+import { getOrganizationDetails, sendJoinRequest, getMyMemberships } from '../../services/db';
+import { Organization, DepartmentType, OrganizationSector } from '../../types';
+import { useAuthStore } from '../../stores/useAuthStore';
+import confetti from 'canvas-confetti';
+
+export const OrganizationProfile: React.FC = () => {
+  const { orgId } = useParams<{ orgId: string }>();
+  const navigate = useNavigate();
+  const { currentUser } = useAuthStore();
+  
+  const [org, setOrg] = useState<Organization | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isMember, setIsMember] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  
+  // Wizard State
+  const [showWizard, setShowWizard] = useState(false);
+  const [step, setStep] = useState(1);
+  const [selectedDept, setSelectedDept] = useState<DepartmentType | null>(null);
+  const [roleTitle, setRoleTitle] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const init = async () => {
+        if (!orgId) return;
+        setLoading(true);
+        const data = await getOrganizationDetails(orgId);
+        if (data) setOrg(data);
+        
+        if (currentUser) {
+            const memberships = await getMyMemberships(currentUser.id);
+            if (memberships.some(m => m.organizationId === orgId)) setIsMember(true);
+        }
+        setLoading(false);
+    };
+    init();
+  }, [orgId, currentUser]);
+
+  const handleJoin = async () => {
+      if (!currentUser || !org || !selectedDept) return;
+      setIsSubmitting(true);
+      const result = await sendJoinRequest(currentUser.id, org.id, selectedDept, roleTitle);
+      setIsSubmitting(false);
+      
+      if (result.success) {
+          setShowWizard(false);
+          confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+          alert("Başvuru gönderildi! Yönetici onayı bekleniyor.");
+          navigate('/lobby');
+      } else {
+          alert(result.message || "Başvuru yapılamadı.");
+          setShowWizard(false);
+      }
+  };
+
+  const handleFollow = () => {
+      setIsFollowing(!isFollowing);
+  };
+
+  const canManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager') && currentUser.currentOrganizationId === orgId;
+
+  const getSectorIcon = (sector: OrganizationSector) => {
+      switch(sector) {
+          case 'technology': return <Laptop className="w-4 h-4" />;
+          case 'health': return <Heart className="w-4 h-4" />;
+          case 'education': return <GraduationCap className="w-4 h-4" />;
+          case 'retail': return <ShoppingBag className="w-4 h-4" />;
+          case 'finance': return <Landmark className="w-4 h-4" />;
+          case 'tourism': return <ConciergeBell className="w-4 h-4" />;
+          default: return <Briefcase className="w-4 h-4" />;
+      }
+  };
+
+  const getSectorLabel = (sector: OrganizationSector) => {
+      const map: Record<string, string> = {
+          'tourism': 'Turizm', 'technology': 'Teknoloji', 'health': 'Sağlık', 
+          'education': 'Eğitim', 'retail': 'Perakende', 'finance': 'Finans', 'other': 'Genel'
+      };
+      return map[sector] || 'Genel';
+  };
+
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
+  if (!org) return <div>Organization not found</div>;
+
+  return (
+    <div className="min-h-screen bg-white pb-24 relative">
+        {/* HERO SECTION */}
+        <div className="relative h-80 w-full">
+            <img 
+                src={org.coverUrl || 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200'} 
+                className="w-full h-full object-cover"
+                alt="Cover" 
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+            
+            <button 
+                onClick={() => navigate('/lobby')}
+                className="absolute top-6 left-6 bg-white/20 backdrop-blur-md p-2 rounded-full text-white hover:bg-white/30 transition-all"
+            >
+                <ArrowLeft className="w-6 h-6" />
+            </button>
+        </div>
+
+        {/* OWNER DASHBOARD PANEL */}
+        {canManage && (
+            <div className="px-6 -mt-10 relative z-20 mb-6">
+                <div className="bg-gray-900 text-white rounded-2xl p-4 shadow-2xl border border-gray-700">
+                    <div className="flex justify-between items-start mb-4">
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <ShieldCheck className="w-4 h-4 text-accent" />
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-300">Kurum Yönetimi</h3>
+                            </div>
+                            <p className="text-xs text-gray-400">Son 30 günde 1.2k ziyaret</p>
+                        </div>
+                        <button 
+                            onClick={() => navigate('/admin')}
+                            className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                        >
+                            Panele Git
+                        </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-2">
+                        <button onClick={() => navigate('/admin/content')} className="bg-gray-800 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-gray-700 transition-colors">
+                            <Megaphone className="w-5 h-5 text-blue-400" />
+                            <span className="text-[10px] font-bold">İçerik</span>
+                        </button>
+                        <button onClick={() => navigate('/admin/settings')} className="bg-gray-800 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-gray-700 transition-colors">
+                            <Edit className="w-5 h-5 text-green-400" />
+                            <span className="text-[10px] font-bold">Düzenle</span>
+                        </button>
+                        <button onClick={() => navigate('/admin/reports')} className="bg-gray-800 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-gray-700 transition-colors">
+                            <BarChart3 className="w-5 h-5 text-purple-400" />
+                            <span className="text-[10px] font-bold">Analiz</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* PROFILE INFO */}
+        <div className={`px-6 relative z-10 ${canManage ? '' : '-mt-16'}`}>
+            <div className="w-32 h-32 rounded-3xl bg-white p-1 shadow-2xl mb-4">
+                <div className="w-full h-full rounded-2xl overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200">
+                    {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-gray-400">{org.name[0]}</span>}
+                </div>
+            </div>
+
+            <div className="mb-6">
+                <h1 className="text-3xl font-bold text-gray-900 leading-tight mb-2">{org.name}</h1>
+                
+                {/* Sector Badge */}
+                <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-xs font-bold mb-3 uppercase tracking-wide">
+                    {getSectorIcon(org.sector)}
+                    {getSectorLabel(org.sector)}
+                </div>
+
+                <div className="flex flex-wrap gap-4 text-sm text-gray-600 font-medium">
+                    {org.location && <div className="flex items-center gap-1"><MapPin className="w-4 h-4 text-accent" /> {org.location}</div>}
+                    {org.website && <div className="flex items-center gap-1"><Globe className="w-4 h-4 text-blue-500" /> {org.website}</div>}
+                </div>
+                {/* Stats Row */}
+                <div className="flex gap-6 mt-4 pb-4 border-b border-gray-100">
+                    <div className="text-center">
+                        <div className="font-bold text-lg text-gray-900">{org.followersCount || 0}</div>
+                        <div className="text-xs text-gray-500">Takipçi</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="font-bold text-lg text-gray-900">{org.memberCount || 0}</div>
+                        <div className="text-xs text-gray-500">Personel</div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 mb-8">
+                <h3 className="font-bold text-gray-900 mb-2">Hakkımızda</h3>
+                <p className="text-gray-600 leading-relaxed text-sm">
+                    {org.description || "Dünyanın en iyi deneyimini sunmak için çalışan tutkulu bir ekibiz."}
+                </p>
+            </div>
+        </div>
+
+        {/* STICKY ACTIONS */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 z-30 shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)]">
+            {isMember ? (
+                <button 
+                    onClick={() => navigate('/')}
+                    className="w-full bg-green-600 text-white font-bold text-lg py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2"
+                >
+                    <CheckCircle2 className="w-6 h-6" />
+                    Panele Git
+                </button>
+            ) : (
+                <div className="flex gap-3">
+                    <button 
+                        onClick={handleFollow}
+                        className={`flex-1 font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all ${isFollowing ? 'bg-gray-100 text-gray-800' : 'bg-blue-600 text-white'}`}
+                    >
+                        {isFollowing ? 'Takip Ediliyor' : <><Bell className="w-5 h-5" /> Takip Et</>}
+                    </button>
+                    <button 
+                        onClick={() => setShowWizard(true)}
+                        className="flex-1 bg-primary text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2"
+                    >
+                        <UserPlus className="w-5 h-5" />
+                        İşe Başvur
+                    </button>
+                </div>
+            )}
+        </div>
+
+        {/* WIZARD MODAL */}
+        <AnimatePresence>
+            {showWizard && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowWizard(false)}
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                    />
+                    <motion.div 
+                        initial={{ y: 100, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 100, opacity: 0 }}
+                        className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden relative z-10 shadow-2xl flex flex-col max-h-[85vh]"
+                    >
+                        <div className="p-8">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Başvuru Sihirbazı</h2>
+                            <p className="text-gray-500 mb-8 text-sm">Hangi pozisyonda aramıza katılmak istersin?</p>
+
+                            {step === 1 && (
+                                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="grid grid-cols-2 gap-3">
+                                    {[
+                                        { id: 'housekeeping', icon: BedDouble, label: 'Operasyon' }, // Generic
+                                        { id: 'kitchen', icon: Utensils, label: 'Mutfak/Gıda' },
+                                        { id: 'front_office', icon: ConciergeBell, label: 'Ön Büro/Danışma' },
+                                        { id: 'management', icon: Users, label: 'Yönetim' },
+                                    ].map((item) => (
+                                        <button 
+                                            key={item.id}
+                                            onClick={() => { setSelectedDept(item.id as any); setStep(2); }}
+                                            className="p-4 rounded-2xl border-2 border-gray-100 hover:border-primary hover:bg-primary/5 flex flex-col items-center gap-3 transition-all group"
+                                        >
+                                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 group-hover:bg-primary group-hover:text-white transition-colors">
+                                                <item.icon className="w-6 h-6" />
+                                            </div>
+                                            <span className="font-bold text-gray-700 text-sm">{item.label}</span>
+                                        </button>
+                                    ))}
+                                </motion.div>
+                            )}
+
+                            {step === 2 && (
+                                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-400 uppercase ml-1">Pozisyon / Unvan (Opsiyonel)</label>
+                                        <input 
+                                            value={roleTitle}
+                                            onChange={e => setRoleTitle(e.target.value)}
+                                            placeholder="Örn: Yazılımcı, Hemşire, Şef"
+                                            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 px-4 font-bold text-gray-900 focus:border-accent focus:outline-none mt-1"
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={handleJoin}
+                                        disabled={isSubmitting}
+                                        className="w-full bg-primary text-white py-4 rounded-2xl font-bold shadow-lg mt-4 flex items-center justify-center gap-2"
+                                    >
+                                        {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Başvuruyu Tamamla'}
+                                    </button>
+                                    <button onClick={() => setStep(1)} className="text-gray-400 font-medium text-sm">Geri Dön</button>
+                                </motion.div>
+                            )}
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
+    </div>
+  );
+};

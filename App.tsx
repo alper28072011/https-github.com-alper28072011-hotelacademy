@@ -7,8 +7,8 @@ import { useAuthStore } from './stores/useAuthStore';
 import { useOrganizationStore } from './stores/useOrganizationStore';
 import { LoginPage } from './features/auth/LoginPage';
 import { OrganizationLobby } from './features/organization/OrganizationLobby';
-import { HotelPublicPage } from './features/organization/HotelPublicPage';
-import { HotelSettings } from './features/organization/HotelSettings';
+import { OrganizationProfile } from './features/organization/OrganizationProfile';
+import { OrganizationSettings } from './features/organization/OrganizationSettings';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ProfilePage } from './features/profile/ProfilePage';
 import { PublicProfilePage } from './features/profile/PublicProfilePage';
@@ -50,7 +50,7 @@ const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </main>
        <footer className="relative z-10 p-4 text-center text-gray-400 text-xs">
-          <p>v2.2.0 &bull; Individual First</p>
+          <p>v2.2.0 &bull; Global Learning</p>
        </footer>
     </div>
   );
@@ -80,7 +80,7 @@ const App: React.FC = () => {
   }, [isAuthenticated, currentUser, currentOrganization]); 
 
   // Role Checks
-  const canAccessHotelAdmin = ['manager', 'admin', 'super_admin'].includes(currentUser?.role || '');
+  const canAccessAdmin = ['manager', 'admin', 'super_admin'].includes(currentUser?.role || '');
   
   // Strict Super Admin Check (Double Verification)
   const isSuperAdmin = currentUser?.role === 'super_admin' && currentUser?.phoneNumber.replace(/\s/g, '') === '+905417726743';
@@ -103,15 +103,15 @@ const App: React.FC = () => {
         {/* Protected Routes */}
         {isAuthenticated ? (
            <>
-              {/* PUBLIC HOTEL PAGE (Accessible if authed but not joined) */}
-              <Route path="/hotel/:orgId" element={<HotelPublicPage />} />
+              {/* PUBLIC ORG PAGE (Accessible if authed but not joined) */}
+              <Route path="/hotel/:orgId" element={<OrganizationProfile />} />
 
               {/* Course Flow Routes */}
               <Route path="/course/:courseId" element={<CourseIntroPage />} />
               <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
               
-              {/* HOTEL ADMIN ROUTES (On-Demand Access) */}
-              {canAccessHotelAdmin && currentOrganization && (
+              {/* ORGANIZATION ADMIN ROUTES (On-Demand Access) */}
+              {canAccessAdmin && currentOrganization && (
                   <Route path="/admin" element={<AdminLayout />}>
                       <Route index element={<Navigate to="requests" replace />} />
                       <Route path="requests" element={<TeamRequests />} />
@@ -119,7 +119,7 @@ const App: React.FC = () => {
                       <Route path="career" element={<CareerBuilder />} />
                       <Route path="content" element={<ContentStudio />} />
                       <Route path="reports" element={<TalentRadar />} />
-                      <Route path="settings" element={<HotelSettings />} /> 
+                      <Route path="settings" element={<OrganizationSettings />} /> 
                   </Route>
               )}
 
@@ -129,7 +129,6 @@ const App: React.FC = () => {
               } />
 
               {/* DEFAULT USER INTERFACE (Freemium / Freelancer / Staff) */}
-              {/* Removed "If no org -> Lobby" Gatekeeper. Everyone gets the dashboard. */}
               <Route 
                 path="/*" 
                 element={
