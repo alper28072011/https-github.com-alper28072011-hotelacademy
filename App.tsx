@@ -20,6 +20,7 @@ import { CoursePlayerPage } from './features/player/CoursePlayerPage';
 import { CourseIntroPage } from './features/course/CourseIntroPage'; 
 import { JourneyMap } from './features/career/JourneyMap';
 import { Loader2 } from 'lucide-react';
+import ScrollToTop from './components/utils/ScrollToTop';
 
 // Admin Imports
 import { AdminLayout } from './features/admin/AdminLayout';
@@ -100,6 +101,7 @@ const App: React.FC = () => {
 
   return (
     <HashRouter>
+      <ScrollToTop />
       <Routes>
         {/* Protected Routes */}
         {isAuthenticated ? (

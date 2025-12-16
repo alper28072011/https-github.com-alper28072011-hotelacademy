@@ -1,4 +1,3 @@
-
 import { 
   collection, 
   getDocs, 
@@ -600,7 +599,7 @@ export const getInstructorCourses = async (authorId: string): Promise<Course[]> 
     try {
         const q = query(coursesRef, where('authorId', '==', authorId));
         const snap = await getDocs(q);
-        return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Course));
+        return snap.docs.map(d => ({ id: d.id, ...d.data() } as Course));
     } catch (e) { return []; }
 };
 export const getCourses = async (orgId?: string): Promise<Course[]> => {
