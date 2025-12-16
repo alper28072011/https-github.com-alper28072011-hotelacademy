@@ -90,8 +90,9 @@ export const initiatePhoneAuth = async (
 /**
  * Registers a new user in Firestore.
  * UPDATED: Department is now optional and defaults to null.
+ * UPDATED: Sets default creatorLevel and reputationPoints.
  */
-export const registerUser = async (userData: Omit<User, 'id' | 'department' | 'role' | 'pin' | 'currentOrganizationId' | 'organizationHistory' | 'xp' | 'completedCourses' | 'startedCourses' | 'completedTasks' | 'badges'>): Promise<User> => {
+export const registerUser = async (userData: Omit<User, 'id' | 'department' | 'role' | 'pin' | 'currentOrganizationId' | 'organizationHistory' | 'xp' | 'completedCourses' | 'startedCourses' | 'completedTasks' | 'badges' | 'creatorLevel' | 'reputationPoints'>): Promise<User> => {
   try {
     const role = userData.phoneNumber.replace(/\s/g, '') === SUPER_ADMIN_PHONE ? 'super_admin' : 'staff';
     
@@ -110,6 +111,10 @@ export const registerUser = async (userData: Omit<User, 'id' | 'department' | 'r
         badges: [],
         isSuperAdmin: role === 'super_admin',
         
+        // NEW DEFAULTS
+        creatorLevel: 'NOVICE',
+        reputationPoints: 0,
+
         status: 'ACTIVE',
         joinDate: Date.now(),
         metadata: {

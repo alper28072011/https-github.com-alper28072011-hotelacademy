@@ -23,7 +23,9 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now(), // Added
-      status: 'ACTIVE' // Added
+      status: 'ACTIVE', // Added
+      creatorLevel: 'NOVICE',
+      reputationPoints: 50
   },
   { 
       name: 'Fatma Demir', 
@@ -40,7 +42,9 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 10000000, // Slightly older
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      creatorLevel: 'NOVICE',
+      reputationPoints: 20
   },
   { 
       name: 'Mehmet Öztürk', 
@@ -57,7 +61,9 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 20000000,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      creatorLevel: 'RISING_STAR',
+      reputationPoints: 150
   },
   { 
       name: 'Canan Kaya', 
@@ -75,7 +81,9 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 5000000,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      creatorLevel: 'EXPERT',
+      reputationPoints: 400
   },
   // Admin User
   { 
@@ -94,7 +102,9 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 30000000,
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      creatorLevel: 'MASTER',
+      reputationPoints: 9999
   },
 ];
 
@@ -129,7 +139,11 @@ const MOCK_COURSES: Course[] = [
       isNew: true,
       steps: [
           { id: 's1', type: 'video', title: 'Hoşgeldin', videoUrl: 'https://cdn.coverr.co/videos/coverr-hotel-lobby-4432/1080p.mp4' }
-      ]
+      ],
+      tier: 'OFFICIAL',
+      verificationStatus: 'VERIFIED',
+      qualityScore: 5,
+      priceType: 'FREE'
   },
   {
       id: '002',
@@ -149,7 +163,11 @@ const MOCK_COURSES: Course[] = [
       priority: 'NORMAL',
       tags: ['#Rehber', '#Kurallar'],
       popularityScore: 90,
-      steps: []
+      steps: [],
+      tier: 'OFFICIAL',
+      verificationStatus: 'VERIFIED',
+      qualityScore: 4.8,
+      priceType: 'FREE'
   },
   {
       id: '003',
@@ -169,7 +187,11 @@ const MOCK_COURSES: Course[] = [
       priority: 'HIGH',
       tags: ['#Hizmet', '#Kalite'],
       popularityScore: 95,
-      steps: []
+      steps: [],
+      tier: 'OFFICIAL',
+      verificationStatus: 'VERIFIED',
+      qualityScore: 4.9,
+      priceType: 'FREE'
   },
   {
     id: '101',
@@ -189,7 +211,11 @@ const MOCK_COURSES: Course[] = [
     priority: 'NORMAL',
     tags: ['#İletişim', '#Kriz'],
     popularityScore: 88,
-    steps: []
+    steps: [],
+    tier: 'OFFICIAL',
+    verificationStatus: 'VERIFIED',
+    qualityScore: 4.7,
+    priceType: 'FREE'
   },
   {
     id: '102',
@@ -210,7 +236,11 @@ const MOCK_COURSES: Course[] = [
     tags: ['#Sanat', '#Mutfak'],
     popularityScore: 75,
     isNew: true,
-    steps: []
+    steps: [],
+    tier: 'OFFICIAL',
+    verificationStatus: 'VERIFIED',
+    qualityScore: 4.5,
+    priceType: 'FREE'
   },
   {
     id: '103',
@@ -228,7 +258,11 @@ const MOCK_COURSES: Course[] = [
     assignmentType: 'OPTIONAL',
     tags: ['#Kahve', '#Hobi'],
     popularityScore: 92,
-    steps: []
+    steps: [],
+    tier: 'OFFICIAL',
+    verificationStatus: 'VERIFIED',
+    qualityScore: 4.8,
+    priceType: 'FREE'
   },
   {
     id: '201',
@@ -247,7 +281,11 @@ const MOCK_COURSES: Course[] = [
     priority: 'HIGH', 
     tags: ['#Güvenlik', '#Zorunlu'],
     popularityScore: 60,
-    steps: []
+    steps: [],
+    tier: 'OFFICIAL',
+    verificationStatus: 'VERIFIED',
+    qualityScore: 4.2,
+    priceType: 'FREE'
   },
   {
     id: '202',
@@ -266,7 +304,11 @@ const MOCK_COURSES: Course[] = [
     priority: 'NORMAL',
     tags: ['#Sağlık', '#Yaşam'],
     popularityScore: 80,
-    steps: []
+    steps: [],
+    tier: 'OFFICIAL',
+    verificationStatus: 'VERIFIED',
+    qualityScore: 4.6,
+    priceType: 'FREE'
   },
   {
     id: '301',
@@ -286,7 +328,11 @@ const MOCK_COURSES: Course[] = [
     priority: 'HIGH',
     tags: ['#Dil', '#İngilizce'],
     popularityScore: 85,
-    steps: []
+    steps: [],
+    tier: 'OFFICIAL',
+    verificationStatus: 'VERIFIED',
+    qualityScore: 4.7,
+    priceType: 'FREE'
   },
   {
     id: '401',
@@ -306,7 +352,11 @@ const MOCK_COURSES: Course[] = [
     priority: 'HIGH',
     tags: ['#Düzen', '#Standart'],
     popularityScore: 70,
-    steps: []
+    steps: [],
+    tier: 'OFFICIAL',
+    verificationStatus: 'VERIFIED',
+    qualityScore: 4.5,
+    priceType: 'FREE'
   },
   {
     id: '402',
@@ -326,7 +376,11 @@ const MOCK_COURSES: Course[] = [
     priority: 'NORMAL',
     tags: ['#Temizlik', '#Kimyasal'],
     popularityScore: 65,
-    steps: []
+    steps: [],
+    tier: 'OFFICIAL',
+    verificationStatus: 'VERIFIED',
+    qualityScore: 4.3,
+    priceType: 'FREE'
   },
   {
     id: '501',
@@ -345,7 +399,11 @@ const MOCK_COURSES: Course[] = [
     tags: ['#Şarap', '#Servis'],
     popularityScore: 98,
     isNew: true,
-    steps: []
+    steps: [],
+    tier: 'OFFICIAL',
+    verificationStatus: 'VERIFIED',
+    qualityScore: 4.9,
+    priceType: 'FREE'
   }
 ];
 

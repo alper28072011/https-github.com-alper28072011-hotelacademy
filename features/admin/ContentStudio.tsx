@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Upload, Loader2, Send, Trash2, 
     BarChart2, Zap, Heart, 
-    Users, Globe, Lock, DollarSign, BookOpen, Award, Star, Building2, User, CheckCircle2
+    Users, Globe, Lock, DollarSign, BookOpen, Award, Star, Building2, User, CheckCircle2, Shield, Video
 } from 'lucide-react';
 import { DepartmentType, FeedPost, Interaction, InteractionType, AssignmentType, ContentPriority, KudosType, User as UserType, Course, CourseVisibility, CourseStep, OwnerType } from '../../types';
 import { uploadFile } from '../../services/storage';
-import { createInteractivePost, getUsersByDepartment, sendKudos, createCourse } from '../../services/db';
+import { createInteractivePost, getUsersByDepartment, sendKudos } from '../../services/db';
+import { publishContent } from '../../services/courseService'; // NEW SERVICE
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 
@@ -70,6 +71,10 @@ export const ContentStudio: React.FC = () => {
       }
   }, [postingAs]);
 
+  // Determine Creator Capability
+  const isExpert = currentUser?.creatorLevel === 'EXPERT' || currentUser?.creatorLevel === 'MASTER';
+  const isNovice = !isExpert;
+
   // Handlers
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files?.[0]) {
@@ -98,29 +103,6 @@ export const ContentStudio: React.FC = () => {
       setSteps([...steps, newStep]);
       setCurrentStepTitle('');
       setCurrentStepFile(null);
-  };
-
-  const addInteraction = (type: InteractionType) => {
-      if (interactions.length > 0) {
-          alert("Şimdilik gönderi başına sadece 1 etkileşim ekleyebilirsiniz.");
-          return;
-      }
-      const newId = Date.now().toString();
-      const defaultData: any = {};
-      if (type === 'POLL') {
-          defaultData.question = "Bu konu hakkında ne düşünüyorsun?";
-          defaultData.options = ["Harika 😍", "Geliştirilmeli 🤔"];
-      } else if (type === 'XP_BOOST') {
-          defaultData.xpAmount = 100;
-      }
-      const newInteraction: Interaction = {
-          id: newId,
-          type,
-          data: defaultData,
-          style: { x: 50, y: 50, scale: 1 }
-      };
-      setInteractions([...interactions, newInteraction]);
-      setActiveInteractionId(newId);
   };
 
   const handlePublishKudos = async () => {
@@ -152,12 +134,13 @@ export const ContentStudio: React.FC = () => {
           let thumbUrl = '';
           if (file) thumbUrl = await uploadFile(file, 'course_covers');
 
-          const newCourse: Omit<Course, 'id'> = {
+          const newCourse: any = {
               organizationId: postingAs === 'ORGANIZATION' ? currentUser.currentOrganizationId! : undefined,
               authorId: currentUser.id,
               ownerType: postingAs,
               visibility: courseVisibility,
               price: courseVisibility === 'PUBLIC' ? coursePrice : 0,
+              priceType: coursePrice > 0 ? 'PAID' : 'FREE',
               categoryId: 'cat_onboarding', // Default for now
               title: courseTitle,
               description: courseDesc,
@@ -172,7 +155,9 @@ export const ContentStudio: React.FC = () => {
               discussionBoardId: `discuss_${Date.now()}` // Auto-create ID
           };
 
-          await createCourse(newCourse);
+          // Use the new Service that handles Tiers & Verification
+          await publishContent(newCourse, currentUser);
+          
           setIsSuccess(true);
           setTimeout(() => {
               setIsSuccess(false);
@@ -224,26 +209,6 @@ export const ContentStudio: React.FC = () => {
       } catch (error) { console.error(error); alert("Yayınlama hatası"); } finally { setIsPublishing(false); }
   };
 
-  // --- BADGE CONFIG ---
-  const badges = [
-      { id: 'STAR_PERFORMER', icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-100', label: 'Yıldız Performans' },
-      { id: 'TEAM_PLAYER', icon: Users, color: 'text-blue-500', bg: 'bg-blue-100', label: 'Takım Oyuncusu' },
-      { id: 'GUEST_HERO', icon: Heart, color: 'text-red-500', bg: 'bg-red-100', label: 'Misafir Kahramanı' },
-      { id: 'FAST_LEARNER', icon: Zap, color: 'text-purple-500', bg: 'bg-purple-100', label: 'Hızlı Öğrenen' },
-  ];
-
-  if (isSuccess) {
-      return (
-          <div className="flex flex-col items-center justify-center h-[70vh] animate-in zoom-in">
-              <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-6">
-                  <CheckCircle2 className="w-12 h-12" />
-              </div>
-              <h2 className="text-3xl font-bold text-gray-800">Yayında!</h2>
-              <p className="text-gray-500 mt-2">İçerik başarıyla paylaşıldı.</p>
-          </div>
-      );
-  }
-
   // --- IDENTITY SWITCHER UI ---
   const renderIdentitySwitcher = () => (
       <div className="flex bg-gray-100 p-1 rounded-xl mb-6">
@@ -264,6 +229,18 @@ export const ContentStudio: React.FC = () => {
       </div>
   );
 
+  if (isSuccess) {
+      return (
+          <div className="flex flex-col items-center justify-center h-[70vh] animate-in zoom-in">
+              <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-6">
+                  <CheckCircle2 className="w-12 h-12" />
+              </div>
+              <h2 className="text-3xl font-bold text-gray-800">Yayında!</h2>
+              <p className="text-gray-500 mt-2">İçerik başarıyla paylaşıldı.</p>
+          </div>
+      );
+  }
+
   return (
     <div className="flex flex-col xl:flex-row gap-8 h-[calc(100vh-100px)] relative">
         
@@ -280,15 +257,25 @@ export const ContentStudio: React.FC = () => {
             {renderIdentitySwitcher()}
 
             {/* Mode Switcher */}
-            <div className="flex bg-gray-100 p-1 rounded-xl w-max">
+            <div className="flex bg-gray-100 p-1 rounded-xl w-max overflow-x-auto">
                 {postingAs === 'ORGANIZATION' && (
-                    <button onClick={() => setActiveTab('feed')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'feed' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Haber Akışı</button>
+                    <button onClick={() => setActiveTab('feed')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'feed' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Haber Akışı</button>
                 )}
-                <button onClick={() => setActiveTab('course')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'course' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                    <BookOpen className="w-4 h-4" /> Kurs
+                
+                {/* Course Tab: Logic for Novices */}
+                <button 
+                    onClick={() => setActiveTab('course')} 
+                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'course' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    {isNovice && postingAs === 'USER' ? (
+                        <><Video className="w-4 h-4" /> Shorts / İpucu</>
+                    ) : (
+                        <><BookOpen className="w-4 h-4" /> Tam Kurs</>
+                    )}
                 </button>
+
                 {postingAs === 'ORGANIZATION' && (
-                    <button onClick={() => setActiveTab('kudos')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'kudos' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <button onClick={() => setActiveTab('kudos')} className={`px-6 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'kudos' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                         <Award className="w-4 h-4" /> Takdir
                     </button>
                 )}
@@ -297,13 +284,25 @@ export const ContentStudio: React.FC = () => {
             {/* --- COURSE MODE --- */}
             {activeTab === 'course' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                    
+                    {/* NOVICE WARNING */}
+                    {isNovice && postingAs === 'USER' && (
+                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex gap-3 text-sm text-blue-700">
+                            <Shield className="w-5 h-5 shrink-0" />
+                            <div>
+                                <span className="font-bold block">Başlangıç Seviyesi</span>
+                                Şu anda sadece maksimum 5 dakikalık "Shorts" veya "Hızlı İpucu" paylaşabilirsin. İtibar puanın arttıkça Uzman Kursları açılacaktır.
+                            </div>
+                        </div>
+                    )}
+
                     {/* 1. Visibility Logic */}
                     {postingAs === 'USER' ? (
-                        <div className="p-4 bg-blue-50 border-blue-100 border rounded-xl flex items-center gap-3 text-blue-700">
+                        <div className="p-4 bg-gray-50 border-gray-200 border rounded-xl flex items-center gap-3 text-gray-700">
                             <Globe className="w-5 h-5" />
                             <div className="text-xs">
-                                <span className="font-bold block">Herkese Açık Kanal</span>
-                                Bu kurs profilinizde "Kanalım" altında listelenir ve tüm dünyaya açılır.
+                                <span className="font-bold block">Topluluk Akışı</span>
+                                Bu içerik "Keşfet" sayfasında yayınlanacak ve topluluk tarafından oylanacaktır.
                             </div>
                         </div>
                     ) : (
@@ -332,11 +331,11 @@ export const ContentStudio: React.FC = () => {
                         </div>
                     )}
 
-                    {courseVisibility === 'PUBLIC' && (
+                    {courseVisibility === 'PUBLIC' && !isNovice && (
                         <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex items-center gap-4 animate-in fade-in">
                             <div className="p-2 bg-green-100 rounded-full text-green-600"><DollarSign className="w-5 h-5" /></div>
                             <div className="flex-1">
-                                <label className="text-xs font-bold text-green-800 uppercase">Kurs Ücreti ($)</label>
+                                <label className="text-xs font-bold text-green-800 uppercase">Ücret ($)</label>
                                 <input 
                                     type="number" 
                                     value={coursePrice} 
@@ -351,12 +350,12 @@ export const ContentStudio: React.FC = () => {
                     {/* 2. Course Details */}
                     <div className="space-y-4">
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase">Kurs Başlığı</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase">Başlık</label>
                             <input 
                                 value={courseTitle} 
                                 onChange={e => setCourseTitle(e.target.value)}
                                 className="w-full p-3 bg-white border border-gray-200 rounded-xl" 
-                                placeholder="Örn: Mükemmel Kahve Yapımı"
+                                placeholder={isNovice ? "Örn: 30 Saniyede Yatak Yapımı" : "Örn: İleri Seviye Kahve Teknikleri"}
                             />
                         </div>
                         <div>
@@ -371,7 +370,7 @@ export const ContentStudio: React.FC = () => {
                         className="w-full bg-primary hover:bg-primary-light text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-primary/20 transition-all active:scale-[0.98]"
                     >
                         {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                        Kursu Yayınla
+                        {isNovice ? 'Shorts Paylaş' : 'Kursu Yayınla'}
                     </button>
                 </div>
             )}

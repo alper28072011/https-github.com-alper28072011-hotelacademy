@@ -23,6 +23,9 @@ export type PermissionType =
 // --- USER LIFECYCLE TYPES ---
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 
+// --- NEW: CREATOR ECONOMY TYPES ---
+export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
+
 export interface UserMetadata {
     lastLoginAt?: number;
     loginCount?: number;
@@ -153,6 +156,10 @@ export interface User {
   pin: string; 
   xp: number; // Global XP or Org Specific? Let's keep it Global for Career Profile
   
+  // NEW: Creator Economy Fields
+  creatorLevel: CreatorLevel; // Determines what content they can make
+  reputationPoints: number; // Gained via quality ratings
+  
   // Profile & Career
   bio?: string; 
   joinDate?: number; 
@@ -229,11 +236,17 @@ export interface Category {
   color?: string;
 }
 
-// --- NEW TARGETING TYPES ---
+// --- NEW TARGETING & MARKETPLACE TYPES ---
 export type AssignmentType = 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
 export type ContentPriority = 'HIGH' | 'NORMAL';
 export type CourseVisibility = 'PRIVATE' | 'PUBLIC' | 'FOLLOWERS_ONLY'; // Expanded
 export type OwnerType = 'USER' | 'ORGANIZATION'; // New: Who owns this content?
+
+// NEW: Content Quality & Tier System
+export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
+export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'UNDER_REVIEW';
+export type PriceType = 'FREE' | 'PAID';
+export type ReviewTag = 'ACCURATE' | 'ENGAGING' | 'BORING' | 'MISLEADING' | 'OUTDATED';
 
 export interface Course {
   id: string;
@@ -242,11 +255,17 @@ export interface Course {
   
   // Marketplace & Ownership Fields
   ownerType: OwnerType; // NEW
-  visibility: CourseVisibility; // NEW
+  tier: ContentTier; // NEW
+  verificationStatus: VerificationStatus; // NEW: Quality Gate
+  qualityScore: number; // 0-5
+  priceType: PriceType; // NEW
+  visibility: CourseVisibility;
+  
   price: number; // 0 = Free
   rating?: number; // 0-5
   studentCount?: number;
   discussionBoardId?: string; 
+  flagCount?: number; // Auto-moderation
 
   categoryId: string;
   title: string;

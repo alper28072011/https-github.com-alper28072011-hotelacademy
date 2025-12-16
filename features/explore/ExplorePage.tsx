@@ -2,11 +2,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Search, Loader2, Sparkles, Building2, MapPin, ArrowRight, Laptop, Heart, GraduationCap, ShoppingBag } from 'lucide-react';
+import { Search, Loader2, Sparkles, Building2, MapPin, ArrowRight, Laptop, Heart, GraduationCap, ShoppingBag, CheckCircle2 } from 'lucide-react';
 import { useContentStore } from '../../stores/useContentStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { getAllPublicOrganizations } from '../../services/db';
-import { Organization, OrganizationSector } from '../../types';
+import { getSmartFeed } from '../../services/courseService'; // NEW
+import { Organization, OrganizationSector, Course } from '../../types';
 import { FilterPills } from './components/FilterPills';
 import { HeroCourseCard } from './components/HeroCourseCard';
 import { TopicSection } from './components/TopicSection';
@@ -17,44 +18,47 @@ export const ExplorePage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
   const { 
-    fetchContent, 
     categories, 
     isLoading, 
     searchQuery, 
     setSearchQuery,
-    getExploreFeed,
-    courses 
+    courses: allCourses // Still needed for fallback or initial cache
   } = useContentStore();
 
   const [activeTab, setActiveTab] = useState<'LEARNING' | 'ORGS'>('LEARNING');
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
   const [selectedSector, setSelectedSector] = useState<OrganizationSector | null>(null);
   const [orgs, setOrgs] = useState<Organization[]>([]);
+  
+  // NEW: Smart Feed State
+  const [smartFeed, setSmartFeed] = useState<Course[]>([]);
+  const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
+  const [feedLoading, setFeedLoading] = useState(true);
 
   useEffect(() => {
-    if (currentUser?.currentOrganizationId) {
-        fetchContent(currentUser.currentOrganizationId);
-    }
     // Fetch organizations
     getAllPublicOrganizations().then(setOrgs);
-  }, [fetchContent, currentUser]);
+  }, []);
 
-  // Derived State: The Feed
-  const feed = useMemo(() => {
-      if (!currentUser) return null;
-      return getExploreFeed(currentUser);
-  }, [currentUser, courses]);
+  // Fetch Smart Feed when filter changes
+  useEffect(() => {
+      if (currentUser) {
+          setFeedLoading(true);
+          getSmartFeed(currentUser, showVerifiedOnly).then(data => {
+              setSmartFeed(data);
+              setFeedLoading(false);
+          });
+      }
+  }, [currentUser, showVerifiedOnly]);
 
   // Derived State: Search/Filter Logic
   const displayContent = useMemo(() => {
-      if (!feed) return null;
-
-      // Search Logic
+      // Search Logic (Overrides feed)
       if (searchQuery.length > 0) {
           if (activeTab === 'LEARNING') {
               return {
                   mode: 'search',
-                  items: courses.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                  items: allCourses.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
               };
           } else {
               return {
@@ -68,7 +72,7 @@ export const ExplorePage: React.FC = () => {
       if (selectedCatId && activeTab === 'LEARNING') {
           return {
               mode: 'category',
-              items: courses.filter(c => c.categoryId === selectedCatId)
+              items: allCourses.filter(c => c.categoryId === selectedCatId)
           };
       }
 
@@ -83,10 +87,10 @@ export const ExplorePage: React.FC = () => {
       // Default Feed
       return {
           mode: 'feed',
-          feed: feed
+          items: smartFeed
       };
 
-  }, [feed, searchQuery, selectedCatId, selectedSector, courses, orgs, activeTab]);
+  }, [smartFeed, searchQuery, selectedCatId, selectedSector, allCourses, orgs, activeTab]);
 
   const sectors: { id: OrganizationSector, label: string }[] = [
       { id: 'tourism', label: 'Turizm' },
@@ -128,8 +132,8 @@ export const ExplorePage: React.FC = () => {
                 </div>
             </div>
 
-            <div className="px-4 mb-2">
-                <div className="relative group">
+            <div className="px-4 mb-2 flex gap-2">
+                <div className="relative group flex-1">
                     <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-accent transition-colors" />
                     <input 
                         type="text"
@@ -139,6 +143,14 @@ export const ExplorePage: React.FC = () => {
                         className="w-full bg-white/10 rounded-2xl py-3 pl-12 pr-4 text-white placeholder-gray-400 font-medium focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/50 transition-all border border-white/10"
                     />
                 </div>
+                {activeTab === 'LEARNING' && !searchQuery && (
+                    <button 
+                        onClick={() => setShowVerifiedOnly(!showVerifiedOnly)}
+                        className={`p-3 rounded-2xl border transition-all ${showVerifiedOnly ? 'bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/30' : 'bg-white/10 border-white/10 text-gray-400'}`}
+                    >
+                        <CheckCircle2 className="w-6 h-6" />
+                    </button>
+                )}
             </div>
             
             {/* Filter Pills (Learning) */}
@@ -209,34 +221,46 @@ export const ExplorePage: React.FC = () => {
                     )}
 
                     {/* B. FEED MODE */}
-                    {displayContent.mode === 'feed' && displayContent.feed && (
+                    {displayContent.mode === 'feed' && (
                         <>
-                            {/* POOL A: PRIORITY (Hero) */}
-                            {displayContent.feed.priority.length > 0 && (
-                                <div className="flex flex-col gap-6">
-                                    <div className="flex items-center gap-2 px-2 opacity-80">
-                                        <Sparkles className="w-4 h-4 text-accent" />
-                                        <span className="text-xs font-bold uppercase tracking-widest text-accent">Senin İçin Seçildi</span>
+                            {feedLoading ? (
+                                <div className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-accent" /></div>
+                            ) : (
+                                <>
+                                    {/* Verified Filter Indicator */}
+                                    {showVerifiedOnly && (
+                                        <div className="bg-blue-600/10 border border-blue-500/30 p-3 rounded-xl flex items-center gap-3 mb-4">
+                                            <CheckCircle2 className="w-5 h-5 text-blue-400" />
+                                            <span className="text-sm font-bold text-blue-200">Sadece Onaylı Uzman İçerikleri Gösteriliyor</span>
+                                        </div>
+                                    )}
+
+                                    {/* POOL A: PRIORITY (Hero) - First Item */}
+                                    {displayContent.items.length > 0 && (
+                                        <div className="flex flex-col gap-6">
+                                            <div className="flex items-center gap-2 px-2 opacity-80">
+                                                <Sparkles className="w-4 h-4 text-accent" />
+                                                <span className="text-xs font-bold uppercase tracking-widest text-accent">Senin İçin Seçildi</span>
+                                            </div>
+                                            <HeroCourseCard course={displayContent.items[0]} />
+                                        </div>
+                                    )}
+
+                                    {/* POOL B: TRENDING - Next 5 Items */}
+                                    {displayContent.items.length > 1 && (
+                                        <TopicSection 
+                                            title="Trend Olanlar" 
+                                            courses={displayContent.items.slice(1, 6)} 
+                                        />
+                                    )}
+
+                                    {/* POOL C: DISCOVERY - Rest */}
+                                    <div>
+                                        <h3 className="text-lg font-bold text-white px-2 mb-4">Ufkunu Genişlet</h3>
+                                        <MasonryGrid courses={displayContent.items.slice(6)} />
                                     </div>
-                                    {displayContent.feed.priority.slice(0, 1).map(course => (
-                                        <HeroCourseCard key={course.id} course={course} />
-                                    ))}
-                                </div>
+                                </>
                             )}
-
-                            {/* POOL B: TRENDING */}
-                            {displayContent.feed.trending.length > 0 && (
-                                <TopicSection 
-                                    title="Trend Olanlar" 
-                                    courses={displayContent.feed.trending} 
-                                />
-                            )}
-
-                            {/* POOL C: DISCOVERY */}
-                            <div>
-                                <h3 className="text-lg font-bold text-white px-2 mb-4">Ufkunu Genişlet</h3>
-                                <MasonryGrid courses={displayContent.feed.discovery} />
-                            </div>
                         </>
                     )}
                 </>
