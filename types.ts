@@ -11,10 +11,19 @@ export interface Language {
 
 export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management' | 'hr' | 'sales' | 'it' | string;
 export type UserRole = 'staff' | 'manager' | 'admin' | 'super_admin';
-export type AuthMode = 'LOGIN' | 'REGISTER';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
+
+// --- NEW EDUCATION TYPES ---
+export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN';
+export type CourseLength = 'SHORT' | 'MEDIUM' | 'LONG';
+/* Add XP_REWARD to StoryCardType to support reward cards in the player */
+export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VIDEO' | 'XP_REWARD';
+
+/* Add AuthMode type for auth store */
+export type AuthMode = 'LOGIN' | 'REGISTER';
 
 export interface User {
   id: string;
@@ -26,7 +35,6 @@ export interface User {
   currentOrganizationId: string | null; 
   department: DepartmentType | null;
   role: UserRole;
-  isSuperAdmin?: boolean;
   status: UserStatus;
   xp: number;
   creatorLevel: CreatorLevel;
@@ -38,24 +46,21 @@ export interface User {
   startedCourses?: string[]; 
   savedCourses?: string[]; 
   completedTasks?: string[]; 
-  followers?: string[];
-  following?: string[];
   followersCount?: number;
   followingCount?: number;
   isPrivate?: boolean;
   instagramHandle?: string;
+  assignedPathId?: string;
+  badges?: { type: KudosType; count: number }[];
+  /* Add missing social and management properties */
+  following?: string[];
+  isSuperAdmin?: boolean;
   privacySettings?: {
     showInSearch: boolean;
     allowTagging: boolean;
     isPrivateAccount: boolean;
   };
-  assignedPathId?: string;
-  badges?: { type: KudosType; count: number }[];
 }
-
-export type CourseVisibility = 'PRIVATE' | 'PUBLIC' | 'FOLLOWERS_ONLY';
-export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
-export type VerificationStatus = 'VERIFIED' | 'PENDING' | 'UNDER_REVIEW';
 
 export interface Course {
   id: string;
@@ -64,178 +69,117 @@ export interface Course {
   authorId: string;
   authorName: string;
   authorAvatarUrl: string;
-  visibility: CourseVisibility;
+  visibility: 'PRIVATE' | 'PUBLIC';
   categoryId: string;
   title: string;
   description: string;
   thumbnailUrl: string;
-  duration: number; 
+  duration: number; // in minutes
   xpReward: number;
   createdAt?: number;
   steps: StoryCard[]; 
   tags?: string[];
   priority?: 'HIGH' | 'NORMAL';
+  config?: CourseConfig;
   price: number;
   priceType: 'FREE' | 'PAID';
+  /* Add missing educational and verification properties */
   coverQuote?: string;
   isFeatured?: boolean;
   assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
-  targetDepartments?: DepartmentType[];
-  popularityScore?: number;
-  isNew?: boolean;
-  tier?: ContentTier;
-  verificationStatus?: VerificationStatus;
-  qualityScore?: number;
-  flagCount?: number;
+  targetDepartments?: string[];
   studentCount?: number;
+  isNew?: boolean;
+  popularityScore?: number;
+  verificationStatus?: VerificationStatus;
+  flagCount?: number;
+  tier?: ContentTier;
+  qualityScore?: number;
   deepDiveResource?: {
-    type: string;
-    url: string;
     title: string;
+    url: string;
+    type: string;
   };
 }
 
-export type StoryCardType = 'INFO' | 'QUIZ' | 'VIDEO' | 'XP_REWARD';
-export type InteractionType = 'MULTIPLE_CHOICE' | 'TRUE_FALSE';
+export interface CourseConfig {
+  level: DifficultyLevel;
+  tone: CourseTone;
+  language: string;
+  autoPlay: boolean;
+  slideDuration: number;
+}
 
 export interface StoryCard {
   id: string;
   type: StoryCardType;
   title: string;
   content: string;
-  mediaUrl?: string;
-  duration: number;
+  mediaUrl: string;
+  mediaPrompt?: string; // AI generated prompt for image search
+  duration: number; // display time in seconds
   interaction?: {
-    type: InteractionType;
     question: string;
     options: string[];
-    correctOptionIndex: number;
+    correctAnswer: string;
+    /* Add correctOptionIndex for quiz logic in player */
+    correctOptionIndex?: number;
     explanation?: string;
   };
 }
 
-export type IssueType = 'maintenance' | 'housekeeping' | 'security';
-export type IssueStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+export type AuthorType = 'USER' | 'ORGANIZATION';
+export type ReviewTag = 'ACCURATE' | 'ENGAGING' | 'MISLEADING' | 'OUTDATED';
+export type VerificationStatus = 'VERIFIED' | 'PENDING' | 'UNDER_REVIEW';
+export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
 
-export interface Issue {
-  id?: string;
-  organizationId: string;
-  userId: string;
-  userName: string;
-  department: DepartmentType | null;
-  type: IssueType;
-  location: string;
-  photoUrl?: string;
-  status: IssueStatus;
-  createdAt: number;
-}
+// Other interfaces remain same for compatibility
+export interface Category { id: string; title: string; icon: string; color: string; }
+export interface CareerPath { id: string; organizationId: string; title: string; description: string; targetRole: string; department: DepartmentType; courseIds: string[]; }
+export interface FeedPost { id: string; organizationId: string; authorType: AuthorType; authorId: string; authorName: string; authorAvatar: string; type: 'image' | 'video' | 'kudos' | 'course'; mediaUrl?: string; caption: string; likes: number; createdAt: number; likedBy?: string[]; kudosData?: { badgeType: KudosType; recipientId: string; recipientName: string; }; }
 
+/* Add Task interface for operations */
 export interface Task {
   id: string;
   organizationId: string;
-  department: DepartmentType;
+  department: string;
   title: string;
   xpReward: number;
   type: 'checklist' | 'photo';
 }
 
-export interface Category {
-  id: string;
-  title: string;
-  icon: string;
-  color: string;
-}
+/* Add Issue types for reporting */
+export type IssueType = 'maintenance' | 'housekeeping' | 'security';
 
-export interface CareerPath {
-  id: string;
+export interface Issue {
   organizationId: string;
-  title: string;
-  description: string;
-  targetRole: string;
-  department: DepartmentType;
-  courseIds: string[];
-}
-
-export interface FeedPost {
-  id: string;
-  organizationId: string;
-  authorType: AuthorType;
-  authorId: string;
-  authorName: string;
-  authorAvatar: string;
-  type: 'image' | 'video' | 'kudos' | 'course'; 
-  mediaUrl?: string; 
-  caption: string;
-  likes: number;
-  createdAt: number;
-  likedBy?: string[]; 
-  kudosData?: {
-    badgeType: KudosType;
-    recipientId: string;
-    recipientName: string;
-  };
-}
-
-export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
-export type OrganizationSize = '1-10' | '11-50' | '50-200' | '200+';
-
-export interface Organization {
-  id: string;
-  name: string;
-  sector: OrganizationSector;
-  logoUrl: string;
-  coverUrl?: string;
-  location: string;
-  ownerId: string;
-  code: string;
-  createdAt: number;
-  settings: {
-    allowStaffContentCreation: boolean;
-    customDepartments: string[];
-    primaryColor: string;
-  };
-  followersCount: number;
-  memberCount: number;
-  website?: string;
-  description?: string;
-  size?: OrganizationSize;
-  status?: 'ACTIVE' | 'ARCHIVED';
-}
-
-export interface Membership {
-  id: string;
   userId: string;
-  organizationId: string;
-  role: UserRole;
-  department: DepartmentType;
-  status: 'ACTIVE' | 'SUSPENDED';
-  joinedAt: number;
-  roleTitle?: string;
-  permissions?: PermissionType[];
+  userName: string;
+  department: string | null;
+  type: IssueType;
+  location: string;
+  photoUrl?: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
+  createdAt: number;
 }
 
-export type PermissionType = 'CAN_CREATE_CONTENT' | 'CAN_MANAGE_TEAM' | 'CAN_VIEW_ANALYTICS' | 'CAN_EDIT_SETTINGS';
-
+/* Add JoinRequest for organization recruitment */
 export interface JoinRequest {
   id: string;
   type: 'REQUEST_TO_JOIN';
   userId: string;
   organizationId: string;
-  targetDepartment: DepartmentType;
+  targetDepartment: string;
   requestedRoleTitle: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
 }
 
+export interface Organization { id: string; name: string; sector: OrganizationSector; logoUrl: string; coverUrl?: string; location: string; ownerId: string; code: string; createdAt: number; settings: { allowStaffContentCreation: boolean; customDepartments: string[]; primaryColor: string; }; followersCount: number; memberCount: number; website?: string; description?: string; size?: OrganizationSize; /* Add status for organization management */ status?: 'ACTIVE' | 'ARCHIVED'; }
+export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
+export type OrganizationSectorExtended = OrganizationSector;
+export type OrganizationSize = '1-10' | '11-50' | '50-200' | '200+';
+export interface Membership { id: string; userId: string; organizationId: string; role: UserRole; department: DepartmentType; status: 'ACTIVE' | 'SUSPENDED'; joinedAt: number; roleTitle?: string; permissions?: PermissionType[]; }
+export type PermissionType = 'CAN_CREATE_CONTENT' | 'CAN_MANAGE_TEAM' | 'CAN_VIEW_ANALYTICS' | 'CAN_EDIT_SETTINGS';
 export type FollowStatus = 'NONE' | 'FOLLOWING' | 'PENDING';
-
-export interface Relationship {
-  followerId: string;
-  followingId: string;
-  status: 'PENDING' | 'ACCEPTED';
-  createdAt: number;
-}
-
-export type ReviewTag = 'ACCURATE' | 'ENGAGING' | 'MISLEADING' | 'OUTDATED';
-
-export type AuthorType = 'USER' | 'ORGANIZATION';
+export interface Relationship { followerId: string; followingId: string; status: 'PENDING' | 'ACCEPTED'; createdAt: number; }

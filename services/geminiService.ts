@@ -1,10 +1,10 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { StoryCard, StoryCardType, InteractionType } from "../types";
+import { StoryCard, StoryCardType, DifficultyLevel, CourseTone } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-interface GeneratedMicroCourse {
+interface GeneratedCourse {
   title: string;
   description: string;
   cards: StoryCard[];
@@ -12,51 +12,48 @@ interface GeneratedMicroCourse {
 }
 
 /**
- * GENERATE MICRO COURSE
- * Converts raw text/source into a gamified Instagram Story-like course.
- * OPTIMIZED: Uses gemini-3-flash-preview for speed and compliance.
+ * GENERATE MAGIC COURSE
+ * Converts raw source into a highly structured, gamified Story-based course.
  */
-export const generateMicroCourse = async (
+export const generateMagicCourse = async (
   sourceContent: string,
-  params: {
-    targetAudience: string;
-    tone: 'PROFESSIONAL' | 'FUN' | 'STRICT';
+  config: {
+    level: DifficultyLevel;
+    tone: CourseTone;
+    length: 'SHORT' | 'MEDIUM';
     language: string;
   }
-): Promise<GeneratedMicroCourse | null> => {
+): Promise<GeneratedCourse | null> => {
   try {
-    const toneInstructions = params.tone === 'FUN' 
-      ? "Tone: Fun, energetic, uses emojis (🚀), addresses user as 'Sen'." 
-      : "Tone: Professional, clear, business-oriented, addresses user as 'Siz'.";
-
-    // Optimized Prompt: Shorter, clearer instructions to save input tokens and guide the model faster.
+    const cardCount = config.length === 'SHORT' ? 5 : 10;
+    
     const prompt = `
-      Role: Expert Instructional Designer.
-      Task: Convert [SOURCE] into a Micro-Learning Course (Story format).
+      Role: Expert Instructional Designer for 5-star Hotel Staff.
+      Task: Convert the [SOURCE] into a Micro-Learning "Story" Course.
       
-      Settings:
-      - Audience: ${params.targetAudience}
-      - Language: ${params.language}
-      - ${toneInstructions}
+      Parameters:
+      - Audience Level: ${config.level}
+      - Tone: ${config.tone} (casually friendly for FUN, professional for FORMAL)
+      - Language: ${config.language}
+      - Slide Count: Exactly ${cardCount} cards.
       
-      Rules:
-      1. Create exactly 5-7 cards.
-      2. Card 1: 'VIDEO' (Hook/Intro).
-      3. Middle: Mix 'INFO' and 'QUIZ'.
-      4. Last Card: 'XP_REWARD'.
-      5. Text length: MAX 200 chars per card (Concise!).
-      6. mediaUrl: ONE English keyword for stock search (e.g. 'hotel lobby').
+      Pedagogical Rules:
+      1. Card 1 MUST be 'COVER' type with a hook title.
+      2. Middle cards should be 'INFO' type.
+      3. Every 3 'INFO' cards, insert 1 'QUIZ' or 'POLL' card to test knowledge.
+      4. The last card MUST be 'REWARD' type with a congratulatory message.
+      5. 'mediaPrompt' MUST be a high-quality English image description (e.g., "professional hotel receptionist smiling at guest, cinematic lighting, 8k").
+      6. Content per slide: Max 180 characters. Be extremely concise.
       
       [SOURCE]:
-      "${sourceContent.substring(0, 12000)}" 
+      ${sourceContent.substring(0, 10000)}
     `;
 
-    // Define the exact schema for the UI to render
     const schema = {
       type: Type.OBJECT,
       properties: {
-        title: { type: Type.STRING, description: "Short catchy title" },
-        description: { type: Type.STRING, description: "1 sentence summary" },
+        title: { type: Type.STRING, description: "Catchy course title" },
+        description: { type: Type.STRING, description: "A summary sentence" },
         tags: { type: Type.ARRAY, items: { type: Type.STRING } },
         cards: {
           type: Type.ARRAY,
@@ -64,70 +61,56 @@ export const generateMicroCourse = async (
             type: Type.OBJECT,
             properties: {
               id: { type: Type.STRING },
-              type: { type: Type.STRING, enum: ['INFO', 'QUIZ', 'VIDEO', 'XP_REWARD'] },
+              type: { type: Type.STRING, enum: ['COVER', 'INFO', 'QUIZ', 'POLL', 'REWARD'] },
               title: { type: Type.STRING },
               content: { type: Type.STRING },
-              mediaUrl: { type: Type.STRING },
-              duration: { type: Type.NUMBER },
+              mediaPrompt: { type: Type.STRING, description: "English keyword for stock photo search" },
+              duration: { type: Type.NUMBER, description: "Seconds to show this slide (default 7)" },
               interaction: {
                 type: Type.OBJECT,
                 properties: {
-                  type: { type: Type.STRING, enum: ['MULTIPLE_CHOICE', 'TRUE_FALSE'] },
                   question: { type: Type.STRING },
                   options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  correctOptionIndex: { type: Type.NUMBER },
+                  correctAnswer: { type: Type.STRING },
+                  /* Added correctOptionIndex to the generation schema to satisfy CoursePlayerPage requirement */
+                  correctOptionIndex: { type: Type.NUMBER, description: "Index of the correct option (0-based)" },
                   explanation: { type: Type.STRING }
                 },
                 nullable: true
               }
             },
-            required: ["id", "type", "title", "content", "mediaUrl", "duration"]
+            required: ["id", "type", "title", "content", "mediaPrompt", "duration"]
           }
         }
       },
       required: ["title", "description", "cards", "tags"]
     };
 
-    // Fixed model name to gemini-3-flash-preview as per guidelines for Basic Text Tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview', 
+      model: 'gemini-3-pro-preview', // High logic capacity
       contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        temperature: 0.7, // Balanced creativity
+        temperature: 0.8,
       }
     });
 
     if (response.text) {
-      const data = JSON.parse(response.text) as GeneratedMicroCourse;
+      const data = JSON.parse(response.text) as GeneratedCourse;
       
-      // Post-process: Add IDs and clean up
-      data.cards = data.cards.map((card, index) => ({
+      // Auto-assign Unsplash fallbacks for preview
+      data.cards = data.cards.map((card, i) => ({
           ...card,
-          id: `card-${Date.now()}-${index}`,
-          // Convert keyword to Unsplash URL
-          mediaUrl: `https://source.unsplash.com/800x1200/?${encodeURIComponent(card.mediaUrl || 'business')}`
+          id: `card-${Date.now()}-${i}`,
+          mediaUrl: `https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=800` // Placeholder will be replaced in UI
       }));
       
       return data;
     }
     return null;
-
   } catch (error) {
-    console.error("Gemini Micro-Course Generation Error:", error);
+    console.error("Gemini Magic Error:", error);
     return null;
-  }
-};
-
-export const translateContent = async (text: string, targetLanguage: string): Promise<string> => {
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Translate to ${targetLanguage}: ${text}`,
-    });
-    return response.text || text;
-  } catch (error) {
-    return text;
   }
 };
