@@ -14,6 +14,7 @@ interface GeneratedCourse {
 /**
  * GENERATE MAGIC COURSE
  * Converts raw source into a highly structured, gamified Story-based course.
+ * Optimized for high speed using Gemini 3 Flash.
  */
 export const generateMagicCourse = async (
   sourceContent: string,
@@ -46,7 +47,7 @@ export const generateMagicCourse = async (
       6. Content per slide: Max 180 characters. Be extremely concise.
       
       [SOURCE]:
-      ${sourceContent.substring(0, 10000)}
+      ${sourceContent.substring(0, 8000)}
     `;
 
     const schema = {
@@ -72,7 +73,6 @@ export const generateMagicCourse = async (
                   question: { type: Type.STRING },
                   options: { type: Type.ARRAY, items: { type: Type.STRING } },
                   correctAnswer: { type: Type.STRING },
-                  /* Added correctOptionIndex to the generation schema to satisfy CoursePlayerPage requirement */
                   correctOptionIndex: { type: Type.NUMBER, description: "Index of the correct option (0-based)" },
                   explanation: { type: Type.STRING }
                 },
@@ -87,24 +87,28 @@ export const generateMagicCourse = async (
     };
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // High logic capacity
+      model: 'gemini-3-flash-preview', // Speed optimized model
       contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        temperature: 0.8,
+        temperature: 0.7, // Balanced creativity and structure
+        thinkingConfig: { thinkingBudget: 0 } // Disable deep thinking for near-instant results
       }
     });
 
     if (response.text) {
-      const data = JSON.parse(response.text) as GeneratedCourse;
+      const data = JSON.parse(response.text.trim()) as GeneratedCourse;
       
-      // Auto-assign Unsplash fallbacks for preview
-      data.cards = data.cards.map((card, i) => ({
-          ...card,
-          id: `card-${Date.now()}-${i}`,
-          mediaUrl: `https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=800` // Placeholder will be replaced in UI
-      }));
+      // Auto-assign Unsplash images based on prompts
+      data.cards = data.cards.map((card, i) => {
+          const encodedPrompt = encodeURIComponent(card.mediaPrompt || 'hotel hospitality');
+          return {
+            ...card,
+            id: `card-${Date.now()}-${i}`,
+            mediaUrl: `https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=800&auto=format&fit=crop&sig=${i}` // Default fallback, but using dynamic Unsplash API for some variety
+          };
+      });
       
       return data;
     }

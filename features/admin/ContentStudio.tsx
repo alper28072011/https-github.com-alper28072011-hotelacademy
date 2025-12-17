@@ -6,7 +6,7 @@ import {
     CheckCircle2, Save, Smartphone, ImageIcon,
     Settings, Globe, Lock, ChevronRight, Upload, Edit, 
     FileType, User, Building2, Search, Trash2, Plus, 
-    MousePointer2, Sparkles, MessageSquare, Award
+    MousePointer2, Sparkles, MessageSquare, Award, AlertCircle
 } from 'lucide-react';
 import { generateMagicCourse } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
@@ -27,7 +27,7 @@ export const ContentStudio: React.FC = () => {
 
   // Studio Flow State
   const [step, setStep] = useState<StudioStep>('SOURCE');
-  const [isEditingExisting, setIsEditingExisting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   // 1. Source State
   const [sourceType, setSourceType] = useState<'TEXT' | 'PDF' | 'URL'>('TEXT');
@@ -47,7 +47,6 @@ export const ContentStudio: React.FC = () => {
       tags: string[];
   } | null>(null);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
-  const [isImageSearchOpen, setIsImageSearchOpen] = useState(false);
 
   // 4. Final Settings
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PRIVATE');
@@ -59,29 +58,36 @@ export const ContentStudio: React.FC = () => {
       const file = e.target.files?.[0];
       if (!file) return;
       setIsExtracting(true);
-      // Mocking PDF extraction (In real app, use pdfjs-dist)
       setTimeout(() => {
-          setSourceData("Bu PDF'den çıkarılan metindir. Otel temizlik prosedürleri: 1. Havalandır, 2. Toz al, 3. Dezenfekte et...");
+          setSourceData("PDF Metni Örneği: Otel temizlik standartları ve hijyen kuralları...");
           setIsExtracting(false);
           setStep('TUNING');
-      }, 1500);
+      }, 1000);
   };
 
   // --- GENERATION ACTION ---
   const handleGenerate = async () => {
       setStep('GENERATING');
-      const result = await generateMagicCourse(sourceData, {
-          level: difficulty,
-          tone: tone,
-          length: length,
-          language: 'Turkish'
-      });
-      if (result) {
-          setCourseData(result);
-          setStep('DIRECTOR');
-      } else {
-          alert("Üretim sırasında hata oluştu.");
-          setStep('SOURCE');
+      setError(null);
+      
+      try {
+          const result = await generateMagicCourse(sourceData, {
+              level: difficulty,
+              tone: tone,
+              length: length,
+              language: 'Turkish'
+          });
+
+          if (result && result.cards && result.cards.length > 0) {
+              setCourseData(result);
+              setStep('DIRECTOR');
+          } else {
+              throw new Error("İçerik üretilemedi.");
+          }
+      } catch (err) {
+          console.error(err);
+          setError("Yapay zeka şu an yoğun veya içeriği kurgulayamadı. Lütfen tekrar deneyin.");
+          setStep('TUNING');
       }
   };
 
@@ -107,18 +113,17 @@ export const ContentStudio: React.FC = () => {
           organizationId: currentOrganization?.id,
           categoryId: 'cat_genel',
           price: 0,
-          priceType: 'FREE'
+          priceType: 'FREE',
+          steps: courseData.cards
       };
 
       const success = await publishContent(payload, currentUser);
       if (success) {
-          alert("Eğitim başarıyla yayınlandı!");
           navigate('/admin/courses');
       }
       setIsPublishing(false);
   };
 
-  // --- RENDERERS ---
   const renderCardIcon = (type: StoryCardType) => {
       switch(type) {
           case 'COVER': return <ImageIcon className="w-4 h-4" />;
@@ -207,12 +212,6 @@ export const ContentStudio: React.FC = () => {
                                 </button>
                             </motion.div>
                         )}
-                        {sourceType === 'URL' && (
-                            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2">
-                                <input placeholder="https://..." className="flex-1 p-4 bg-white border-2 border-gray-100 rounded-2xl outline-none focus:border-accent" />
-                                <button onClick={() => setStep('TUNING')} className="bg-primary text-white px-8 rounded-2xl font-bold">Çek</button>
-                            </motion.div>
-                        )}
                     </div>
                 </div>
             )}
@@ -223,7 +222,12 @@ export const ContentStudio: React.FC = () => {
                     <h1 className="text-3xl font-black text-primary mb-8">İnce Ayarlar</h1>
                     
                     <div className="w-full space-y-8">
-                        {/* Difficulty */}
+                        {error && (
+                            <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-600 text-sm font-bold animate-pulse">
+                                <AlertCircle className="w-5 h-5" /> {error}
+                            </div>
+                        )}
+                        
                         <div className="space-y-3">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Eğitim Zorluğu</label>
                             <div className="flex gap-2">
@@ -235,7 +239,6 @@ export const ContentStudio: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Tone */}
                         <div className="space-y-3">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">İletişim Tonu</label>
                             <div className="flex gap-2">
@@ -247,7 +250,6 @@ export const ContentStudio: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Length */}
                         <div className="space-y-3">
                             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Kurs Süresi</label>
                             <div className="flex gap-2">
@@ -273,17 +275,18 @@ export const ContentStudio: React.FC = () => {
             {/* --- STEP 3: GENERATING --- */}
             {step === 'GENERATING' && (
                 <div className="flex-1 flex flex-col items-center justify-center p-12">
-                    <motion.div animate={{ rotate: 360 }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }} className="w-24 h-24 rounded-full border-t-4 border-r-4 border-accent border-l-4 border-l-transparent border-b-4 border-b-transparent mb-8" />
+                    <div className="relative mb-8">
+                        <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }} className="w-24 h-24 rounded-full border-t-4 border-accent border-r-4 border-r-transparent" />
+                        <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-accent animate-pulse" />
+                    </div>
                     <h2 className="text-2xl font-black text-primary">Eğitim Kurgulanıyor...</h2>
-                    <p className="text-gray-400 mt-2 animate-pulse">Gemini sizin için en iyi senaryoyu yazıyor.</p>
+                    <p className="text-gray-400 mt-2 animate-pulse text-sm">Flash hızıyla içerikler hazırlanıyor.</p>
                 </div>
             )}
 
-            {/* --- STEP 4: DIRECTOR (The Editor) --- */}
+            {/* --- STEP 4: DIRECTOR --- */}
             {step === 'DIRECTOR' && courseData && (
                 <div className="flex-1 flex overflow-hidden">
-                    
-                    {/* Left: Card Flow */}
                     <div className="w-72 border-r border-gray-100 flex flex-col bg-white shrink-0">
                         <div className="p-4 border-b border-gray-50 flex justify-between items-center">
                             <span className="text-xs font-black text-gray-400 uppercase">Akış (Flow)</span>
@@ -307,90 +310,38 @@ export const ContentStudio: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Middle: Canvas / Preview */}
                     <div className="flex-1 bg-gray-50 p-8 flex items-center justify-center relative overflow-hidden">
-                        
-                        {/* PHONE MOCKUP */}
                         <div className="w-[340px] h-[640px] bg-black rounded-[3rem] border-[10px] border-gray-900 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] relative overflow-hidden flex flex-col">
-                            {/* Inner Screen */}
                             <div className="flex-1 relative flex flex-col">
                                 <img src={courseData.cards[activeCardIndex].mediaUrl} className="absolute inset-0 w-full h-full object-cover opacity-60" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-                                
                                 <div className="relative z-10 p-8 mt-auto text-white">
                                     <span className="text-[10px] font-black bg-accent text-primary px-2 py-0.5 rounded uppercase mb-2 inline-block">{courseData.cards[activeCardIndex].type}</span>
                                     <h3 className="text-2xl font-black mb-3">{courseData.cards[activeCardIndex].title}</h3>
                                     <p className="text-sm opacity-80 leading-relaxed">{courseData.cards[activeCardIndex].content}</p>
-                                    
-                                    {courseData.cards[activeCardIndex].type === 'QUIZ' && (
-                                        <div className="mt-6 space-y-2">
-                                            {courseData.cards[activeCardIndex].interaction?.options.map((opt, i) => (
-                                                <div key={i} className="w-full p-3 rounded-xl bg-white/10 border border-white/20 text-xs font-bold">{opt}</div>
-                                            ))}
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </div>
-
-                        {/* Floating Action (Save/Next) */}
                         <div className="absolute bottom-8 right-8 flex gap-4">
                              <button onClick={() => setStep('PUBLISH')} className="bg-primary text-white px-8 py-3 rounded-2xl font-bold shadow-xl flex items-center gap-2">
-                                Yayınla <ChevronRight className="w-5 h-5" />
+                                İleri <ChevronRight className="w-5 h-5" />
                              </button>
                         </div>
                     </div>
 
-                    {/* Right: Card Property Editor */}
                     <div className="w-80 bg-white border-l border-gray-100 flex flex-col p-6 overflow-y-auto no-scrollbar">
                         <h3 className="text-sm font-black text-gray-800 uppercase mb-6 flex items-center gap-2">
                             <Edit className="w-4 h-4" /> Kart Özellikleri
                         </h3>
-
                         <div className="space-y-6">
                             <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">Görsel Seçimi</label>
-                                <div className="relative aspect-video rounded-2xl bg-gray-100 overflow-hidden border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2 group cursor-pointer">
-                                    <img src={courseData.cards[activeCardIndex].mediaUrl} className="absolute inset-0 w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">Değiştir</div>
-                                </div>
-                                <div className="mt-2 p-3 bg-blue-50 rounded-xl flex items-start gap-2 border border-blue-100">
-                                    <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
-                                    <p className="text-[10px] text-blue-800 italic">AI Önerisi: "{courseData.cards[activeCardIndex].mediaPrompt}"</p>
-                                </div>
-                            </div>
-
-                            <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">Başlık</label>
-                                <input 
-                                    value={courseData.cards[activeCardIndex].title}
-                                    onChange={e => updateActiveCard({ title: e.target.value })}
-                                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-bold focus:border-primary outline-none"
-                                />
+                                <input value={courseData.cards[activeCardIndex].title} onChange={e => updateActiveCard({ title: e.target.value })} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-bold focus:border-primary outline-none" />
                             </div>
-
                             <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">İçerik Metni</label>
-                                <textarea 
-                                    value={courseData.cards[activeCardIndex].content}
-                                    onChange={e => updateActiveCard({ content: e.target.value })}
-                                    rows={4}
-                                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-medium focus:border-primary outline-none resize-none"
-                                />
+                                <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">İçerik</label>
+                                <textarea value={courseData.cards[activeCardIndex].content} onChange={e => updateActiveCard({ content: e.target.value })} rows={4} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-medium focus:border-primary outline-none resize-none" />
                             </div>
-
-                            {courseData.cards[activeCardIndex].type === 'QUIZ' && (
-                                <div className="pt-4 border-t border-gray-100 space-y-4">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">Soru Seçenekleri</label>
-                                    {courseData.cards[activeCardIndex].interaction?.options.map((opt, i) => (
-                                        <input key={i} value={opt} className="w-full p-2 bg-gray-50 rounded-lg border border-gray-100 text-xs font-bold" />
-                                    ))}
-                                </div>
-                            )}
-
-                            <button className="w-full py-3 bg-red-50 text-red-500 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2">
-                                <Trash2 className="w-4 h-4" /> Kartı Sil
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -401,8 +352,7 @@ export const ContentStudio: React.FC = () => {
                 <div className="flex-1 flex flex-col items-center justify-center p-12 max-w-lg mx-auto">
                     <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6"><CheckCircle2 className="w-8 h-8" /></div>
                     <h1 className="text-3xl font-black text-primary mb-2">Harika İş!</h1>
-                    <p className="text-gray-500 text-center mb-10">Eğitim tasarımı tamamlandı. Şimdi nasıl yayınlamak istersin?</p>
-                    
+                    <p className="text-gray-500 text-center mb-10">Eğitim tasarımı tamamlandı.</p>
                     <div className="w-full space-y-6">
                         <div className="grid grid-cols-2 gap-3">
                             <button onClick={() => setVisibility('PRIVATE')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${visibility === 'PRIVATE' ? 'border-primary bg-primary/5' : 'border-gray-100'}`}>
@@ -414,23 +364,10 @@ export const ContentStudio: React.FC = () => {
                                 <span className="font-bold text-xs text-gray-800">Herkese Açık</span>
                             </button>
                         </div>
-
-                        <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">Paylaşan Kimlik</label>
-                            <div className="flex bg-gray-100 p-1 rounded-xl">
-                                <button onClick={() => setOwnerType('ORGANIZATION')} className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all ${ownerType === 'ORGANIZATION' ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}>🏢 KURUMSAL</button>
-                                <button onClick={() => setOwnerType('USER')} className={`flex-1 py-2 rounded-lg text-[10px] font-black transition-all ${ownerType === 'USER' ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}>👤 ŞAHSİ PROFİL</button>
-                            </div>
-                        </div>
                     </div>
-
                     <div className="flex gap-4 mt-12 w-full">
                         <button onClick={() => setStep('DIRECTOR')} className="flex-1 py-4 text-gray-400 font-bold">Geri Dön</button>
-                        <button 
-                            onClick={handlePublish}
-                            disabled={isPublishing}
-                            className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-2"
-                        >
+                        <button onClick={handlePublish} disabled={isPublishing} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-2">
                             {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" /> Yayınla & Bitir</>}
                         </button>
                     </div>
