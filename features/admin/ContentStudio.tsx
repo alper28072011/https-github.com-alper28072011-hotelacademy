@@ -11,10 +11,11 @@ import {
 } from 'lucide-react';
 import { generateMagicCourse } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
+import { updateCourse } from '../../services/db';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { StoryCard, DifficultyLevel, CourseTone, StoryCardType } from '../../types';
-import { useNavigate } from 'react-router-dom';
+import { StoryCard, DifficultyLevel, CourseTone, StoryCardType, Course } from '../../types';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 type StudioStep = 'SOURCE' | 'TUNING' | 'GENERATING' | 'DIRECTOR' | 'PUBLISH';
 
@@ -22,11 +23,14 @@ export const ContentStudio: React.FC = () => {
   const { currentUser } = useAuthStore();
   const { currentOrganization } = useOrganizationStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Studio Flow State
   const [step, setStep] = useState<StudioStep>('SOURCE');
   const [error, setError] = useState<string | null>(null);
+  const [isEditingExisting, setIsEditingExisting] = useState(false);
+  const [existingCourseId, setExistingCourseId] = useState<string | null>(null);
   
   // 1. Source State
   const [sourceType, setSourceType] = useState<'TEXT' | 'PDF' | 'URL'>('TEXT');
@@ -52,6 +56,24 @@ export const ContentStudio: React.FC = () => {
   const [ownerType, setOwnerType] = useState<'USER' | 'ORGANIZATION'>('ORGANIZATION');
   const [isPublishing, setIsPublishing] = useState(false);
 
+  // --- EDIT MODE DETECTOR ---
+  useEffect(() => {
+      const incoming = location.state?.courseData as Course;
+      if (incoming) {
+          setIsEditingExisting(true);
+          setExistingCourseId(incoming.id);
+          setCourseData({
+              title: incoming.title,
+              description: incoming.description,
+              cards: incoming.steps || [],
+              tags: incoming.tags || []
+          });
+          setVisibility(incoming.visibility);
+          setOwnerType(incoming.authorType);
+          setStep('DIRECTOR'); // Jump straight to editor
+      }
+  }, [location.state]);
+
   // --- GENERATION ACTION WITH TIMEOUT ---
   const handleGenerate = async () => {
       setStep('GENERATING');
@@ -62,7 +84,7 @@ export const ContentStudio: React.FC = () => {
               setError("İşlem beklenenden uzun sürdü. Lütfen tekrar deneyin.");
               setStep('TUNING');
           }
-      }, 45000); // 45 Saniye limit
+      }, 45000); 
 
       try {
           const result = await generateMagicCourse(sourceData, {
@@ -95,6 +117,13 @@ export const ContentStudio: React.FC = () => {
       setCourseData({ ...courseData, cards: newCards });
   };
 
+  const deleteActiveCard = () => {
+      if (!courseData || courseData.cards.length <= 1) return;
+      const newCards = courseData.cards.filter((_, i) => i !== activeCardIndex);
+      setCourseData({ ...courseData, cards: newCards });
+      setActiveCardIndex(Math.max(0, activeCardIndex - 1));
+  };
+
   const handlePublish = async () => {
       if (!courseData || !currentUser) return;
       setIsPublishing(true);
@@ -113,11 +142,27 @@ export const ContentStudio: React.FC = () => {
           steps: courseData.cards
       };
 
-      const success = await publishContent(payload, currentUser);
-      if (success) {
-          navigate('/admin/courses');
+      try {
+          let success = false;
+          if (isEditingExisting && existingCourseId) {
+              // UPDATE MODE
+              success = await updateCourse(existingCourseId, payload);
+          } else {
+              // CREATE MODE
+              success = await publishContent(payload, currentUser);
+          }
+
+          if (success) {
+              navigate('/admin/courses');
+          } else {
+              alert("İçerik kaydedilirken bir hata oluştu.");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Bir hata oluştu.");
+      } finally {
+          setIsPublishing(false);
       }
-      setIsPublishing(false);
   };
 
   const renderCardIcon = (type: StoryCardType) => {
@@ -148,7 +193,9 @@ export const ContentStudio: React.FC = () => {
                 </div>
             </div>
             <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Stüdyo:</span>
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    {isEditingExisting ? 'Düzenleme Modu:' : 'Stüdyo:'}
+                </span>
                 <span className="text-xs font-black text-primary uppercase">{step}</span>
             </div>
         </div>
@@ -195,7 +242,7 @@ export const ContentStudio: React.FC = () => {
                                     placeholder="Eğitimin konusunu veya ham içeriği buraya yaz..."
                                     className="w-full h-40 p-6 bg-white border-2 border-gray-100 rounded-3xl outline-none focus:border-accent transition-colors font-medium"
                                 />
-                                <button onClick={() => setStep('TUNING')} disabled={!sourceData.trim()} className="mt-6 bg-primary text-white px-12 py-4 rounded-2xl font-bold shadow-xl active:scale-95 transition-all disabled:opacity-50">İleri Git</button>
+                                <button onClick={() => setStep('TUNING')} disabled={!sourceData.trim()} className="mt-6 bg-primary text-white px-12 py-4 rounded-2xl font-bold shadow-xl active:scale-[0.98] transition-all disabled:opacity-50">İleri Git</button>
                             </motion.div>
                         )}
                     </div>
@@ -234,7 +281,7 @@ export const ContentStudio: React.FC = () => {
                     </div>
                     <div className="flex gap-4 mt-12 w-full">
                         <button onClick={() => setStep('SOURCE')} className="flex-1 py-4 text-gray-400 font-bold hover:text-gray-600">Geri Dön</button>
-                        <button onClick={handleGenerate} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-3">
+                        <button onClick={handleGenerate} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98]">
                             <Wand2 className="w-5 h-5 text-accent" /> Sihirli Oluştur
                         </button>
                     </div>
@@ -253,11 +300,11 @@ export const ContentStudio: React.FC = () => {
             )}
 
             {step === 'DIRECTOR' && courseData && (
-                <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex overflow-hidden animate-in fade-in duration-500">
                     <div className="w-72 border-r border-gray-100 flex flex-col bg-white shrink-0">
                         <div className="p-4 border-b border-gray-50 flex justify-between items-center">
                             <span className="text-xs font-black text-gray-400 uppercase">Akış</span>
-                            <button className="p-1 text-gray-400 hover:text-primary"><Plus className="w-4 h-4" /></button>
+                            <button className="p-1 text-gray-400 hover:text-primary active:scale-90"><Plus className="w-4 h-4" /></button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
                             {courseData.cards.map((card, idx) => (
@@ -290,7 +337,31 @@ export const ContentStudio: React.FC = () => {
                             </div>
                         </div>
                         <div className="absolute bottom-8 right-8 flex gap-4">
-                             <button onClick={() => setStep('PUBLISH')} className="bg-primary text-white px-8 py-3 rounded-2xl font-bold shadow-xl flex items-center gap-2">İleri <ChevronRight className="w-5 h-5" /></button>
+                             <button onClick={() => setStep('PUBLISH')} className="bg-primary text-white px-8 py-3 rounded-2xl font-bold shadow-xl flex items-center gap-2 active:scale-95 transition-all">
+                                {isEditingExisting ? 'Kaydet' : 'İleri'} <ChevronRight className="w-5 h-5" />
+                             </button>
+                        </div>
+                    </div>
+
+                    <div className="w-80 bg-white border-l border-gray-100 flex flex-col p-6 overflow-y-auto no-scrollbar">
+                        <h3 className="text-sm font-black text-gray-800 uppercase mb-6 flex items-center gap-2">
+                            <Edit className="w-4 h-4" /> Kart Özellikleri
+                        </h3>
+                        <div className="space-y-6">
+                            <div>
+                                <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">Başlık</label>
+                                <input value={courseData.cards[activeCardIndex].title} onChange={e => updateActiveCard({ title: e.target.value })} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-bold focus:border-primary outline-none" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">İçerik</label>
+                                <textarea value={courseData.cards[activeCardIndex].content} onChange={e => updateActiveCard({ content: e.target.value })} rows={4} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-medium focus:border-primary outline-none resize-none" />
+                            </div>
+                            <button 
+                                onClick={deleteActiveCard}
+                                className="w-full py-3 bg-red-50 text-red-500 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Trash2 className="w-4 h-4" /> Kartı Sil
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -299,8 +370,10 @@ export const ContentStudio: React.FC = () => {
             {step === 'PUBLISH' && (
                 <div className="flex-1 flex flex-col items-center justify-center p-12 max-w-lg mx-auto">
                     <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6"><CheckCircle2 className="w-8 h-8" /></div>
-                    <h1 className="text-3xl font-black text-primary mb-2">Hazır!</h1>
-                    <div className="w-full space-y-6 mt-8">
+                    <h1 className="text-3xl font-black text-primary mb-2">{isEditingExisting ? 'Güncelleniyor' : 'Hazır!'}</h1>
+                    <p className="text-gray-500 text-sm mb-8 text-center">{isEditingExisting ? 'Yaptığınız değişiklikler anında yansıyacak.' : 'Eğitim tasarımı tamamlandı.'}</p>
+                    
+                    <div className="w-full space-y-6 mt-4">
                         <div className="grid grid-cols-2 gap-3">
                             <button onClick={() => setVisibility('PRIVATE')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${visibility === 'PRIVATE' ? 'border-primary bg-primary/5' : 'border-gray-100'}`}>
                                 <Lock className="w-5 h-5 text-gray-400" />
@@ -314,8 +387,8 @@ export const ContentStudio: React.FC = () => {
                     </div>
                     <div className="flex gap-4 mt-12 w-full">
                         <button onClick={() => setStep('DIRECTOR')} className="flex-1 py-4 text-gray-400 font-bold">Geri</button>
-                        <button onClick={handlePublish} disabled={isPublishing} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-2">
-                            {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Yayınla
+                        <button onClick={handlePublish} disabled={isPublishing} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-2 active:scale-95 transition-all">
+                            {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} {isEditingExisting ? 'Güncellemeyi Kaydet' : 'Yayınla'}
                         </button>
                     </div>
                 </div>
