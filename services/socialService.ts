@@ -4,19 +4,19 @@ import {
     serverTimestamp, addDoc, deleteDoc, getDoc, limit, orderBy 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { FollowStatus, Relationship, User } from '../types';
+import { FollowStatus, Relationship, User, Organization } from '../types';
 
 const relationshipsRef = collection(db, 'relationships');
 
 /**
- * Checks the relationship status between current user and target user.
+ * Checks the relationship status between current user and target user/org.
  */
-export const checkFollowStatus = async (currentUserId: string, targetUserId: string): Promise<FollowStatus> => {
+export const checkFollowStatus = async (currentUserId: string, targetId: string): Promise<FollowStatus> => {
     try {
         const q = query(
             relationshipsRef, 
             where('followerId', '==', currentUserId), 
-            where('followingId', '==', targetUserId)
+            where('followingId', '==', targetId)
         );
         const snapshot = await getDocs(q);
         
@@ -51,9 +51,7 @@ export const followUserSmart = async (currentUserId: string, targetUserId: strin
                 where('followerId', '==', currentUserId), 
                 where('followingId', '==', targetUserId)
             );
-            const existingSnap = await getDocs(q); // Transaction read limitation: query must be done carefully or use deterministic IDs
-            // Note: In real production, use ID like `follower_following` for O(1) reads.
-            // For this demo, assuming standard flow.
+            const existingSnap = await getDocs(q); 
             
             if (!existingSnap.empty) {
                 return { status: existingSnap.docs[0].data().status as FollowStatus, success: false };
@@ -73,7 +71,10 @@ export const followUserSmart = async (currentUserId: string, targetUserId: strin
             // 4. Update Counters (Only if Public)
             if (!isPrivate) {
                 const currentUserRef = doc(db, 'users', currentUserId);
-                transaction.update(currentUserRef, { followingCount: (targetUser.followingCount || 0) + 1 });
+                transaction.update(currentUserRef, { 
+                    followingCount: (await transaction.get(currentUserRef)).data()?.followingCount + 1,
+                    following: (await transaction.get(currentUserRef)).data()?.following ? [...(await transaction.get(currentUserRef)).data()?.following, targetUserId] : [targetUserId]
+                });
                 transaction.update(targetUserRef, { followersCount: (targetUser.followersCount || 0) + 1 });
             }
 
@@ -100,42 +101,92 @@ export const followUserSmart = async (currentUserId: string, targetUserId: strin
 };
 
 /**
- * Unfollows a user.
+ * Follows an Organization. (Organizations are always PUBLIC for now)
  */
-export const unfollowUserSmart = async (currentUserId: string, targetUserId: string): Promise<boolean> => {
+export const followOrganizationSmart = async (currentUserId: string, targetOrgId: string): Promise<{ status: FollowStatus, success: boolean }> => {
+    try {
+        const result = await runTransaction(db, async (transaction) => {
+            const orgRef = doc(db, 'organizations', targetOrgId);
+            const orgSnap = await transaction.get(orgRef);
+            if (!orgSnap.exists()) throw new Error("Organization not found");
+
+            // Check duplicate
+            const q = query(relationshipsRef, where('followerId', '==', currentUserId), where('followingId', '==', targetOrgId));
+            const existingSnap = await getDocs(q);
+            if (!existingSnap.empty) return { status: 'FOLLOWING', success: false };
+
+            // Create Relationship
+            const newRelRef = doc(collection(db, 'relationships'));
+            transaction.set(newRelRef, {
+                followerId: currentUserId,
+                followingId: targetOrgId,
+                status: 'ACCEPTED',
+                createdAt: Date.now()
+            });
+
+            // Update User Following List & Count
+            const userRef = doc(db, 'users', currentUserId);
+            const userDoc = await transaction.get(userRef);
+            const currentFollowing = userDoc.data()?.following || [];
+            
+            transaction.update(userRef, { 
+                followingCount: (userDoc.data()?.followingCount || 0) + 1,
+                following: [...currentFollowing, targetOrgId]
+            });
+
+            // Update Org Followers Count
+            const currentFollowers = orgSnap.data()?.followersCount || 0;
+            transaction.update(orgRef, { followersCount: currentFollowers + 1 });
+
+            return { status: 'FOLLOWING', success: true };
+        });
+        return result;
+    } catch (e) {
+        console.error("Follow Org Error:", e);
+        return { status: 'NONE', success: false };
+    }
+};
+
+/**
+ * Unfollows a user OR organization.
+ */
+export const unfollowUserSmart = async (currentUserId: string, targetId: string): Promise<boolean> => {
     try {
         await runTransaction(db, async (transaction) => {
-            // 1. Find Relationship (Simplified Query for demo)
             const q = query(
                 relationshipsRef, 
                 where('followerId', '==', currentUserId), 
-                where('followingId', '==', targetUserId)
+                where('followingId', '==', targetId)
             );
             const snapshot = await getDocs(q);
-            
             if (snapshot.empty) return;
 
             const relDoc = snapshot.docs[0];
-            const relData = relDoc.data() as Relationship;
-
-            // 2. Delete Doc
             transaction.delete(relDoc.ref);
 
-            // 3. Decrement Counters (Only if it was accepted)
-            if (relData.status === 'ACCEPTED') {
-                const currentUserRef = doc(db, 'users', currentUserId);
-                const targetUserRef = doc(db, 'users', targetUserId);
-                
-                // Use increment(-1) for safety in prod, but logic here assumes reads
-                const targetSnap = await transaction.get(targetUserRef);
-                const currentSnap = await transaction.get(currentUserRef);
-                
-                if (targetSnap.exists() && currentSnap.exists()) {
-                    const tCount = targetSnap.data().followersCount || 0;
-                    const cCount = currentSnap.data().followingCount || 0;
-                    
-                    transaction.update(targetUserRef, { followersCount: Math.max(0, tCount - 1) });
-                    transaction.update(currentUserRef, { followingCount: Math.max(0, cCount - 1) });
+            // Update User Counters
+            const currentUserRef = doc(db, 'users', currentUserId);
+            const userSnap = await transaction.get(currentUserRef);
+            if (userSnap.exists()) {
+                const userData = userSnap.data() as User;
+                const newFollowing = (userData.following || []).filter(id => id !== targetId);
+                transaction.update(currentUserRef, { 
+                    followingCount: Math.max(0, (userData.followingCount || 0) - 1),
+                    following: newFollowing
+                });
+            }
+
+            // Determine if Target is User or Org
+            const userTargetRef = doc(db, 'users', targetId);
+            const userTargetSnap = await transaction.get(userTargetRef);
+            
+            if (userTargetSnap.exists()) {
+                transaction.update(userTargetRef, { followersCount: Math.max(0, (userTargetSnap.data().followersCount || 0) - 1) });
+            } else {
+                const orgTargetRef = doc(db, 'organizations', targetId);
+                const orgTargetSnap = await transaction.get(orgTargetRef);
+                if (orgTargetSnap.exists()) {
+                    transaction.update(orgTargetRef, { followersCount: Math.max(0, (orgTargetSnap.data().followersCount || 0) - 1) });
                 }
             }
         });
@@ -147,7 +198,6 @@ export const unfollowUserSmart = async (currentUserId: string, targetUserId: str
 };
 
 export const getFollowers = async (userId: string): Promise<User[]> => {
-    // Basic implementation: Fetch IDs from relationships then fetch Users
     try {
         const q = query(relationshipsRef, where('followingId', '==', userId), where('status', '==', 'ACCEPTED'), limit(50));
         const snap = await getDocs(q);
@@ -155,8 +205,6 @@ export const getFollowers = async (userId: string): Promise<User[]> => {
         
         if (userIds.length === 0) return [];
         
-        // Firestore 'in' query supports up to 10
-        // For scalability, you'd batch this. Doing top 10 for demo.
         const usersQ = query(collection(db, 'users'), where('__name__', 'in', userIds.slice(0, 10)));
         const usersSnap = await getDocs(usersQ);
         return usersSnap.docs.map(d => ({id: d.id, ...d.data()} as User));

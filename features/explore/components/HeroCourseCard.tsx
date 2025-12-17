@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Course } from '../../../types';
-import { Play, Clock, Zap, Star, Globe, Lock, DollarSign } from 'lucide-react';
+import { Play, Clock, Zap, Star, Globe, Lock, DollarSign, Building2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,6 +13,14 @@ export const HeroCourseCard: React.FC<HeroCourseCardProps> = ({ course }) => {
   const navigate = useNavigate();
 
   const isPublic = course.visibility === 'PUBLIC';
+  const authorName = course.authorName || (course.organizationId ? 'Kurumsal' : 'Anonim');
+  const authorAvatar = course.authorAvatarUrl;
+
+  const handleAuthorClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (course.authorType === 'USER') navigate(`/user/${course.authorId}`);
+      else navigate(`/org/${course.authorId || course.organizationId}`);
+  };
 
   return (
     <motion.div 
@@ -32,19 +40,20 @@ export const HeroCourseCard: React.FC<HeroCourseCardProps> = ({ course }) => {
       <div className="absolute inset-0 bg-gradient-to-t from-primary-dark via-primary/40 to-transparent" />
       <div className="absolute inset-0 bg-gradient-to-r from-primary-dark/60 to-transparent" />
 
-      {/* Floating Badges (Top Left) */}
-      <div className="absolute top-4 left-4 flex flex-col gap-2">
-          {course.priority === 'HIGH' && (
-              <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-lg w-max animate-pulse">
-                  <Star className="w-3 h-3 fill-current" /> Zorunlu
-              </div>
-          )}
-          {course.tags?.map(tag => (
-              <div key={tag} className="bg-black/40 backdrop-blur-md text-white/80 text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider border border-white/10 w-max">
-                  {tag}
-              </div>
-          ))}
+      {/* AUTHOR BADGE (Top Left) */}
+      <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-full p-1 pr-3 border border-white/10 z-10 cursor-pointer hover:bg-black/60 transition-colors" onClick={handleAuthorClick}>
+          <div className="w-6 h-6 rounded-full overflow-hidden bg-white/20">
+              {authorAvatar ? <img src={authorAvatar} className="w-full h-full object-cover"/> : <Building2 className="p-1 text-white"/>}
+          </div>
+          <span className="text-[10px] font-bold text-white">{authorName}</span>
       </div>
+
+      {/* Priority Badge (Below Author) */}
+      {course.priority === 'HIGH' && (
+          <div className="absolute top-14 left-4 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-lg w-max animate-pulse">
+              <Star className="w-3 h-3 fill-current" /> Zorunlu
+          </div>
+      )}
 
       {/* Visibility Badge (Top Right) */}
       <div className="absolute top-4 right-4">

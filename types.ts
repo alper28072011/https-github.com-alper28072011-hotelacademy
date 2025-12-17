@@ -201,7 +201,7 @@ export interface Category {
 export type AssignmentType = 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
 export type ContentPriority = 'HIGH' | 'NORMAL';
 export type CourseVisibility = 'PRIVATE' | 'PUBLIC' | 'FOLLOWERS_ONLY';
-export type OwnerType = 'USER' | 'ORGANIZATION';
+export type AuthorType = 'USER' | 'ORGANIZATION'; // New Polymorphic Type
 export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'UNDER_REVIEW';
 export type PriceType = 'FREE' | 'PAID';
@@ -210,8 +210,13 @@ export type ReviewTag = 'ACCURATE' | 'ENGAGING' | 'BORING' | 'MISLEADING' | 'OUT
 export interface Course {
   id: string;
   organizationId?: string;
+  
+  // Polymorphic Author Details (Denormalized)
+  authorType: AuthorType;
   authorId: string;
-  ownerType: OwnerType;
+  authorName: string;
+  authorAvatarUrl: string;
+
   tier: ContentTier;
   verificationStatus: VerificationStatus;
   qualityScore: number;
@@ -247,9 +252,13 @@ export interface Course {
 export interface FeedPost {
   id: string;
   organizationId: string;
+  
+  // Polymorphic Author Details (Denormalized)
+  authorType: AuthorType;
   authorId: string;
   authorName: string;
   authorAvatar: string;
+
   assignmentType?: AssignmentType; 
   targetDepartments: DepartmentType[]; 
   priority?: ContentPriority; 

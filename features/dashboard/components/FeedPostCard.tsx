@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Star, Users, Zap, Bookmark, Check, Play, Clock } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Star, Users, Zap, Bookmark, Check, Play, Clock, Building2, BadgeCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { FeedPost, KudosType, Course } from '../../../types';
 import { togglePostLike, toggleSaveCourse } from '../../../services/db';
@@ -29,6 +29,12 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
   const isSavedByMe = isCourse && currentUser?.savedCourses?.includes(post.id);
   const [saved, setSaved] = useState(isSavedByMe);
 
+  // -- Author Logic --
+  const authorName = post.authorName || (post.organizationId ? 'Kurumsal' : 'Anonim');
+  const authorAvatar = post.authorAvatar || post.authorAvatarUrl;
+  const authorType = (post as any).authorType || 'ORGANIZATION'; // Default fallback
+  const authorId = post.authorId || post.organizationId;
+
   const handleLike = async () => {
       if (!currentUser || isCourse) return;
       const newStatus = !liked;
@@ -46,8 +52,13 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
       await toggleSaveCourse(currentUser.id, post.id, newStatus);
   };
 
-  const handleProfileClick = () => {
-      if (!isCourse) navigate(`/user/${(post as FeedPost).authorId}`);
+  const handleAuthorClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (authorType === 'USER') {
+          navigate(`/user/${authorId}`);
+      } else {
+          navigate(`/org/${authorId}`);
+      }
   };
 
   const handleCourseClick = () => {
@@ -59,7 +70,7 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
       const diff = now - timestamp;
       const hours = Math.floor(diff / (1000 * 60 * 60));
       if (hours < 1) return 'Az önce';
-      if (hours < 24) return `${hours} saat önce`;
+      if (hours < 24) return `${hours} sa`;
       return new Date(timestamp).toLocaleDateString();
   };
 
@@ -81,12 +92,21 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
               <div className={`absolute inset-0 bg-gradient-to-br ${config.gradient} opacity-5`} />
               
               <div className="flex items-center justify-between p-3 md:p-4 relative z-10">
-                  <div className="flex items-center gap-2">
-                      <div className="bg-gradient-to-r from-accent to-accent-light text-primary text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-sm">
-                          <Star className="w-3 h-3 fill-primary" /> Takdir
-                      </div>
+                  <div className="flex items-center gap-2 cursor-pointer" onClick={handleAuthorClick}>
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 border border-white shadow-sm">
+                            {authorAvatar ? (
+                                <img src={authorAvatar} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-primary text-white text-xs font-bold">
+                                    {authorName[0]}
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            <div className="text-xs font-bold text-gray-900">{authorName}</div>
+                            <div className="text-[10px] text-gray-400">Takdir Gönderdi • {formatTime(p.createdAt)}</div>
+                        </div>
                   </div>
-                  <div className="text-[10px] text-gray-400">{formatTime(p.createdAt)}</div>
               </div>
 
               <div className="px-4 pb-6 pt-2 text-center relative z-10" onDoubleClick={handleLike}>
@@ -98,7 +118,7 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
                   </div>
                   <h2 className="text-xl font-bold text-gray-800 mb-1">{config.label}</h2>
                   <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-6">
-                      <span className="font-bold cursor-pointer hover:underline" onClick={handleProfileClick}>{p.authorName}</span>
+                      <span className="font-bold cursor-pointer hover:underline" onClick={handleAuthorClick}>{p.authorName}</span>
                       <span className="text-gray-400">➔</span>
                       <span className="font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded cursor-pointer hover:underline" onClick={() => navigate(`/user/${p.kudosData?.recipientId}`)}>
                           {p.kudosData?.recipientName}
@@ -116,7 +136,6 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
                           {likeCount > 0 && <span className="text-sm font-bold text-gray-600">{likeCount}</span>}
                       </button>
                   </div>
-                  <div className="text-xs font-bold text-accent">+250 XP Awarded</div>
               </div>
           </div>
       );
@@ -127,17 +146,22 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
       const c = post as Course;
       return (
           <div className="bg-white border-b border-gray-100 md:rounded-3xl md:border md:shadow-sm md:mb-6 overflow-hidden group cursor-pointer" onClick={handleCourseClick}>
-              {/* Header */}
+              {/* Dynamic Header */}
               <div className="flex items-center justify-between p-3 md:p-4">
-                  <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center font-bold text-xs">
-                          {c.organizationId ? 'ORG' : 'HA'}
+                  <div className="flex items-center gap-2 cursor-pointer" onClick={handleAuthorClick}>
+                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-xs overflow-hidden border border-gray-200">
+                          {authorAvatar ? (
+                              <img src={authorAvatar} className="w-full h-full object-cover" />
+                          ) : authorType === 'ORGANIZATION' ? <Building2 className="w-5 h-5 text-gray-400" /> : authorName[0]}
                       </div>
                       <div>
-                          <div className="font-bold text-sm text-gray-900 leading-none">
-                              {c.organizationId ? 'Kurumsal Eğitim' : 'Hotel Academy'}
+                          <div className="font-bold text-sm text-gray-900 leading-none flex items-center gap-1">
+                              {authorName}
+                              {authorType === 'ORGANIZATION' && <BadgeCheck className="w-3 h-3 text-blue-500" />}
                           </div>
-                          <div className="text-[10px] text-gray-500 mt-0.5">Sponsorlu İçerik</div>
+                          <div className="text-[10px] text-gray-500 mt-0.5">
+                              {c.organizationId && c.visibility === 'PRIVATE' ? 'Kurumsal Eğitim' : 'Paylaşım'} • {formatTime(c.createdAt || Date.now())}
+                          </div>
                       </div>
                   </div>
                   <button onClick={handleBookmark} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
@@ -189,13 +213,13 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
     <div className="bg-white border-b border-gray-100 md:rounded-3xl md:border md:shadow-sm md:mb-6 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-3 md:p-4">
-            <div className="flex items-center gap-3 cursor-pointer" onClick={handleProfileClick}>
+            <div className="flex items-center gap-3 cursor-pointer" onClick={handleAuthorClick}>
                 <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden">
-                    <img src={p.authorAvatar} alt={p.authorName} className="w-full h-full object-cover" />
+                    <img src={authorAvatar} alt={authorName} className="w-full h-full object-cover" />
                 </div>
                 <div>
-                    <div className="font-bold text-sm text-gray-900 leading-none">{p.authorName}</div>
-                    <div className="text-xs text-gray-500 mt-1">{p.targetDepartments.join(', ').replace('_', ' ')}</div>
+                    <div className="font-bold text-sm text-gray-900 leading-none">{authorName}</div>
+                    <div className="text-xs text-gray-500 mt-1">{formatTime(p.createdAt)}</div>
                 </div>
             </div>
             <button className="text-gray-400">
@@ -240,10 +264,9 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
             
             <div className="font-bold text-sm text-gray-900 mb-2">{likeCount} beğeni</div>
             <div className="text-sm text-gray-800 mb-1">
-                <span className="font-bold mr-2 cursor-pointer hover:underline" onClick={handleProfileClick}>{p.authorName}</span>
+                <span className="font-bold mr-2 cursor-pointer hover:underline" onClick={handleAuthorClick}>{authorName}</span>
                 {p.caption}
             </div>
-            <div className="text-[10px] text-gray-400 uppercase mt-2">{formatTime(p.createdAt)}</div>
         </div>
     </div>
   );

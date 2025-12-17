@@ -21,8 +21,10 @@ import {
     ReviewTag, 
     ContentTier, 
     VerificationStatus, 
-    CreatorLevel 
+    CreatorLevel,
+    AuthorType
 } from '../types';
+import { getOrganizationDetails } from './db';
 
 /**
  * Creates a new course with logic based on User Level.
@@ -30,7 +32,7 @@ import {
  * - Expert: Can create PRO Courses (Pending Review).
  * - Manager/Admin: Can create OFFICIAL Content (Auto-verified).
  */
-export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'verificationStatus' | 'qualityScore' | 'flagCount'>, user: User): Promise<boolean> => {
+export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'verificationStatus' | 'qualityScore' | 'flagCount' | 'authorType' | 'authorName' | 'authorAvatarUrl'> & { ownerType?: AuthorType }, user: User): Promise<boolean> => {
     try {
         let tier: ContentTier = 'COMMUNITY';
         let status: VerificationStatus = 'VERIFIED'; // Default open for Community
@@ -45,27 +47,51 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
         } else {
             // NOVICE / RISING_STAR
             tier = 'COMMUNITY';
-            // Constraint: Novices can't make long courses (handled in UI, enforced here if needed)
             if (courseData.duration > 5) {
                 throw new Error("Başlangıç seviyesindeki içerik üreticileri maks. 5 dakikalık içerik üretebilir.");
             }
         }
 
-        // 2. Prepare Data
+        // 2. Prepare Author Details (Denormalization)
+        let authorType: AuthorType = 'USER';
+        let authorName = user.name;
+        let authorAvatarUrl = user.avatar;
+        let finalAuthorId = user.id;
+
+        // If posting AS Organization (Manager/Admin posting to Org)
+        if (courseData.ownerType === 'ORGANIZATION' && courseData.organizationId) {
+            authorType = 'ORGANIZATION';
+            finalAuthorId = courseData.organizationId;
+            // Fetch Org details to stamp on the card
+            const org = await getOrganizationDetails(courseData.organizationId);
+            if (org) {
+                authorName = org.name;
+                authorAvatarUrl = org.logoUrl;
+            }
+        }
+
+        // 3. Prepare Final Data
         const finalData = {
             ...courseData,
             tier,
             verificationStatus: status,
-            qualityScore: 0, // Start fresh
+            qualityScore: 0,
             flagCount: 0,
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            // Stamped Author Info
+            authorType,
+            authorId: finalAuthorId,
+            authorName,
+            authorAvatarUrl
         };
 
-        // 3. Write to DB
+        // Remove temporary ownerType before saving
+        delete (finalData as any).ownerType;
+
+        // 4. Write to DB
         await addDoc(collection(db, 'courses'), finalData);
         
-        // 4. Update User Stats (Optimistic Reputation for creating)
-        // Small reward for creation to encourage activity
+        // 5. Update User Stats (Optimistic Reputation for creating)
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
             xp: increment(50) 
@@ -97,52 +123,48 @@ export const submitReview = async (
             if (!courseSnap.exists()) throw new Error("Course not found");
             
             const course = courseSnap.data() as Course;
-            const authorRef = doc(db, 'users', course.authorId);
-
-            // 1. Calculate New Rating (Weighted Average or Simple Moving Avg)
-            // Simplified here: Just strictly updating based on input for demo
-            // In prod: (oldRating * count + newRating) / (count + 1)
             
-            // 2. Auto-Moderation Logic
+            // Only reward USER authors, not ORGS directly (Orgs don't have XP)
+            if (course.authorType === 'USER') {
+                const authorRef = doc(db, 'users', course.authorId);
+                
+                // Economy: Reputation & XP
+                let reputationDelta = 0;
+                let xpDelta = 0;
+
+                if (rating >= 4) {
+                    reputationDelta = 10; 
+                    xpDelta = 50;
+                } else if (rating <= 2) {
+                    reputationDelta = -5;
+                }
+
+                if (tags.includes('ACCURATE') || tags.includes('ENGAGING')) {
+                    reputationDelta += 5;
+                }
+
+                transaction.update(authorRef, {
+                    reputationPoints: increment(reputationDelta),
+                    xp: increment(xpDelta)
+                });
+            }
+
+            // Auto-Moderation Logic
             let newStatus = course.verificationStatus;
             let newFlagCount = course.flagCount || 0;
 
             if (tags.includes('MISLEADING') || tags.includes('OUTDATED')) {
                 newFlagCount += 1;
                 if (newFlagCount >= 3) {
-                    newStatus = 'UNDER_REVIEW'; // Quarantine content
+                    newStatus = 'UNDER_REVIEW'; 
                 }
             }
 
-            // 3. Economy: Reputation & XP
-            let reputationDelta = 0;
-            let xpDelta = 0;
-
-            if (rating >= 4) {
-                reputationDelta = 10; // Good content
-                xpDelta = 50;
-            } else if (rating <= 2) {
-                reputationDelta = -5; // Poor content
-            }
-
-            if (tags.includes('ACCURATE') || tags.includes('ENGAGING')) {
-                reputationDelta += 5;
-            }
-
-            // 4. Commit Updates
             transaction.update(courseRef, {
-                qualityScore: rating, // Simplify: storing last rating or avg logic
+                qualityScore: rating,
                 flagCount: newFlagCount,
                 verificationStatus: newStatus
             });
-
-            // Award Author
-            transaction.update(authorRef, {
-                reputationPoints: increment(reputationDelta),
-                xp: increment(xpDelta)
-            });
-
-            // Note: Could also upgrade CreatorLevel here if reputation crosses threshold
         });
         return true;
     } catch (error) {
@@ -153,7 +175,6 @@ export const submitReview = async (
 
 /**
  * Intelligent Feed Algorithm
- * Returns mixed content based on Trust & Relevance
  */
 export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promise<Course[]> => {
     try {
@@ -161,7 +182,6 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
         let q;
 
         if (showVerifiedOnly) {
-            // Show only PRO (Verified Experts) or OFFICIAL (Org)
             q = query(
                 coursesRef, 
                 where('tier', 'in', ['PRO', 'OFFICIAL']),
@@ -170,11 +190,6 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
                 limit(20)
             );
         } else {
-            // "For You" Logic:
-            // 1. Official Org Content (High Priority)
-            // 2. High Rated Community Content
-            // 3. New Content
-            // Note: Complex OR queries are limited in Firestore, so we fetch basic list and filter client-side for advanced "For You" logic in this demo architecture.
             q = query(
                 coursesRef, 
                 where('verificationStatus', '==', 'VERIFIED'),
@@ -185,9 +200,6 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
 
         const snapshot = await getDocs(q);
         let courses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Course));
-
-        // Client-Side Post-Processing for "Relevance"
-        // Filter out content from blocked users or blocked tags if we had that feature.
         
         return courses;
     } catch (error) {

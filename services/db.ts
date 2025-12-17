@@ -19,7 +19,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector, PermissionType } from '../types';
+import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector, PermissionType, AuthorType } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -144,38 +144,57 @@ export const getDashboardStories = async (user: User): Promise<Course[]> => {
 };
 
 /**
- * FEED: Returns mixed content (Public + Org) for the main scroll.
- * Acts like the Instagram Feed.
+ * FEED: Returns mixed content:
+ * 1. Posts/Courses from Following (User + Org)
+ * 2. Mandatory Content from Current Org
+ * 3. Global Trending Content (Discovery)
  */
 export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[]> => {
     try {
-        const feedItems: (Course | FeedPost)[] = [];
+        const feedMap = new Map<string, Course | FeedPost>();
+        const followingIds = user.following || [];
 
-        // 1. Fetch Public Courses (Global Content)
-        const publicQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), limit(20));
-        const publicSnap = await getDocs(publicQ);
-        publicSnap.docs.forEach(d => feedItems.push({ id: d.id, ...d.data(), type: 'course' } as any));
+        // 1. Fetch from Following (Users & Orgs)
+        // Note: Firestore 'in' query supports max 10. For now we fetch limited or chunk.
+        // Optimized: Just fetch recent posts globally and filter in memory for small apps, 
+        // or iterate through following list if small.
+        // Current Strategy: Fetch top 50 recent items and filter by "Following OR My Org OR Public"
+        
+        const globalQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), orderBy('createdAt', 'desc'), limit(20));
+        const globalSnap = await getDocs(globalQ);
+        globalSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data(), type: 'course' } as any));
 
-        // 2. Fetch Org Content (If in Org)
+        // 2. Fetch My Org Content (Private + Public)
         if (user.currentOrganizationId) {
-            // Org Courses
-            const orgCoursesQ = query(coursesRef, where('organizationId', '==', user.currentOrganizationId), limit(10));
-            const orgCoursesSnap = await getDocs(orgCoursesQ);
-            orgCoursesSnap.docs.forEach(d => {
-                // Avoid duplicates if it was somehow public too
-                if (!feedItems.find(i => i.id === d.id)) {
-                    feedItems.push({ id: d.id, ...d.data(), type: 'course' } as any);
-                }
-            });
+            const orgQ = query(coursesRef, where('organizationId', '==', user.currentOrganizationId), limit(10));
+            const orgSnap = await getDocs(orgQ);
+            orgSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data(), type: 'course' } as any));
 
-            // Org Social Posts
-            const postsQ = query(postsRef, where('organizationId', '==', user.currentOrganizationId), limit(20));
+            const postsQ = query(postsRef, where('organizationId', '==', user.currentOrganizationId), limit(10));
             const postsSnap = await getDocs(postsQ);
-            postsSnap.docs.forEach(d => feedItems.push({ id: d.id, ...d.data() } as FeedPost));
+            postsSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data() } as FeedPost));
         }
 
-        // 3. Sort by Date (Newest First)
-        return feedItems.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        // 3. Fetch Specific Following Content (If not caught by above)
+        // If user follows people outside their org, we need to fetch their content.
+        // Limited implementation for robustness: Fetch posts from authors I follow.
+        if (followingIds.length > 0) {
+            // Slice to 10 for Firestore 'in' limit
+            const safeFollowing = followingIds.slice(0, 10);
+            
+            const followingPostsQ = query(postsRef, where('authorId', 'in', safeFollowing), limit(10));
+            const followingPostsSnap = await getDocs(followingPostsQ);
+            followingPostsSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data() } as FeedPost));
+
+            const followingCoursesQ = query(coursesRef, where('authorId', 'in', safeFollowing), where('visibility', '==', 'PUBLIC'), limit(10));
+            const followingCoursesSnap = await getDocs(followingCoursesQ);
+            followingCoursesSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data(), type: 'course' } as any));
+        }
+
+        const allItems = Array.from(feedMap.values());
+        
+        // 4. Sort by Date (Newest First)
+        return allItems.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     } catch (error) {
         console.error("Feed Error:", error);
@@ -198,16 +217,22 @@ export const toggleSaveCourse = async (userId: string, courseId: string, isSaved
     }
 };
 
+export const createPost = async (post: Omit<FeedPost, 'id'>) => {
+    try { await addDoc(postsRef, post); return true; } catch (e) { return false; }
+};
+
+export const createCourse = async (course: Omit<Course, 'id'>) => {
+    try { await addDoc(coursesRef, course); return true; } catch(e) { return false; }
+};
+
 // ... (Rest of the existing functions below, unchanged) ...
 
 export const getHybridContent = async (user: User): Promise<Course[]> => {
-    // Legacy fallback, mapped to getDashboardFeed logic essentially but returning only courses
     const feed = await getDashboardFeed(user);
     return feed.filter((i): i is Course => (i as any).type !== 'kudos' && (i as any).type !== 'image');
 };
 
 export const getFeedPosts = async (dept: DepartmentType | null, orgId: string | null): Promise<FeedPost[]> => {
-    // Legacy fallback
     return [];
 };
 
@@ -262,7 +287,9 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
                 allowStaffContentCreation: false,
                 customDepartments: ['Yönetim', 'Operasyon', 'Mutfak'], 
                 primaryColor: '#0B1E3B'
-            }
+            },
+            followersCount: 0,
+            memberCount: 1
         };
 
         await setDoc(doc(db, 'organizations', orgId), newOrg);
@@ -422,9 +449,7 @@ export const getMyMemberships = async (userId: string): Promise<Membership[]> =>
         return snap.docs.map(d => d.data() as Membership);
     } catch (e) { return []; }
 };
-export const createPost = async (post: Omit<FeedPost, 'id'>) => {
-    try { await addDoc(postsRef, post); return true; } catch (e) { return false; }
-};
+
 export const createInteractivePost = async (post: Omit<FeedPost, 'id'>) => {
     return createPost(post);
 };
@@ -445,9 +470,7 @@ export const getCourse = async (courseId: string): Promise<Course | null> => {
       return null;
     } catch (error) { return null; }
 };
-export const createCourse = async (course: Omit<Course, 'id'>) => {
-    try { await addDoc(coursesRef, course); return true; } catch(e) { return false; }
-};
+
 export const updateUserProfile = async (userId: string, data: Partial<User>) => {
     try {
         const userRef = doc(db, 'users', userId);
@@ -531,6 +554,7 @@ export const sendKudos = async (sender: User, recipientId: string, recipientName
                 authorId: sender.id,
                 authorName: sender.name,
                 authorAvatar: sender.avatar,
+                authorType: 'USER',
                 assignmentType: 'GLOBAL',
                 targetDepartments: [], 
                 priority: 'NORMAL',
@@ -558,26 +582,11 @@ export const searchUserByPhone = async (phone: string): Promise<User | null> => 
     } catch (e) { return null; }
 };
 export const followUser = async (currentUserId: string, targetUserId: string): Promise<boolean> => {
-    try {
-        await runTransaction(db, async (transaction) => {
-            const currentUserRef = doc(db, 'users', currentUserId);
-            const targetUserRef = doc(db, 'users', targetUserId);
-            transaction.update(currentUserRef, { following: arrayUnion(targetUserId), followingCount: increment(1) });
-            transaction.update(targetUserRef, { followers: arrayUnion(currentUserId), followersCount: increment(1) });
-        });
-        return true;
-    } catch (e) { return false; }
+    // Legacy mapping to Smart Service
+    return (await import('./socialService')).followUserSmart(currentUserId, targetUserId).then(r => r.success);
 };
 export const unfollowUser = async (currentUserId: string, targetUserId: string): Promise<boolean> => {
-    try {
-        await runTransaction(db, async (transaction) => {
-            const currentUserRef = doc(db, 'users', currentUserId);
-            const targetUserRef = doc(db, 'users', targetUserId);
-            transaction.update(currentUserRef, { following: arrayRemove(targetUserId), followingCount: increment(-1) });
-            transaction.update(targetUserRef, { followers: arrayRemove(currentUserId), followersCount: increment(-1) });
-        });
-        return true;
-    } catch (e) { return false; }
+    return (await import('./socialService')).unfollowUserSmart(currentUserId, targetUserId);
 };
 export const getUserById = async (userId: string): Promise<User | null> => {
     try {
