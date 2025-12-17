@@ -9,17 +9,13 @@ interface GeneratedCourse {
   tags: string[];
 }
 
-/**
- * Helper: Yanıt metnindeki Markdown kod bloklarını temizler.
- */
 const cleanJsonResponse = (text: string): string => {
-  // ```json ve ``` bloklarını kaldırır
   return text.replace(/```json/g, "").replace(/```/g, "").trim();
 };
 
 /**
  * GENERATE MAGIC COURSE
- * Gemini 3 Flash ile yüksek hızda yapılandırılmış eğitim içeriği üretir.
+ * Soru formatı ve içerik kalitesi için optimize edildi.
  */
 export const generateMagicCourse = async (
   sourceContent: string,
@@ -31,28 +27,24 @@ export const generateMagicCourse = async (
   }
 ): Promise<GeneratedCourse | null> => {
   try {
-    // Her çağrıda yeni instance (En güncel API KEY kullanımı için zorunludur)
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
     const cardCount = config.length === 'SHORT' ? 5 : 10;
     
     const prompt = `
-      Role: Expert Instructional Designer for 5-star Hotel Staff.
-      Task: Convert the [SOURCE] into a Micro-Learning "Story" Course.
+      Role: Senior Instructional Designer & Storyteller.
+      Task: Transform [SOURCE] into an engaging Micro-Learning Story.
       
-      Parameters:
-      - Audience Level: ${config.level}
-      - Tone: ${config.tone}
-      - Language: ${config.language}
-      - Target Slide Count: Approximately ${cardCount} cards.
+      Rules for Interaction (QUIZ):
+      - If a card type is 'QUIZ', it MUST have an 'interaction' object.
+      - 'options' must be an array of EXACTLY 3-4 strings.
+      - 'correctOptionIndex' must be a valid 0-based index.
+      - 'explanation' should be a short helpful feedback.
       
-      Structure:
-      1. Card 1: 'COVER' (Intro)
-      2. Middle: 'INFO' cards (Concise knowledge, max 160 chars)
-      3. Interactivity: Every 2-3 info cards, insert 1 'QUIZ'
-      4. End: 'REWARD' (Success message)
-      
-      'mediaPrompt' guidelines: High-quality English keyword for professional photography.
+      Rules for Media:
+      - 'mediaPrompt' must be a high-quality descriptive English keyword.
+
+      Language: ${config.language}
+      Slide Count: ~${cardCount}
       
       [SOURCE]:
       ${sourceContent.substring(0, 8000)}
@@ -84,7 +76,7 @@ export const generateMagicCourse = async (
                   correctOptionIndex: { type: Type.NUMBER },
                   explanation: { type: Type.STRING }
                 },
-                nullable: true
+                required: ["question", "options", "correctOptionIndex"]
               }
             },
             required: ["id", "type", "title", "content", "mediaPrompt", "duration"]
@@ -101,8 +93,8 @@ export const generateMagicCourse = async (
         responseMimeType: "application/json",
         responseSchema: schema,
         temperature: 0.7,
-        maxOutputTokens: 4000, // Çıktı için yeterli alan sağla
-        thinkingConfig: { thinkingBudget: 0 } // Flash hızını maksimize et
+        maxOutputTokens: 5000,
+        thinkingConfig: { thinkingBudget: 0 }
       }
     });
 
@@ -111,11 +103,10 @@ export const generateMagicCourse = async (
       const cleanedJson = cleanJsonResponse(rawText);
       const data = JSON.parse(cleanedJson) as GeneratedCourse;
       
-      // StoryCard ID'lerini ve placeholder görsellerini düzenle
       data.cards = data.cards.map((card, i) => ({
           ...card,
           id: `card-${Date.now()}-${i}`,
-          mediaUrl: `https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=800&auto=format&fit=crop&sig=${i}`
+          mediaUrl: `https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800&auto=format&fit=crop`
       }));
       
       return data;

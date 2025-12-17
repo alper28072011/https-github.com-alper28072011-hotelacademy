@@ -7,11 +7,12 @@ import {
     Settings, Globe, Lock, ChevronRight, Upload, Edit, 
     FileType, User, Building2, Search, Trash2, Plus, 
     MousePointer2, Sparkles, MessageSquare, Award, AlertCircle,
-    RefreshCw
+    RefreshCw, Image as LucideImage, Copy
 } from 'lucide-react';
 import { generateMagicCourse } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
 import { updateCourse } from '../../services/db';
+import { uploadFile } from '../../services/storage';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { StoryCard, DifficultyLevel, CourseTone, StoryCardType, Course } from '../../types';
@@ -25,6 +26,7 @@ export const ContentStudio: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cardMediaRef = useRef<HTMLInputElement>(null);
 
   // Studio Flow State
   const [step, setStep] = useState<StudioStep>('SOURCE');
@@ -35,14 +37,13 @@ export const ContentStudio: React.FC = () => {
   // 1. Source State
   const [sourceType, setSourceType] = useState<'TEXT' | 'PDF' | 'URL'>('TEXT');
   const [sourceData, setSourceData] = useState('');
-  const [isExtracting, setIsExtracting] = useState(false);
-
+  
   // 2. Tuning State
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('BEGINNER');
   const [tone, setTone] = useState<CourseTone>('CASUAL');
   const [length, setLength] = useState<'SHORT' | 'MEDIUM'>('SHORT');
 
-  // 3. Director State (The Editor)
+  // 3. Director State
   const [courseData, setCourseData] = useState<{
       title: string;
       description: string;
@@ -50,13 +51,13 @@ export const ContentStudio: React.FC = () => {
       tags: string[];
   } | null>(null);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 
   // 4. Final Settings
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PRIVATE');
   const [ownerType, setOwnerType] = useState<'USER' | 'ORGANIZATION'>('ORGANIZATION');
   const [isPublishing, setIsPublishing] = useState(false);
 
-  // --- EDIT MODE DETECTOR ---
   useEffect(() => {
       const incoming = location.state?.courseData as Course;
       if (incoming) {
@@ -70,11 +71,10 @@ export const ContentStudio: React.FC = () => {
           });
           setVisibility(incoming.visibility);
           setOwnerType(incoming.authorType);
-          setStep('DIRECTOR'); // Jump straight to editor
+          setStep('DIRECTOR');
       }
   }, [location.state]);
 
-  // --- GENERATION ACTION WITH TIMEOUT ---
   const handleGenerate = async () => {
       setStep('GENERATING');
       setError(null);
@@ -104,10 +104,32 @@ export const ContentStudio: React.FC = () => {
           }
       } catch (err: any) {
           clearTimeout(timeoutId);
-          console.error(err);
-          setError("Yapay zeka şu an çok yoğun. Lütfen metni biraz kısaltıp tekrar deneyin.");
+          setError("Yapay zeka içeriği kurgulayamadı. Lütfen metni değiştirip deneyin.");
           setStep('TUNING');
       }
+  };
+
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !courseData) return;
+      
+      setIsUploadingMedia(true);
+      try {
+          const url = await uploadFile(file, 'course_media');
+          updateActiveCard({ mediaUrl: url });
+      } catch (err) {
+          alert("Görsel yüklenemedi.");
+      } finally {
+          setIsUploadingMedia(false);
+      }
+  };
+
+  const applyImageToAll = () => {
+      if (!courseData) return;
+      const currentUrl = courseData.cards[activeCardIndex].mediaUrl;
+      const newCards = courseData.cards.map(c => ({ ...c, mediaUrl: currentUrl }));
+      setCourseData({ ...courseData, cards: newCards });
+      alert("Bu görsel tüm kartlara uygulandı.");
   };
 
   const updateActiveCard = (updates: Partial<StoryCard>) => {
@@ -145,21 +167,13 @@ export const ContentStudio: React.FC = () => {
       try {
           let success = false;
           if (isEditingExisting && existingCourseId) {
-              // UPDATE MODE
               success = await updateCourse(existingCourseId, payload);
           } else {
-              // CREATE MODE
               success = await publishContent(payload, currentUser);
           }
-
-          if (success) {
-              navigate('/admin/courses');
-          } else {
-              alert("İçerik kaydedilirken bir hata oluştu.");
-          }
+          if (success) navigate('/admin/courses');
       } catch (e) {
-          console.error(e);
-          alert("Bir hata oluştu.");
+          alert("Hata oluştu.");
       } finally {
           setIsPublishing(false);
       }
@@ -176,7 +190,6 @@ export const ContentStudio: React.FC = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-100px)] bg-gray-50 overflow-hidden rounded-[2.5rem] border border-gray-200 shadow-xl">
-        
         {/* TOP STATUS BAR */}
         <div className="bg-white border-b border-gray-100 px-8 py-4 flex justify-between items-center shrink-0">
             <div className="flex items-center gap-4">
@@ -193,10 +206,7 @@ export const ContentStudio: React.FC = () => {
                 </div>
             </div>
             <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                    {isEditingExisting ? 'Düzenleme Modu:' : 'Stüdyo:'}
-                </span>
-                <span className="text-xs font-black text-primary uppercase">{step}</span>
+                <span className="text-xs font-black text-primary uppercase">{isEditingExisting ? 'Düzenleme' : 'Stüdyo'}</span>
             </div>
         </div>
 
@@ -208,27 +218,20 @@ export const ContentStudio: React.FC = () => {
                             <Sparkles className="w-10 h-10 text-accent" />
                         </div>
                         <h1 className="text-4xl font-black text-primary mb-2">Nasıl Başlamak İstersin?</h1>
-                        <p className="text-gray-500">Sıkıcı dokümanları "Story"lere dönüştürelim.</p>
                     </motion.div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
                         <button onClick={() => setSourceType('TEXT')} className={`p-8 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-4 group ${sourceType === 'TEXT' ? 'border-primary bg-primary/5 shadow-xl' : 'border-gray-100 bg-white hover:border-accent'}`}>
-                            <div className={`p-4 rounded-2xl group-hover:scale-110 transition-transform ${sourceType === 'TEXT' ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400'}`}>
-                                <Type className="w-8 h-8" />
-                            </div>
+                            <div className={`p-4 rounded-2xl ${sourceType === 'TEXT' ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400'}`}><Type className="w-8 h-8" /></div>
                             <span className="font-bold text-gray-800">AI ile Konuş</span>
                         </button>
                         <button onClick={() => fileInputRef.current?.click()} className="p-8 rounded-[2rem] border-2 border-gray-100 bg-white hover:border-accent transition-all flex flex-col items-center gap-4 group">
-                            <div className="p-4 rounded-2xl bg-gray-50 text-gray-400 group-hover:scale-110 group-hover:bg-red-50 group-hover:text-red-500 transition-all">
-                                <FileType className="w-8 h-8" />
-                            </div>
+                            <div className="p-4 rounded-2xl bg-gray-50 text-gray-400 group-hover:bg-red-50 group-hover:text-red-500"><FileType className="w-8 h-8" /></div>
                             <span className="font-bold text-gray-800">PDF'den Üret</span>
                             <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" />
                         </button>
                         <button onClick={() => setSourceType('URL')} className={`p-8 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-4 group ${sourceType === 'URL' ? 'border-primary bg-primary/5 shadow-xl' : 'border-gray-100 bg-white hover:border-accent'}`}>
-                            <div className={`p-4 rounded-2xl group-hover:scale-110 transition-transform ${sourceType === 'URL' ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400'}`}>
-                                <Link className="w-8 h-8" />
-                            </div>
+                            <div className={`p-4 rounded-2xl ${sourceType === 'URL' ? 'bg-primary text-white' : 'bg-gray-50 text-gray-400'}`}><Link className="w-8 h-8" /></div>
                             <span className="font-bold text-gray-800">Link Yapıştır</span>
                         </button>
                     </div>
@@ -236,13 +239,8 @@ export const ContentStudio: React.FC = () => {
                     <div className="mt-12 w-full max-w-2xl">
                         {sourceType === 'TEXT' && (
                             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                                <textarea 
-                                    value={sourceData}
-                                    onChange={e => setSourceData(e.target.value)}
-                                    placeholder="Eğitimin konusunu veya ham içeriği buraya yaz..."
-                                    className="w-full h-40 p-6 bg-white border-2 border-gray-100 rounded-3xl outline-none focus:border-accent transition-colors font-medium"
-                                />
-                                <button onClick={() => setStep('TUNING')} disabled={!sourceData.trim()} className="mt-6 bg-primary text-white px-12 py-4 rounded-2xl font-bold shadow-xl active:scale-[0.98] transition-all disabled:opacity-50">İleri Git</button>
+                                <textarea value={sourceData} onChange={e => setSourceData(e.target.value)} placeholder="Eğitimin konusunu buraya yaz..." className="w-full h-40 p-6 bg-white border-2 border-gray-100 rounded-3xl outline-none focus:border-accent transition-colors font-medium" />
+                                <button onClick={() => setStep('TUNING')} disabled={!sourceData.trim()} className="mt-6 bg-primary text-white px-12 py-4 rounded-2xl font-bold shadow-xl active:scale-95 disabled:opacity-50">İleri Git</button>
                             </motion.div>
                         )}
                     </div>
@@ -253,13 +251,9 @@ export const ContentStudio: React.FC = () => {
                 <div className="flex-1 flex flex-col items-center justify-center p-12 max-w-2xl mx-auto">
                     <h1 className="text-3xl font-black text-primary mb-8">İnce Ayarlar</h1>
                     <div className="w-full space-y-8">
-                        {error && (
-                            <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-600 text-sm font-bold animate-pulse">
-                                <AlertCircle className="w-5 h-5" /> {error}
-                            </div>
-                        )}
+                        {error && <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-600 text-sm font-bold"><AlertCircle className="w-5 h-5" /> {error}</div>}
                         <div className="space-y-3">
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Eğitim Zorluğu</label>
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Zorluk</label>
                             <div className="flex gap-2">
                                 {(['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] as DifficultyLevel[]).map(l => (
                                     <button key={l} onClick={() => setDifficulty(l)} className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all ${difficulty === l ? 'bg-primary text-white shadow-lg' : 'bg-white text-gray-500 border border-gray-100'}`}>
@@ -269,21 +263,17 @@ export const ContentStudio: React.FC = () => {
                             </div>
                         </div>
                         <div className="space-y-3">
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">İletişim Tonu</label>
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Ton</label>
                             <div className="flex gap-2">
                                 {(['FORMAL', 'CASUAL', 'FUN'] as CourseTone[]).map(t => (
-                                    <button key={t} onClick={() => setTone(t)} className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all ${tone === t ? 'bg-accent text-primary shadow-lg' : 'bg-white text-gray-500 border border-gray-100'}`}>
-                                        {t === 'FORMAL' ? '🤵 Kurumsal' : t === 'CASUAL' ? '👋 Samimi' : '🥳 Eğlenceli'}
-                                    </button>
+                                    <button key={t} onClick={() => setTone(t)} className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all ${tone === t ? 'bg-accent text-primary shadow-lg' : 'bg-white text-gray-500 border border-gray-100'}`}>{t}</button>
                                 ))}
                             </div>
                         </div>
                     </div>
                     <div className="flex gap-4 mt-12 w-full">
-                        <button onClick={() => setStep('SOURCE')} className="flex-1 py-4 text-gray-400 font-bold hover:text-gray-600">Geri Dön</button>
-                        <button onClick={handleGenerate} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98]">
-                            <Wand2 className="w-5 h-5 text-accent" /> Sihirli Oluştur
-                        </button>
+                        <button onClick={() => setStep('SOURCE')} className="flex-1 py-4 text-gray-400 font-bold hover:text-gray-600">Geri</button>
+                        <button onClick={handleGenerate} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-3 active:scale-[0.98]"><Wand2 className="w-5 h-5 text-accent" /> Sihirli Oluştur</button>
                     </div>
                 </div>
             )}
@@ -295,22 +285,20 @@ export const ContentStudio: React.FC = () => {
                         <Sparkles className="absolute inset-0 m-auto w-8 h-8 text-accent animate-pulse" />
                     </div>
                     <h2 className="text-2xl font-black text-primary">Eğitim Kurgulanıyor...</h2>
-                    <p className="text-gray-400 mt-2 animate-pulse text-sm">Flash hızıyla içerikler JSON formatında hazırlanıyor.</p>
                 </div>
             )}
 
             {step === 'DIRECTOR' && courseData && (
-                <div className="flex-1 flex overflow-hidden animate-in fade-in duration-500">
+                <div className="flex-1 flex overflow-hidden">
                     <div className="w-72 border-r border-gray-100 flex flex-col bg-white shrink-0">
                         <div className="p-4 border-b border-gray-50 flex justify-between items-center">
                             <span className="text-xs font-black text-gray-400 uppercase">Akış</span>
-                            <button className="p-1 text-gray-400 hover:text-primary active:scale-90"><Plus className="w-4 h-4" /></button>
+                            <button className="p-1 text-gray-400 hover:text-primary"><Plus className="w-4 h-4" /></button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
                             {courseData.cards.map((card, idx) => (
                                 <div 
-                                    key={card.id} 
-                                    onClick={() => setActiveCardIndex(idx)}
+                                    key={card.id} onClick={() => setActiveCardIndex(idx)}
                                     className={`p-3 rounded-2xl border-2 transition-all cursor-pointer flex items-center gap-3 ${activeCardIndex === idx ? 'border-primary bg-primary/5 shadow-sm' : 'border-gray-50 hover:border-gray-200'}`}
                                 >
                                     <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-black text-gray-400">{idx + 1}</div>
@@ -337,17 +325,31 @@ export const ContentStudio: React.FC = () => {
                             </div>
                         </div>
                         <div className="absolute bottom-8 right-8 flex gap-4">
-                             <button onClick={() => setStep('PUBLISH')} className="bg-primary text-white px-8 py-3 rounded-2xl font-bold shadow-xl flex items-center gap-2 active:scale-95 transition-all">
-                                {isEditingExisting ? 'Kaydet' : 'İleri'} <ChevronRight className="w-5 h-5" />
-                             </button>
+                             <button onClick={() => setStep('PUBLISH')} className="bg-primary text-white px-8 py-3 rounded-2xl font-bold shadow-xl flex items-center gap-2">Sonraki Adım <ChevronRight className="w-5 h-5" /></button>
                         </div>
                     </div>
 
                     <div className="w-80 bg-white border-l border-gray-100 flex flex-col p-6 overflow-y-auto no-scrollbar">
-                        <h3 className="text-sm font-black text-gray-800 uppercase mb-6 flex items-center gap-2">
-                            <Edit className="w-4 h-4" /> Kart Özellikleri
-                        </h3>
+                        <h3 className="text-sm font-black text-gray-800 uppercase mb-6 flex items-center gap-2"><Edit className="w-4 h-4" /> Kart Özellikleri</h3>
+                        
                         <div className="space-y-6">
+                            {/* MEDIA SECTION */}
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black text-gray-400 uppercase block">Görsel Yönetimi</label>
+                                <div className="relative aspect-video rounded-xl bg-gray-100 overflow-hidden border border-gray-200 group">
+                                    <img src={courseData.cards[activeCardIndex].mediaUrl} className="w-full h-full object-cover" />
+                                    {isUploadingMedia && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-white" /></div>}
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                        <button onClick={() => cardMediaRef.current?.click()} className="p-2 bg-white rounded-full text-primary shadow-lg"><Upload className="w-4 h-4" /></button>
+                                        <button onClick={applyImageToAll} title="Tümüne Uygula" className="p-2 bg-accent rounded-full text-primary shadow-lg"><Copy className="w-4 h-4" /></button>
+                                    </div>
+                                    <input type="file" ref={cardMediaRef} className="hidden" accept="image/*" onChange={handleMediaUpload} />
+                                </div>
+                                <p className="text-[9px] text-gray-400 italic">Bu görseli tek tıkla tüm eğitimin teması yapabilirsiniz.</p>
+                            </div>
+
+                            <div className="h-px bg-gray-50" />
+
                             <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">Başlık</label>
                                 <input value={courseData.cards[activeCardIndex].title} onChange={e => updateActiveCard({ title: e.target.value })} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-bold focus:border-primary outline-none" />
@@ -356,39 +358,42 @@ export const ContentStudio: React.FC = () => {
                                 <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">İçerik</label>
                                 <textarea value={courseData.cards[activeCardIndex].content} onChange={e => updateActiveCard({ content: e.target.value })} rows={4} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-medium focus:border-primary outline-none resize-none" />
                             </div>
-                            <button 
-                                onClick={deleteActiveCard}
-                                className="w-full py-3 bg-red-50 text-red-500 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
-                            >
-                                <Trash2 className="w-4 h-4" /> Kartı Sil
-                            </button>
+
+                            {courseData.cards[activeCardIndex].type === 'QUIZ' && (
+                                <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100">
+                                    <span className="text-[10px] font-black text-orange-600 uppercase mb-2 block">Soru Ayarları</span>
+                                    <p className="text-xs text-orange-800 font-bold mb-1">{courseData.cards[activeCardIndex].interaction?.question}</p>
+                                    <div className="space-y-1">
+                                        {courseData.cards[activeCardIndex].interaction?.options.map((opt, i) => (
+                                            <div key={i} className={`text-[10px] p-1 rounded ${i === courseData.cards[activeCardIndex].interaction?.correctOptionIndex ? 'bg-green-100 text-green-700 font-black' : 'text-gray-500'}`}>
+                                                {i + 1}. {opt}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <button onClick={deleteActiveCard} className="w-full py-3 bg-red-50 text-red-500 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"><Trash2 className="w-4 h-4" /> Kartı Sil</button>
                         </div>
                     </div>
                 </div>
             )}
 
             {step === 'PUBLISH' && (
-                <div className="flex-1 flex flex-col items-center justify-center p-12 max-w-lg mx-auto">
+                <div className="flex-1 flex flex-col items-center justify-center p-12 max-w-lg mx-auto text-center">
                     <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-6"><CheckCircle2 className="w-8 h-8" /></div>
-                    <h1 className="text-3xl font-black text-primary mb-2">{isEditingExisting ? 'Güncelleniyor' : 'Hazır!'}</h1>
-                    <p className="text-gray-500 text-sm mb-8 text-center">{isEditingExisting ? 'Yaptığınız değişiklikler anında yansıyacak.' : 'Eğitim tasarımı tamamlandı.'}</p>
-                    
-                    <div className="w-full space-y-6 mt-4">
+                    <h1 className="text-3xl font-black text-primary mb-2">Harika İş!</h1>
+                    <p className="text-gray-500 text-sm mb-10">Eğitim tamamlandı, şimdi yayınla.</p>
+                    <div className="w-full space-y-6">
                         <div className="grid grid-cols-2 gap-3">
-                            <button onClick={() => setVisibility('PRIVATE')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${visibility === 'PRIVATE' ? 'border-primary bg-primary/5' : 'border-gray-100'}`}>
-                                <Lock className="w-5 h-5 text-gray-400" />
-                                <span className="font-bold text-xs text-gray-800">Kurum İçi</span>
-                            </button>
-                            <button onClick={() => setVisibility('PUBLIC')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${visibility === 'PUBLIC' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>
-                                <Globe className="w-5 h-5 text-blue-500" />
-                                <span className="font-bold text-xs text-gray-800">Herkese Açık</span>
-                            </button>
+                            <button onClick={() => setVisibility('PRIVATE')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${visibility === 'PRIVATE' ? 'border-primary bg-primary/5' : 'border-gray-100'}`}><Lock className="w-5 h-5 text-gray-400" /><span className="font-bold text-xs">Kurum İçi</span></button>
+                            <button onClick={() => setVisibility('PUBLIC')} className={`p-4 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${visibility === 'PUBLIC' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}><Globe className="w-5 h-5 text-blue-500" /><span className="font-bold text-xs">Herkese Açık</span></button>
                         </div>
                     </div>
                     <div className="flex gap-4 mt-12 w-full">
                         <button onClick={() => setStep('DIRECTOR')} className="flex-1 py-4 text-gray-400 font-bold">Geri</button>
-                        <button onClick={handlePublish} disabled={isPublishing} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-2 active:scale-95 transition-all">
-                            {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} {isEditingExisting ? 'Güncellemeyi Kaydet' : 'Yayınla'}
+                        <button onClick={handlePublish} disabled={isPublishing} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-2">
+                            {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" /> Yayınla & Bitir</>}
                         </button>
                     </div>
                 </div>
