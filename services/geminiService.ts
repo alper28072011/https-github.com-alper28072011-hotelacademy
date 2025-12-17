@@ -14,6 +14,7 @@ interface GeneratedMicroCourse {
 /**
  * GENERATE MICRO COURSE
  * Converts raw text/source into a gamified Instagram Story-like course.
+ * OPTIMIZED: Uses gemini-2.5-flash for speed and cost-efficiency.
  */
 export const generateMicroCourse = async (
   sourceContent: string,
@@ -24,41 +25,38 @@ export const generateMicroCourse = async (
   }
 ): Promise<GeneratedMicroCourse | null> => {
   try {
-    // FIX 4: Explicit Tone Enforcement in Prompt
     const toneInstructions = params.tone === 'FUN' 
-      ? "USE 'FUN' TONE: Use emojis in every card (🚀, 💡, 🔥). Address the user as 'Sen' (informal). Be witty, encouraging, and use short, punchy sentences like a social media influencer. Make it exciting!" 
-      : "USE 'PROFESSIONAL' TONE: Use formal, clear business Turkish (Siz). Focus on efficiency, standards, and respect. No slang.";
+      ? "Tone: Fun, energetic, uses emojis (🚀), addresses user as 'Sen'." 
+      : "Tone: Professional, clear, business-oriented, addresses user as 'Siz'.";
 
+    // Optimized Prompt: Shorter, clearer instructions to save input tokens and guide the model faster.
     const prompt = `
-      Act as a world-class Instructional Designer and Gamification Expert for Hotel Staff Training.
+      Role: Expert Instructional Designer.
+      Task: Convert [SOURCE] into a Micro-Learning Course (Story format).
       
-      YOUR TASK:
-      Convert the provided [SOURCE MATERIAL] into an interactive "Micro-Learning Story" (like Instagram Stories or Duolingo).
-      
-      CRITICAL SETTINGS:
-      - AUDIENCE: ${params.targetAudience}
-      - LANGUAGE: ${params.language}
+      Settings:
+      - Audience: ${params.targetAudience}
+      - Language: ${params.language}
       - ${toneInstructions}
       
-      STRUCTURE RULES:
-      1. Break the content into 5-10 "Story Cards".
-      2. Card 1 must be a 'VIDEO' or 'INFO' card acting as an exciting hook/intro.
-      3. Mix 'INFO' cards (short, punchy text) with 'QUIZ' cards (checking understanding).
-      4. Every 2-3 info cards MUST be followed by a Quiz.
-      5. The last card must be 'XP_REWARD' type with a congratulatory message.
-      6. Content must be extremely concise (max 280 chars per card).
-      7. For 'mediaUrl', provide a relevant English search keyword for a stock photo (e.g., "hotel receptionist smiling").
+      Rules:
+      1. Create exactly 5-7 cards.
+      2. Card 1: 'VIDEO' (Hook/Intro).
+      3. Middle: Mix 'INFO' and 'QUIZ'.
+      4. Last Card: 'XP_REWARD'.
+      5. Text length: MAX 200 chars per card (Concise!).
+      6. mediaUrl: ONE English keyword for stock search (e.g. 'hotel lobby').
       
-      SOURCE MATERIAL:
-      "${sourceContent.substring(0, 15000)}" 
+      [SOURCE]:
+      "${sourceContent.substring(0, 12000)}" 
     `;
 
     // Define the exact schema for the UI to render
     const schema = {
       type: Type.OBJECT,
       properties: {
-        title: { type: Type.STRING, description: "Catchy course title" },
-        description: { type: Type.STRING, description: "Short summary" },
+        title: { type: Type.STRING, description: "Short catchy title" },
+        description: { type: Type.STRING, description: "1 sentence summary" },
         tags: { type: Type.ARRAY, items: { type: Type.STRING } },
         cards: {
           type: Type.ARRAY,
@@ -68,9 +66,9 @@ export const generateMicroCourse = async (
               id: { type: Type.STRING },
               type: { type: Type.STRING, enum: ['INFO', 'QUIZ', 'VIDEO', 'XP_REWARD'] },
               title: { type: Type.STRING },
-              content: { type: Type.STRING, description: "Main text, use markdown for emphasis" },
-              mediaUrl: { type: Type.STRING, description: "Keyword for stock image" },
-              duration: { type: Type.NUMBER, description: "Estimated seconds to read (5-15)" },
+              content: { type: Type.STRING },
+              mediaUrl: { type: Type.STRING },
+              duration: { type: Type.NUMBER },
               interaction: {
                 type: Type.OBJECT,
                 properties: {
@@ -78,7 +76,7 @@ export const generateMicroCourse = async (
                   question: { type: Type.STRING },
                   options: { type: Type.ARRAY, items: { type: Type.STRING } },
                   correctOptionIndex: { type: Type.NUMBER },
-                  explanation: { type: Type.STRING, description: "Why is this correct?" }
+                  explanation: { type: Type.STRING }
                 },
                 nullable: true
               }
@@ -90,23 +88,28 @@ export const generateMicroCourse = async (
       required: ["title", "description", "cards", "tags"]
     };
 
+    // Switched to gemini-2.5-flash for optimum speed/cost ratio for JSON tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-2.5-flash', 
       contents: prompt,
       config: {
-        // REMOVED thinkingConfig to prevent potential model compatibility issues.
         responseMimeType: "application/json",
-        responseSchema: schema
+        responseSchema: schema,
+        temperature: 0.7, // Balanced creativity
       }
     });
 
     if (response.text) {
       const data = JSON.parse(response.text) as GeneratedMicroCourse;
-      // Post-process: Convert keywords to Unsplash URLs for demo
-      data.cards = data.cards.map(card => ({
+      
+      // Post-process: Add IDs and clean up
+      data.cards = data.cards.map((card, index) => ({
           ...card,
-          mediaUrl: `https://source.unsplash.com/800x1200/?${encodeURIComponent(card.mediaUrl || 'hotel')}`
+          id: `card-${Date.now()}-${index}`,
+          // Convert keyword to Unsplash URL
+          mediaUrl: `https://source.unsplash.com/800x1200/?${encodeURIComponent(card.mediaUrl || 'business')}`
       }));
+      
       return data;
     }
     return null;
