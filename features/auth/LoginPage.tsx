@@ -1,412 +1,283 @@
 
-import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, Loader2, ShieldCheck, User as UserIcon, CheckCircle2, AlertTriangle, Lock } from 'lucide-react';
+import { 
+  User as UserIcon, 
+  Lock, 
+  Mail, 
+  Eye, 
+  EyeOff, 
+  Loader2, 
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2
+} from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { auth, RecaptchaVerifier } from '../../services/firebase';
-import { checkUserExists, registerUser, initiatePhoneAuth } from '../../services/authService';
-import { getMyMemberships, updateUserProfile } from '../../services/db';
-import { User } from '../../types';
-import { PhoneInput } from './components/PhoneInput';
-
-// Admin "Backdoor" Number
-const ADMIN_PHONE = '+905417726743';
+import { loginUser, registerUser } from '../../services/authService';
+import { getMyMemberships } from '../../services/db';
 
 export const LoginPage: React.FC = () => {
-  const { t } = useTranslation();
   const { 
-    step, setStep, 
-    phoneNumber, setPhoneNumber, 
-    verificationId, setVerificationId,
-    isLoading, setLoading,
-    error, setError,
-    loginSuccess,
-    authMode, setAuthMode,
-    recordSmsAttempt, cooldownUntil
+    authMode, setAuthMode, 
+    isLoading, setLoading, 
+    error, setError, 
+    loginSuccess 
   } = useAuthStore();
   const { switchOrganization } = useOrganizationStore();
 
-  // Profile Setup State
+  // Form State
+  const [identifier, setIdentifier] = useState(''); // Email or Username
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [name, setName] = useState('');
-  const [otpCode, setOtpCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Local cooldown check
-  const [isBlocked, setIsBlocked] = useState(false);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!identifier || !password) return;
 
-  useEffect(() => {
-      // Check block status periodically
-      const checkBlock = () => {
-          setIsBlocked(Date.now() < cooldownUntil);
-      };
-      checkBlock();
-      const interval = setInterval(checkBlock, 1000);
-      return () => clearInterval(interval);
-  }, [cooldownUntil]);
+    setLoading(true);
+    setError(null);
 
-  useEffect(() => {
-    // Initialize invisible recaptcha only on PHONE step
-    if (step === 'PHONE') {
-        const initRecaptcha = async () => {
-            try {
-                const container = document.getElementById('recaptcha-container');
-                if (!container) return;
+    try {
+      const user = await loginUser(identifier, password);
+      
+      // Smart Membership Routing
+      const memberships = await getMyMemberships(user.id);
+      if (user.currentOrganizationId) {
+        await switchOrganization(user.currentOrganizationId);
+      }
+      
+      loginSuccess(user);
+    } catch (err: any) {
+      setError(err.message || "Giriş başarısız. Lütfen bilgilerinizi kontrol edin.");
+      setLoading(false);
+    }
+  };
 
-                if ((window as any).recaptchaVerifier) {
-                    try {
-                        (window as any).recaptchaVerifier.clear();
-                    } catch(e) { /* ignore */ }
-                    (window as any).recaptchaVerifier = null;
-                }
-
-                (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                    'size': 'invisible',
-                    'callback': () => {
-                        // reCAPTCHA solved
-                    }
-                });
-            } catch (e) {
-                console.error("Recaptcha Init Error:", e);
-            }
-        };
-        
-        initRecaptcha();
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password || !username || !name) {
+      setError("Lütfen tüm alanları doldurun.");
+      return;
     }
 
-    return () => {
-        if ((window as any).recaptchaVerifier) {
-            try {
-                (window as any).recaptchaVerifier.clear();
-            } catch(e) { /* ignore */ }
-            (window as any).recaptchaVerifier = null;
-        }
-    };
-  }, [step]);
+    setLoading(true);
+    setError(null);
 
-  // --- HELPER FOR SMART LOGIN ---
-  const handleSmartLogin = async (user: User) => {
-      const memberships = await getMyMemberships(user.id);
-      
-      if (user.currentOrganizationId) {
-          await switchOrganization(user.currentOrganizationId);
-          loginSuccess(user);
-      } else if (memberships.length === 1) {
-          // Auto-select single membership
-          const orgId = memberships[0].organizationId;
-          const role = memberships[0].role;
-          const dept = memberships[0].department;
-          
-          await updateUserProfile(user.id, { 
-              currentOrganizationId: orgId,
-              role: role,
-              department: dept
-          });
-          
-          const updatedUser = { ...user, currentOrganizationId: orgId, role, department: dept };
-          await switchOrganization(orgId);
-          loginSuccess(updatedUser);
-      } else {
-          // No active org -> User is Free Agent -> Lobby
-          loginSuccess(user);
-      }
-  };
-
-  // --- HANDLERS ---
-
-  const handleSendOtp = async (e: React.FormEvent) => {
-      e.preventDefault();
-      
-      if (isBlocked) {
-          setError("Çok fazla deneme yaptınız. Lütfen bekleyin.");
-          return;
-      }
-
-      if (phoneNumber.length < 10) {
-          setError("Lütfen geçerli bir numara girin.");
-          return;
-      }
-
-      const allowed = recordSmsAttempt();
-      if (!allowed) {
-          setError("Güvenlik nedeniyle işleminiz 5 dakika durduruldu.");
-          setIsBlocked(true);
-          return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      let cleanNumber = phoneNumber.replace(/\s/g, '');
-
-      try {
-          const appVerifier = (window as any).recaptchaVerifier;
-          if (!appVerifier) throw new Error("ReCAPTCHA not initialized");
-
-          const confirmationResult = await initiatePhoneAuth(cleanNumber, authMode, appVerifier);
-          
-          setVerificationId(confirmationResult.verificationId);
-          setPhoneNumber(cleanNumber);
-          setLoading(false);
-          setStep('OTP');
-          (window as any).confirmationResult = confirmationResult;
-
-      } catch (err: any) {
-          console.error("Auth Error:", err);
-          setLoading(false);
-          
-          if (err.message === 'ACCOUNT_NOT_FOUND') {
-              setError("Bu numara kayıtlı değil. Lütfen 'Kayıt Ol' sekmesini kullanın.");
-          } else if (err.message === 'ACCOUNT_EXISTS') {
-              setError("Bu numara zaten kayıtlı. Lütfen giriş yapın.");
-          } else if (err.code === 'auth/too-many-requests') {
-              setError("Çok fazla istek gönderildi. Lütfen daha sonra tekrar deneyin.");
-          } else {
-              setError("İşlem başarısız. Lütfen bilgilerinizi kontrol edin.");
-          }
-
-          if((window as any).recaptchaVerifier) {
-              try {
-                  (window as any).recaptchaVerifier.clear();
-                  (window as any).recaptchaVerifier = null;
-              } catch (e) {}
-          }
-      }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (otpCode.length !== 6) return;
-
-      setLoading(true);
-      setError(null);
-
-      try {
-          const confirmationResult = (window as any).confirmationResult;
-          if (!confirmationResult) throw new Error("Session expired");
-
-          await confirmationResult.confirm(otpCode);
-          
-          const existingUser = await checkUserExists(phoneNumber);
-
-          if (existingUser) {
-              await handleSmartLogin(existingUser);
-          } else {
-              setStep('PROFILE_SETUP');
-              setLoading(false);
-          }
-
-      } catch (err: any) {
-          console.error("OTP Error:", err);
-          setLoading(false);
-          setError("Hatalı kod. Tekrar deneyin.");
-      }
-  };
-
-  const handleRegister = async () => {
-      if (!name) {
-          setError("Lütfen adınızı girin.");
-          return;
-      }
-      setLoading(true);
-
-      try {
-          const avatarInitials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-
-          const newUser = await registerUser({
-              phoneNumber,
-              name,
-              avatar: avatarInitials,
-              // Other fields handled by registerUser default values
-          });
-
-          // Registration successful - go to Lobby
-          loginSuccess(newUser);
-
-      } catch (err) {
-          console.error("Registration Error:", err);
-          setLoading(false);
-          setError("Kayıt oluşturulamadı.");
-      }
-  };
-
-  const switchMode = (mode: 'LOGIN' | 'REGISTER') => {
-      setAuthMode(mode);
-      setError(null);
+    try {
+      const user = await registerUser({ email, password, username, name });
+      loginSuccess(user);
+    } catch (err: any) {
+      setError(err.message || "Kayıt sırasında bir hata oluştu.");
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="w-full min-h-[85vh] flex flex-col items-center justify-center p-6 relative">
-        <div id="recaptcha-container"></div>
-
+    <div className="w-full max-w-md mx-auto px-4 py-8">
+      {/* Branding */}
+      <div className="text-center mb-10">
         <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-sm"
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="w-20 h-20 bg-primary text-white rounded-3xl mx-auto flex items-center justify-center shadow-2xl shadow-primary/20 mb-6"
         >
-            {/* Header */}
-            <div className="text-center mb-8">
-                <div className="w-20 h-20 bg-primary text-white rounded-3xl mx-auto flex items-center justify-center shadow-xl shadow-primary/20 mb-4">
-                    <span className="text-4xl font-bold">H</span>
-                </div>
-                <h1 className="text-2xl font-bold text-primary tracking-tight">Hotel Academy</h1>
-                <p className="text-gray-400 text-sm mt-1">Sosyal Öğrenme Platformu</p>
-            </div>
-
-            {/* Blocked State */}
-            {isBlocked && (
-                <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-600 mb-6 animate-pulse">
-                    <AlertTriangle className="w-6 h-6 shrink-0" />
-                    <div className="text-xs font-bold">
-                        Güvenlik kilitlenmesi. Lütfen {Math.ceil((cooldownUntil - Date.now()) / 1000 / 60)} dakika bekleyin.
-                    </div>
-                </div>
-            )}
-
-            <AnimatePresence mode="wait">
-                {/* STEP 1: PHONE INPUT & MODE SELECTION */}
-                {step === 'PHONE' && !isBlocked && (
-                    <motion.div
-                        key="phone-step"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                    >
-                        {/* Tabs */}
-                        <div className="flex p-1 bg-gray-100 rounded-xl mb-6 relative">
-                            <motion.div 
-                                layoutId="activeTab"
-                                className={`absolute inset-y-1 w-1/2 bg-white rounded-lg shadow-sm`}
-                                animate={{ x: authMode === 'LOGIN' ? 0 : '100%' }}
-                                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                            />
-                            <button 
-                                onClick={() => switchMode('LOGIN')}
-                                className={`flex-1 py-3 text-sm font-bold relative z-10 transition-colors ${authMode === 'LOGIN' ? 'text-primary' : 'text-gray-500'}`}
-                            >
-                                Giriş Yap
-                            </button>
-                            <button 
-                                onClick={() => switchMode('REGISTER')}
-                                className={`flex-1 py-3 text-sm font-bold relative z-10 transition-colors ${authMode === 'REGISTER' ? 'text-primary' : 'text-gray-500'}`}
-                            >
-                                Kayıt Ol
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleSendOtp} className="flex flex-col gap-6">
-                            <PhoneInput 
-                                value={phoneNumber}
-                                onChange={setPhoneNumber}
-                                disabled={isLoading}
-                            />
-
-                            <div className="flex items-start gap-2 text-xs text-gray-400 px-1">
-                                <Lock className="w-3 h-3 mt-0.5 shrink-0" />
-                                <p>Numaranız yalnızca doğrulama ve güvenli erişim için kullanılacaktır.</p>
-                            </div>
-
-                            {error && <div className="text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded-xl border border-red-100">{error}</div>}
-
-                            <button 
-                                type="submit" 
-                                disabled={isLoading || phoneNumber.length < 10}
-                                className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-lg font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                            >
-                                {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Devam Et <ArrowRight className="w-5 h-5" /></>}
-                            </button>
-                        </form>
-                    </motion.div>
-                )}
-
-                {/* STEP 2: OTP INPUT */}
-                {step === 'OTP' && (
-                    <motion.form 
-                        key="otp"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        onSubmit={handleVerifyOtp}
-                        className="flex flex-col gap-6"
-                    >
-                        <div className="text-center mb-2">
-                            <ShieldCheck className="w-12 h-12 text-green-500 mx-auto mb-2 opacity-80" />
-                            <h2 className="text-xl font-bold text-gray-800">Kodu Doğrula</h2>
-                            <p className="text-gray-500 text-sm">{phoneNumber} numarasına gönderilen kodu girin.</p>
-                        </div>
-
-                        <input 
-                            type="text" 
-                            maxLength={6}
-                            placeholder="000000"
-                            className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 text-center text-3xl tracking-[0.5em] font-bold text-gray-800 placeholder-gray-200 focus:outline-none focus:border-primary transition-all shadow-sm"
-                            value={otpCode}
-                            onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                            autoFocus
-                        />
-
-                        {error && <div className="text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded-xl">{error}</div>}
-
-                        <button 
-                            type="submit" 
-                            disabled={isLoading || otpCode.length !== 6}
-                            className="w-full bg-primary hover:bg-primary-light disabled:bg-gray-300 text-white font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                        >
-                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Doğrula"}
-                        </button>
-                        
-                        <button type="button" onClick={() => setStep('PHONE')} className="text-gray-400 text-sm font-medium hover:text-gray-600 underline">
-                            Numarayı Değiştir
-                        </button>
-                    </motion.form>
-                )}
-
-                {/* STEP 3: PROFILE SETUP (Simplified) */}
-                {step === 'PROFILE_SETUP' && (
-                    <motion.div 
-                        key="profile"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className="flex flex-col gap-6"
-                    >
-                        <div className="text-center mb-2">
-                            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 text-green-600">
-                                <CheckCircle2 className="w-8 h-8" />
-                            </div>
-                            <h2 className="text-xl font-bold text-gray-800">Hoş Geldin!</h2>
-                            <p className="text-gray-500 text-sm">Seni nasıl hitap edelim?</p>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Adın Soyadın</label>
-                                <div className="relative group">
-                                    <UserIcon className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
-                                    <input 
-                                        type="text" 
-                                        placeholder="Örn: Ayşe Yılmaz"
-                                        className="w-full bg-white border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 text-lg font-bold text-gray-800 placeholder-gray-300 focus:outline-none focus:border-primary transition-all"
-                                        value={name}
-                                        onChange={(e) => setName(e.target.value)}
-                                        autoFocus
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {error && <div className="text-red-500 text-sm text-center font-medium bg-red-50 p-3 rounded-xl">{error}</div>}
-
-                        <button 
-                            onClick={handleRegister}
-                            disabled={isLoading}
-                            className="w-full bg-primary hover:bg-primary-light text-white text-lg font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4"
-                        >
-                            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Platforma Katıl"}
-                        </button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+          <span className="text-4xl font-bold text-accent">H</span>
         </motion.div>
+        <h1 className="text-3xl font-bold text-primary tracking-tight">Hotel Academy</h1>
+        <p className="text-gray-500 mt-2">Profesyonellerin Buluşma Noktası</p>
+      </div>
+
+      <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-black/5 border border-gray-100 overflow-hidden relative">
+        {/* Tabs */}
+        <div className="flex p-2 bg-gray-50 border-b border-gray-100">
+          <button 
+            onClick={() => setAuthMode('LOGIN')}
+            className={`flex-1 py-3 text-sm font-bold rounded-2xl transition-all ${authMode === 'LOGIN' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Giriş Yap
+          </button>
+          <button 
+            onClick={() => setAuthMode('REGISTER')}
+            className={`flex-1 py-3 text-sm font-bold rounded-2xl transition-all ${authMode === 'REGISTER' ? 'bg-white text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Kayıt Ol
+          </button>
+        </div>
+
+        <div className="p-8">
+          <AnimatePresence mode="wait">
+            {authMode === 'LOGIN' ? (
+              <motion.form 
+                key="login-form"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                onSubmit={handleLogin}
+                className="space-y-5"
+              >
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-400 uppercase ml-1">Kullanıcı Adı veya E-posta</label>
+                  <div className="relative group">
+                    <UserIcon className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
+                    <input 
+                      type="text"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      placeholder="kullaniciadi veya e-posta"
+                      className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 font-bold text-gray-800 focus:outline-none focus:border-primary focus:bg-white transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-400 uppercase ml-1">Şifre</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-4 top-4 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
+                    <input 
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-12 font-bold text-gray-800 focus:outline-none focus:border-primary focus:bg-white transition-all"
+                      required
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-4 text-gray-400 hover:text-primary transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-red-500 text-xs font-bold bg-red-50 p-3 rounded-xl border border-red-100"
+                  >
+                    {error}
+                  </motion.div>
+                )}
+
+                <button 
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-primary hover:bg-primary-light text-white font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                >
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Giriş Yap <ArrowRight className="w-5 h-5" /></>}
+                </button>
+              </motion.form>
+            ) : (
+              <motion.form 
+                key="register-form"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                onSubmit={handleRegister}
+                className="space-y-4"
+              >
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-400 uppercase ml-1">Ad Soyad</label>
+                  <div className="relative group">
+                    <CheckCircle2 className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
+                    <input 
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Ayşe Yılmaz"
+                      className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-3 pl-12 pr-4 font-bold text-gray-800 focus:outline-none focus:border-primary focus:bg-white transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-400 uppercase ml-1">Kullanıcı Adı</label>
+                  <div className="relative group">
+                    <UserIcon className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
+                    <input 
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                      placeholder="ayse_hotel"
+                      className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-3 pl-12 pr-4 font-bold text-gray-800 focus:outline-none focus:border-primary focus:bg-white transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-400 uppercase ml-1">E-posta</label>
+                  <div className="relative group">
+                    <Mail className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
+                    <input 
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="ayse@otel.com"
+                      className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-3 pl-12 pr-4 font-bold text-gray-800 focus:outline-none focus:border-primary focus:bg-white transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-400 uppercase ml-1">Şifre</label>
+                  <div className="relative group">
+                    <Lock className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-primary transition-colors" />
+                    <input 
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-3 pl-12 pr-12 font-bold text-gray-800 focus:outline-none focus:border-primary focus:bg-white transition-all"
+                      required
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-3.5 text-gray-400 hover:text-primary transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-red-500 text-xs font-bold bg-red-50 p-3 rounded-xl border border-red-100"
+                  >
+                    {error}
+                  </motion.div>
+                )}
+
+                <button 
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-accent hover:bg-accent-dark text-primary font-bold py-4 rounded-2xl shadow-xl shadow-accent/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4"
+                >
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Hesap Oluştur <ShieldCheck className="w-5 h-5" /></>}
+                </button>
+              </motion.form>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      <div className="text-center mt-8">
+        <p className="text-gray-400 text-xs px-8">
+          Devam ederek <span className="text-gray-600 font-bold underline">Kullanım Koşullarını</span> ve <span className="text-gray-600 font-bold underline">Gizlilik Politikamızı</span> kabul etmiş olursunuz.
+        </p>
+      </div>
     </div>
   );
 };

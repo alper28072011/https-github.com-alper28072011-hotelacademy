@@ -9,6 +9,8 @@ const SEED_ORG_ID = 'demo_hotel_1';
 const MOCK_USERS: Omit<User, 'id'>[] = [
   { 
       name: 'Ayşe Yılmaz', 
+      email: 'ayse@example.com',
+      username: 'ayse_y',
       phoneNumber: '+905550000001', 
       avatar: 'AY', 
       department: 'housekeeping', 
@@ -19,16 +21,18 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       startedCourses: [], 
       completedTasks: [], 
       assignedPathId: 'path_hk_manager', 
-      badges: [], 
-      currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
-      joinDate: Date.now(), // Added
-      status: 'ACTIVE', // Added
+      joinDate: Date.now(),
+      status: 'ACTIVE',
       creatorLevel: 'NOVICE',
-      reputationPoints: 50
+      reputationPoints: 50,
+      followersCount: 0,
+      followingCount: 0
   },
   { 
       name: 'Fatma Demir', 
+      email: 'fatma@example.com',
+      username: 'fatma_d',
       phoneNumber: '+905550000002', 
       avatar: 'FD', 
       department: 'housekeeping', 
@@ -38,16 +42,19 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       completedCourses: [], 
       startedCourses: [], 
       completedTasks: [], 
-      badges: [], 
-      currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
-      joinDate: Date.now() - 10000000, // Slightly older
+      joinDate: Date.now() - 10000000,
       status: 'ACTIVE',
       creatorLevel: 'NOVICE',
-      reputationPoints: 20
+      reputationPoints: 20,
+      currentOrganizationId: SEED_ORG_ID,
+      followersCount: 0,
+      followingCount: 0
   },
   { 
       name: 'Mehmet Öztürk', 
+      email: 'mehmet@example.com',
+      username: 'mehmet_o',
       phoneNumber: '+905550000003', 
       avatar: 'MÖ', 
       department: 'kitchen', 
@@ -57,16 +64,19 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       completedCourses: ['102'], 
       startedCourses: [], 
       completedTasks: [], 
-      badges: [], 
-      currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 20000000,
       status: 'ACTIVE',
       creatorLevel: 'RISING_STAR',
-      reputationPoints: 150
+      reputationPoints: 150,
+      currentOrganizationId: SEED_ORG_ID,
+      followersCount: 0,
+      followingCount: 0
   },
   { 
       name: 'Canan Kaya', 
+      email: 'canan@example.com',
+      username: 'canan_k',
       phoneNumber: '+905550000004', 
       avatar: 'CK', 
       department: 'front_office', 
@@ -77,19 +87,21 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       startedCourses: [], 
       completedTasks: [], 
       assignedPathId: 'path_fo_manager', 
-      badges: [], 
-      currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 5000000,
       status: 'ACTIVE',
       creatorLevel: 'EXPERT',
-      reputationPoints: 400
+      reputationPoints: 400,
+      currentOrganizationId: SEED_ORG_ID,
+      followersCount: 0,
+      followingCount: 0
   },
   // Admin User
   { 
       name: 'System Admin', 
-      phoneNumber: '+905417726743',
       email: 'admin@hotelacademy.com',
+      username: 'admin',
+      phoneNumber: '+905417726743',
       avatar: 'AD', 
       department: 'management', 
       role: 'admin', 
@@ -98,13 +110,14 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       completedCourses: [], 
       startedCourses: [], 
       completedTasks: [], 
-      badges: [], 
-      currentOrganizationId: SEED_ORG_ID, 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 30000000,
       status: 'ACTIVE',
       creatorLevel: 'MASTER',
-      reputationPoints: 9999
+      reputationPoints: 9999,
+      currentOrganizationId: SEED_ORG_ID,
+      followersCount: 0,
+      followingCount: 0
   },
 ];
 
@@ -474,7 +487,7 @@ export const seedDatabase = async (): Promise<boolean> => {
     // Seed Users
     console.log(`📦 Preparing ${MOCK_USERS.length} user records...`);
     MOCK_USERS.forEach((user) => {
-      if(user.department !== user.department.toLowerCase()) {
+      if(user.department && user.department !== user.department.toLowerCase()) {
           user.department = user.department.toLowerCase() as DepartmentType;
       }
       const userRef = doc(collection(db, 'users')); 
