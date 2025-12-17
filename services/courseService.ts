@@ -28,42 +28,34 @@ import { getOrganizationDetails } from './db';
 
 /**
  * Creates a new course with logic based on User Level.
- * - Novice: Can only create Community Shorts (auto-published).
- * - Expert: Can create PRO Courses (Pending Review).
- * - Manager/Admin: Can create OFFICIAL Content (Auto-verified).
  */
 export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'verificationStatus' | 'qualityScore' | 'flagCount' | 'authorType' | 'authorName' | 'authorAvatarUrl'> & { ownerType?: string }, user: User): Promise<boolean> => {
     try {
         let tier: ContentTier = 'COMMUNITY';
-        let status: VerificationStatus = 'VERIFIED'; // Default open for Community
+        let status: VerificationStatus = 'VERIFIED'; 
         
-        // 1. Determine Tier & Status based on User Role & Level
         if (user.role === 'manager' || user.role === 'admin' || user.role === 'super_admin') {
             tier = 'OFFICIAL';
             status = 'VERIFIED';
         } else if (user.creatorLevel === 'EXPERT' || user.creatorLevel === 'MASTER') {
             tier = 'PRO';
-            status = 'PENDING'; // Experts need review for PRO content
+            status = 'PENDING'; 
         } else {
-            // NOVICE / RISING_STAR
             tier = 'COMMUNITY';
             if (courseData.duration > 5) {
                 throw new Error("Başlangıç seviyesindeki içerik üreticileri maks. 5 dakikalık içerik üretebilir.");
             }
         }
 
-        // 2. Prepare Author Details (Denormalization)
         let authorType: AuthorType = 'USER';
         let authorName = user.name;
         let authorAvatarUrl = user.avatar;
         let finalAuthorId = user.id;
 
-        // CRITICAL FIX: Handle Organization authorship strictly
         if (courseData.ownerType === 'ORGANIZATION' && courseData.organizationId) {
             authorType = 'ORGANIZATION';
-            finalAuthorId = courseData.organizationId; // Author ID becomes Org ID
+            finalAuthorId = courseData.organizationId; 
             
-            // Fetch Org details to stamp on the card
             const org = await getOrganizationDetails(courseData.organizationId);
             if (org) {
                 authorName = org.name;
@@ -71,10 +63,8 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
             }
         }
 
-        // Remove ownerType helper before saving
         const { ownerType, ...dataToSave } = courseData;
 
-        // 3. Prepare Final Data
         const finalData = {
             ...dataToSave,
             tier,
@@ -82,18 +72,14 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
             qualityScore: 0,
             flagCount: 0,
             createdAt: Date.now(),
-            // Stamped Author Info
             authorType,
             authorId: finalAuthorId,
             authorName,
             authorAvatarUrl
         };
 
-        // 4. Write to DB
         await addDoc(collection(db, 'courses'), finalData);
         
-        // 5. Update User Stats (Optimistic Reputation for creating)
-        // Note: Even if posting as Org, the user gets some credit/XP for the action
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
             xp: increment(50) 
@@ -108,9 +94,6 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
 
 /**
  * Handles Course Review & Economy Logic
- * - Updates Course Rating
- * - Awards XP/Reputation to Author
- * - Auto-Moderation (Flagging)
  */
 export const submitReview = async (
     courseId: string, 
@@ -126,11 +109,9 @@ export const submitReview = async (
             
             const course = courseSnap.data() as Course;
             
-            // Only reward USER authors, not ORGS directly (Orgs don't have XP)
             if (course.authorType === 'USER') {
                 const authorRef = doc(db, 'users', course.authorId);
                 
-                // Economy: Reputation & XP
                 let reputationDelta = 0;
                 let xpDelta = 0;
 
@@ -151,7 +132,6 @@ export const submitReview = async (
                 });
             }
 
-            // Auto-Moderation Logic
             let newStatus = course.verificationStatus;
             let newFlagCount = course.flagCount || 0;
 
@@ -177,6 +157,8 @@ export const submitReview = async (
 
 /**
  * Intelligent Feed Algorithm
+ * Firestore composite index hatalarını önlemek için orderBy sorgudan kaldırıldı, 
+ * bellek içinde (JS) sıralama eklendi.
  */
 export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promise<Course[]> => {
     try {
@@ -184,18 +166,17 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
         let q;
 
         if (showVerifiedOnly) {
+            // orderBy kaldırıldı (index hatasını önlemek için)
             q = query(
                 coursesRef, 
                 where('tier', 'in', ['PRO', 'OFFICIAL']),
                 where('verificationStatus', '==', 'VERIFIED'),
-                orderBy('createdAt', 'desc'),
-                limit(20)
+                limit(30)
             );
         } else {
             q = query(
                 coursesRef, 
                 where('verificationStatus', '==', 'VERIFIED'),
-                orderBy('createdAt', 'desc'),
                 limit(50)
             );
         }
@@ -203,7 +184,8 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
         const snapshot = await getDocs(q);
         let courses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Course));
         
-        return courses;
+        // JS tarafında kronolojik sıralama
+        return courses.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (error) {
         console.error("Smart Feed Error:", error);
         return [];

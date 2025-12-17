@@ -37,10 +37,8 @@ export const getAdminCourses = async (userId: string, orgId?: string | null): Pr
     try {
         let q;
         if (orgId) {
-            // Eğer bir kuruma bağlıysam, o kurumun TÜM içeriklerini getir (Sahibi kim olursa olsun)
             q = query(coursesRef, where('organizationId', '==', orgId));
         } else {
-            // Freelancer isem sadece kendi yazdıklarımı getir
             q = query(coursesRef, where('authorId', '==', userId));
         }
         
@@ -58,26 +56,26 @@ export const getAdminCourses = async (userId: string, orgId?: string | null): Pr
 
 /**
  * DASHBOARD FEED V4 (Kesin Çözüm)
- * Instagram/Facebook gibi çoklu havuz birleştirme mantığı.
+ * Firestore index hatalarını önlemek için orderBy sorgudan kaldırıldı, 
+ * birleştirme aşamasında JS ile sıralanıyor.
  */
 export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[]> => {
     try {
         const promises = [];
 
-        // 1. HAVUZ: KİŞİSEL (Kendi paylaşımlarım)
+        // 1. HAVUZ: KİŞİSEL
         const myQ = query(coursesRef, where('authorId', '==', user.id), limit(5));
         promises.push(getDocs(myQ));
 
-        // 2. HAVUZ: KURUMSAL (Çalıştığım yerin TÜM içerikleri - Private dahil)
+        // 2. HAVUZ: KURUMSAL
         if (user.currentOrganizationId) {
             const orgQ = query(coursesRef, where('organizationId', '==', user.currentOrganizationId), limit(15));
             promises.push(getDocs(orgQ));
         }
 
-        // 3. HAVUZ: SOSYAL (Takip ettiğim KİŞİ ve KURUMLARIN paylaşımları)
+        // 3. HAVUZ: SOSYAL
         const following = user.following || [];
         if (following.length > 0) {
-            // Firestore 'in' limit 10, bu yüzden son 10 takibi alıyoruz
             const recentFollowing = following.slice(-10); 
             const socialQ = query(
                 coursesRef, 
@@ -88,14 +86,11 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
             promises.push(getDocs(socialQ));
         }
 
-        // 4. HAVUZ: KEŞFET (Global popüler içerikler)
-        const discoverQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), orderBy('createdAt', 'desc'), limit(10));
+        // 4. HAVUZ: KEŞFET - Hata veren orderBy buradan kaldırıldı
+        const discoverQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), limit(10));
         promises.push(getDocs(discoverQ));
 
-        // Sorguları paralel çalıştır
         const snapshots = await Promise.all(promises);
-        
-        // Tekilleştirme ve Birleştirme
         const feedMap = new Map<string, Course | FeedPost>();
         
         snapshots.forEach(snap => {
@@ -104,7 +99,7 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
             });
         });
 
-        // Tarihe göre sırala (Yeni en üstte)
+        // Tüm havuzlar burada kronolojik olarak sıralanıyor
         return Array.from(feedMap.values())
             .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
@@ -127,7 +122,6 @@ export const getDashboardStories = async (user: User): Promise<Course[]> => {
         );
         const snap = await getDocs(q);
         const courses = snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
-        // Tamamlanmamış olanları filtrele
         return courses.filter(c => !user.completedCourses?.includes(c.id));
     } catch (error) { return []; }
 };
@@ -278,7 +272,6 @@ export const subscribeToLeaderboard = (dept: DepartmentType, orgId: string, call
     });
 };
 
-// Updated sendJoinRequest to return message for UI feedback to fix Property 'message' error
 export const sendJoinRequest = async (userId: string, orgId: string, dept: DepartmentType, roleTitle?: string): Promise<{ success: boolean; message?: string }> => {
     try {
         await addDoc(collection(db, 'requests'), {
@@ -290,7 +283,6 @@ export const sendJoinRequest = async (userId: string, orgId: string, dept: Depar
     }
 };
 
-// Added missing export getDailyTasks
 export const getDailyTasks = async (dept: DepartmentType, orgId: string): Promise<Task[]> => {
     try {
         const q = query(collection(db, 'tasks'), where('organizationId', '==', orgId), where('department', '==', dept));
@@ -299,7 +291,6 @@ export const getDailyTasks = async (dept: DepartmentType, orgId: string): Promis
     } catch (e) { return []; }
 };
 
-// Added missing export completeTask
 export const completeTask = async (userId: string, taskId: string, xp: number) => {
     try {
         const userRef = doc(db, 'users', userId);
@@ -310,7 +301,6 @@ export const completeTask = async (userId: string, taskId: string, xp: number) =
     } catch (e) { }
 };
 
-// Added missing export createIssue
 export const createIssue = async (issue: Issue): Promise<boolean> => {
     try {
         await addDoc(collection(db, 'issues'), issue);
@@ -318,7 +308,6 @@ export const createIssue = async (issue: Issue): Promise<boolean> => {
     } catch (e) { return false; }
 };
 
-// Added missing export getUsersByDepartment
 export const getUsersByDepartment = async (dept: string, orgId: string): Promise<User[]> => {
     try {
         const q = query(membershipsRef, where('organizationId', '==', orgId), where('department', '==', dept));
@@ -330,7 +319,6 @@ export const getUsersByDepartment = async (dept: string, orgId: string): Promise
     } catch (e) { return []; }
 };
 
-// Added missing export searchUserByPhone
 export const searchUserByPhone = async (phoneNumber: string): Promise<User | null> => {
     try {
         const q = query(usersRef, where('phoneNumber', '==', phoneNumber));
@@ -340,7 +328,6 @@ export const searchUserByPhone = async (phoneNumber: string): Promise<User | nul
     } catch (e) { return null; }
 };
 
-// Added missing export inviteUserToOrg
 export const inviteUserToOrg = async (user: User, orgId: string, dept: string, roleTitle: string, permissions: PermissionType[]) => {
     try {
         const membershipId = `${user.id}_${orgId}`;
@@ -351,7 +338,6 @@ export const inviteUserToOrg = async (user: User, orgId: string, dept: string, r
     } catch (e) { return false; }
 };
 
-// Added missing export createCareerPath
 export const createCareerPath = async (path: Omit<CareerPath, 'id'>): Promise<boolean> => {
     try {
         await addDoc(collection(db, 'careerPaths'), path);
@@ -359,7 +345,6 @@ export const createCareerPath = async (path: Omit<CareerPath, 'id'>): Promise<bo
     } catch (e) { return false; }
 };
 
-// Added missing export getCareerPaths
 export const getCareerPaths = async (orgId: string): Promise<CareerPath[]> => {
     try {
         const q = query(collection(db, 'careerPaths'), where('organizationId', '==', orgId));
@@ -368,7 +353,6 @@ export const getCareerPaths = async (orgId: string): Promise<CareerPath[]> => {
     } catch (e) { return []; }
 };
 
-// Added missing export getCareerPath
 export const getCareerPath = async (id: string): Promise<CareerPath | null> => {
     try {
         const snap = await getDoc(doc(db, 'careerPaths', id));
@@ -376,7 +360,6 @@ export const getCareerPath = async (id: string): Promise<CareerPath | null> => {
     } catch (e) { return null; }
 };
 
-// Added missing export getCareerPathByDepartment
 export const getCareerPathByDepartment = async (dept: string | null, orgId: string): Promise<CareerPath | null> => {
     if (!dept) return null;
     try {
@@ -387,7 +370,6 @@ export const getCareerPathByDepartment = async (dept: string | null, orgId: stri
     } catch (e) { return null; }
 };
 
-// Added missing export togglePostLike
 export const togglePostLike = async (postId: string, userId: string, isLiked: boolean) => {
     try {
         const postRef = doc(db, 'posts', postId);
@@ -399,7 +381,6 @@ export const togglePostLike = async (postId: string, userId: string, isLiked: bo
     } catch (e) { return false; }
 };
 
-// Added missing export getAllPublicOrganizations
 export const getAllPublicOrganizations = async (): Promise<Organization[]> => {
     try {
         const snap = await getDocs(query(orgsRef, limit(100)));
@@ -407,7 +388,6 @@ export const getAllPublicOrganizations = async (): Promise<Organization[]> => {
     } catch (e) { return []; }
 };
 
-// Added missing export getJoinRequests
 export const getJoinRequests = async (orgId: string, dept?: string): Promise<(JoinRequest & { user?: User })[]> => {
     try {
         let q = query(requestsRef, where('organizationId', '==', orgId), where('status', '==', 'PENDING'));
@@ -421,7 +401,6 @@ export const getJoinRequests = async (orgId: string, dept?: string): Promise<(Jo
     } catch (e) { return []; }
 };
 
-// Added missing export approveJoinRequest
 export const approveJoinRequest = async (requestId: string, request: JoinRequest, roleTitle: string, permissions: PermissionType[]) => {
     try {
         const batch = writeBatch(db);
@@ -435,7 +414,6 @@ export const approveJoinRequest = async (requestId: string, request: JoinRequest
     } catch (e) { return false; }
 };
 
-// Added missing export rejectJoinRequest
 export const rejectJoinRequest = async (requestId: string) => {
     try {
         await updateDoc(doc(db, 'requests', requestId), { status: 'REJECTED' });
@@ -443,7 +421,6 @@ export const rejectJoinRequest = async (requestId: string) => {
     } catch (e) { return false; }
 };
 
-// Added missing export updateOrganization
 export const updateOrganization = async (orgId: string, data: Partial<Organization>): Promise<boolean> => {
     try {
         await updateDoc(doc(db, 'organizations', orgId), data);

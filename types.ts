@@ -14,6 +14,7 @@ export type UserRole = 'staff' | 'manager' | 'admin' | 'super_admin';
 export type AuthMode = 'LOGIN' | 'REGISTER';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
+export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
 
 export interface User {
   id: string;
@@ -41,8 +42,6 @@ export interface User {
   following?: string[];
   followersCount?: number;
   followingCount?: number;
-  // Added properties to fix seed and profile errors
-  pin?: string;
   isPrivate?: boolean;
   instagramHandle?: string;
   privacySettings?: {
@@ -78,7 +77,6 @@ export interface Course {
   priority?: 'HIGH' | 'NORMAL';
   price: number;
   priceType: 'FREE' | 'PAID';
-  // Added properties to fix seed and service errors
   coverQuote?: string;
   isFeatured?: boolean;
   assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
@@ -157,8 +155,6 @@ export interface CareerPath {
   department: DepartmentType;
   courseIds: string[];
 }
-
-export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
 
 export interface FeedPost {
   id: string;

@@ -26,8 +26,7 @@ export const LoginPage: React.FC = () => {
   } = useAuthStore();
   const { switchOrganization } = useOrganizationStore();
 
-  // Form State
-  const [identifier, setIdentifier] = useState(''); // Email or Username
+  const [identifier, setIdentifier] = useState(''); 
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
@@ -43,13 +42,10 @@ export const LoginPage: React.FC = () => {
 
     try {
       const user = await loginUser(identifier, password);
-      
-      // Smart Membership Routing
-      const memberships = await getMyMemberships(user.id);
+      await getMyMemberships(user.id);
       if (user.currentOrganizationId) {
         await switchOrganization(user.currentOrganizationId);
       }
-      
       loginSuccess(user);
     } catch (err: any) {
       setError(err.message || "Giriş başarısız. Lütfen bilgilerinizi kontrol edin.");
@@ -78,7 +74,6 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="w-full max-w-md mx-auto px-4 py-8">
-      {/* Branding */}
       <div className="text-center mb-10">
         <motion.div 
           initial={{ scale: 0.8, opacity: 0 }}
@@ -92,7 +87,6 @@ export const LoginPage: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-[2.5rem] shadow-2xl shadow-black/5 border border-gray-100 overflow-hidden relative">
-        {/* Tabs */}
         <div className="flex p-2 bg-gray-50 border-b border-gray-100">
           <button 
             onClick={() => setAuthMode('LOGIN')}
@@ -142,7 +136,7 @@ export const LoginPage: React.FC = () => {
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="********"
                       className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-12 font-bold text-gray-800 focus:outline-none focus:border-primary focus:bg-white transition-all"
                       required
                     />
@@ -171,7 +165,7 @@ export const LoginPage: React.FC = () => {
                   disabled={isLoading}
                   className="w-full bg-primary hover:bg-primary-light text-white font-bold py-4 rounded-2xl shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
-                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Giriş Yap <ArrowRight className="w-5 h-5" /></>}
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <React.Fragment>Giriş Yap <ArrowRight className="w-5 h-5" /></React.Fragment>}
                 </button>
               </motion.form>
             ) : (
@@ -236,7 +230,7 @@ export const LoginPage: React.FC = () => {
                       type={showPassword ? "text" : "password"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="********"
                       className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-3 pl-12 pr-12 font-bold text-gray-800 focus:outline-none focus:border-primary focus:bg-white transition-all"
                       required
                     />
@@ -265,7 +259,7 @@ export const LoginPage: React.FC = () => {
                   disabled={isLoading}
                   className="w-full bg-accent hover:bg-accent-dark text-primary font-bold py-4 rounded-2xl shadow-xl shadow-accent/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4"
                 >
-                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Hesap Oluştur <ShieldCheck className="w-5 h-5" /></>}
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <React.Fragment>Hesap Oluştur <ShieldCheck className="w-5 h-5" /></React.Fragment>}
                 </button>
               </motion.form>
             )}
