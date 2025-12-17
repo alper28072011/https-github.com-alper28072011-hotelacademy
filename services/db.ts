@@ -19,7 +19,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector, PermissionType } from '../types';
+import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector, PermissionType, AuthorType } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -57,31 +57,10 @@ export const updateCourse = async (courseId: string, data: Partial<Course>): Pro
 
 export const getAdminCourses = async (userId: string, orgId?: string | null): Promise<Course[]> => {
     try {
-        const results = new Map<string, Course>();
-
-        const safeMap = (d: any): Course => {
-            const data = d.data();
-            return {
-                id: d.id,
-                ...data,
-                title: data.title || 'Untitled Course',
-                thumbnailUrl: data.thumbnailUrl || 'https://via.placeholder.com/400',
-                categoryId: data.categoryId || 'cat_general',
-                createdAt: data.createdAt || Date.now(),
-            } as Course;
-        };
-
-        const authorQ = query(coursesRef, where('authorId', '==', userId));
-        const authorSnap = await getDocs(authorQ);
-        authorSnap.docs.forEach(d => results.set(d.id, safeMap(d)));
-
-        if (orgId) {
-            const orgQ = query(coursesRef, where('organizationId', '==', orgId));
-            const orgSnap = await getDocs(orgQ);
-            orgSnap.docs.forEach(d => results.set(d.id, safeMap(d)));
-        }
-
-        return Array.from(results.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        // Simple query for now, filtering usually done client side or specific index
+        const q = query(coursesRef, where('authorId', '==', userId));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
     } catch (e) {
         console.error("Get Admin Courses Error:", e);
         return [];
@@ -100,103 +79,102 @@ export const getOrgCourses = async (orgId: string): Promise<Course[]> => {
     }
 };
 
-// --- INSTAGRAM-STYLE ALGORITHMS ---
+// --- HYBRID SOCIAL FEED ENGINE ---
 
 /**
- * STORIES: Only returns content that is:
- * 1. Assigned by the Organization (Private)
- * 2. NOT Completed by the user
- * 3. Urgent or Mandatory
+ * FEED ALGORITHM V2
+ * Returns a mixed stream of content based on:
+ * 1. Personal: Content I created (I always see my own stuff)
+ * 2. Corporate: Private content from my active Organization
+ * 3. Social: Public content from people/orgs I follow
+ * 4. Discovery: Trending Public content (Filler)
  */
-export const getDashboardStories = async (user: User): Promise<Course[]> => {
-    if (!user.currentOrganizationId) return [];
-
+export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[]> => {
     try {
-        // Fetch Org Private Content
-        const q = query(
+        const promises = [];
+
+        // 1. PERSONAL POOL (My Posts)
+        const personalQ = query(coursesRef, where('authorId', '==', user.id), limit(5));
+        promises.push(getDocs(personalQ));
+
+        // 2. CORPORATE POOL (My Job)
+        if (user.currentOrganizationId) {
+            const orgQ = query(
+                coursesRef, 
+                where('organizationId', '==', user.currentOrganizationId),
+                where('visibility', '==', 'PRIVATE'),
+                limit(10)
+            );
+            promises.push(getDocs(orgQ));
+        }
+
+        // 3. SOCIAL POOL (Who I Follow)
+        const following = user.following || [];
+        if (following.length > 0) {
+            // Firestore 'in' limit is 10. We take the last 10 followed entities.
+            // In production, you'd use a dedicated 'Timeline' collection fan-out.
+            const recentFollowing = following.slice(-10); 
+            const socialQ = query(
+                coursesRef,
+                where('authorId', 'in', recentFollowing),
+                where('visibility', 'in', ['PUBLIC', 'FOLLOWERS_ONLY']),
+                limit(20)
+            );
+            promises.push(getDocs(socialQ));
+        }
+
+        // 4. DISCOVERY POOL (Global Public)
+        // Fetched to ensure feed is never empty and to promote new content
+        const discoveryQ = query(
             coursesRef, 
-            where('organizationId', '==', user.currentOrganizationId),
-            where('visibility', '==', 'PRIVATE')
+            where('visibility', '==', 'PUBLIC'), 
+            orderBy('createdAt', 'desc'), 
+            limit(10)
         );
-        const snap = await getDocs(q);
-        const allOrgCourses = snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+        promises.push(getDocs(discoveryQ));
 
-        // Filter: Only Incomplete & Relevant
-        const stories = allOrgCourses.filter(course => {
-            const isCompleted = user.completedCourses?.includes(course.id);
-            if (isCompleted) return false;
-
-            // Optional: Filter by department if strictly assigned
-            if (course.assignmentType === 'DEPARTMENT' && course.targetDepartments && user.department) {
-                return course.targetDepartments.includes(user.department);
-            }
-            
-            return true;
+        // Execute Parallel
+        const snapshots = await Promise.all(promises);
+        
+        // Merge & Dedup
+        const feedMap = new Map<string, Course | FeedPost>();
+        
+        snapshots.forEach(snap => {
+            snap.docs.forEach(doc => {
+                feedMap.set(doc.id, { id: doc.id, ...doc.data(), type: 'course' } as any);
+            });
         });
 
-        // Sort: High Priority First
-        return stories.sort((a, b) => (b.priority === 'HIGH' ? 1 : 0) - (a.priority === 'HIGH' ? 1 : 0)).slice(0, 10);
+        // Convert to Array & Sort by Date (Newest First)
+        return Array.from(feedMap.values())
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     } catch (error) {
-        console.error("Stories Error:", error);
+        console.error("Hybrid Feed Error:", error);
         return [];
     }
 };
 
 /**
- * FEED: Returns mixed content:
- * 1. Posts/Courses from Following (User + Org)
- * 2. Mandatory Content from Current Org
- * 3. Global Trending Content (Discovery)
+ * STORIES: High Priority / Mandatory Content Only
  */
-export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[]> => {
+export const getDashboardStories = async (user: User): Promise<Course[]> => {
+    if (!user.currentOrganizationId) return [];
+
     try {
-        const feedMap = new Map<string, Course | FeedPost>();
-        const followingIds = user.following || [];
-
-        // 1. GLOBAL PUBLIC DISCOVERY (To ensure feed is never empty)
-        // Fetch recent public content
-        const globalQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), orderBy('createdAt', 'desc'), limit(15));
-        const globalSnap = await getDocs(globalQ);
-        globalSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data(), type: 'course' } as any));
-
-        // 2. ORG SPECIFIC CONTENT (If employed)
-        if (user.currentOrganizationId) {
-            // Internal Courses
-            const orgCoursesQ = query(coursesRef, where('organizationId', '==', user.currentOrganizationId), limit(10));
-            const orgCoursesSnap = await getDocs(orgCoursesQ);
-            orgCoursesSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data(), type: 'course' } as any));
-
-            // Internal Posts
-            const orgPostsQ = query(postsRef, where('organizationId', '==', user.currentOrganizationId), limit(10));
-            const orgPostsSnap = await getDocs(orgPostsQ);
-            orgPostsSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data() } as FeedPost));
-        }
-
-        // 3. FOLLOWING CONTENT (The Social Graph)
-        // Firestore limitation: 'in' query allows max 10 items.
-        // Strategy: If user follows < 10, query directly. If > 10, pick top 10 most recently followed or random.
-        if (followingIds.length > 0) {
-            const activeFollowing = followingIds.slice(0, 10); // Simple slice for MVP
-            
-            // Posts from following
-            const followingPostsQ = query(postsRef, where('authorId', 'in', activeFollowing), limit(10));
-            const followingPostsSnap = await getDocs(followingPostsQ);
-            followingPostsSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data() } as FeedPost));
-
-            // Courses from following (only public ones)
-            const followingCoursesQ = query(coursesRef, where('authorId', 'in', activeFollowing), where('visibility', '==', 'PUBLIC'), limit(10));
-            const followingCoursesSnap = await getDocs(followingCoursesQ);
-            followingCoursesSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data(), type: 'course' } as any));
-        }
-
-        const allItems = Array.from(feedMap.values());
+        const q = query(
+            coursesRef, 
+            where('organizationId', '==', user.currentOrganizationId),
+            where('priority', '==', 'HIGH')
+        );
+        const snap = await getDocs(q);
         
-        // 4. Sort by Date (Newest First)
-        return allItems.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        // Filter out completed ones locally
+        const courses = snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+        return courses.filter(c => !user.completedCourses?.includes(c.id));
 
     } catch (error) {
-        console.error("Feed Error:", error);
+        console.error("Stories Error:", error);
         return [];
     }
 };
@@ -225,8 +203,9 @@ export const createCourse = async (course: Omit<Course, 'id'>) => {
 };
 
 export const getHybridContent = async (user: User): Promise<Course[]> => {
+    // Maps to feed logic
     const feed = await getDashboardFeed(user);
-    return feed.filter((i): i is Course => (i as any).type !== 'kudos' && (i as any).type !== 'image');
+    return feed as Course[];
 };
 
 export const getFeedPosts = async (dept: DepartmentType | null, orgId: string | null): Promise<FeedPost[]> => {
@@ -245,10 +224,6 @@ export const searchOrganizations = async (searchTerm: string): Promise<Organizat
     if (!searchTerm || searchTerm.length < 2) return [];
     try {
         const term = searchTerm.toLowerCase();
-        // NOTE: Firestore doesn't support native partial text search like 'LIKE %term%'.
-        // For a real app, use Algolia/Typesense. Here we use a simple prefix match if possible, or client side filter.
-        // For this demo, we fetch a batch and filter client side.
-        
         const q = query(orgsRef, limit(50));
         const snap = await getDocs(q);
         
@@ -335,7 +310,7 @@ export const updateOrganization = async (orgId: string, data: Partial<Organizati
 };
 
 export const getUnifiedFeed = async (user: User): Promise<Course[]> => {
-    return getHybridContent(user);
+    return (await getDashboardFeed(user)) as Course[];
 };
 
 export const getUsersByDepartment = async (dept: DepartmentType, orgId: string): Promise<User[]> => {
@@ -563,6 +538,7 @@ export const sendKudos = async (sender: User, recipientId: string, recipientName
                 caption: message,
                 likes: 0,
                 createdAt: Date.now(),
+                visibility: 'PUBLIC',
                 likedBy: [],
                 kudosData: { recipientId, recipientName, recipientAvatar, badgeType }
             };
@@ -713,5 +689,5 @@ export const getInstructorCourses = async (authorId: string): Promise<Course[]> 
     } catch (e) { return []; }
 };
 export const getCourses = async (orgId?: string): Promise<Course[]> => {
-  return getHybridContent({ currentOrganizationId: orgId } as User); 
+  return (await getDashboardFeed({ currentOrganizationId: orgId } as User)) as Course[];
 };

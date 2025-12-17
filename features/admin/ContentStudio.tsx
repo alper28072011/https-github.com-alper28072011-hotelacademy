@@ -12,7 +12,7 @@ import { updateCourse } from '../../services/db';
 import { uploadFile } from '../../services/storage';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { StoryCard, Course, CourseVisibility } from '../../types';
+import { StoryCard, Course, CourseVisibility, AuthorType } from '../../types';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 // FIX 5: PDF Extraction Logic via CDN to avoid local node_modules dependency issues
@@ -75,7 +75,7 @@ export const ContentStudio: React.FC = () => {
   const [category, setCategory] = useState('cat_onboarding');
   const [coverImage, setCoverImage] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
-  const [ownerType, setOwnerType] = useState<'USER' | 'ORGANIZATION'>('ORGANIZATION'); // Default to Org for Admins
+  const [ownerType, setOwnerType] = useState<AuthorType>('ORGANIZATION'); // Default to Org for Admins
 
   // INITIALIZE FOR EDIT MODE
   useEffect(() => {
@@ -92,7 +92,7 @@ export const ContentStudio: React.FC = () => {
           setVisibility(course.visibility);
           setCategory(course.categoryId);
           setCoverImage(course.thumbnailUrl);
-          setOwnerType(course.authorType === 'ORGANIZATION' ? 'ORGANIZATION' : 'USER');
+          setOwnerType(course.authorType);
           setStage('PREVIEW'); // Skip generation
       }
   }, [location.state]);
@@ -405,14 +405,14 @@ export const ContentStudio: React.FC = () => {
                                     className={`p-4 rounded-xl border-2 text-left transition-all ${visibility === 'PUBLIC' ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-gray-100 bg-white hover:bg-gray-50'}`}
                                 >
                                     <div className="flex items-center gap-2 font-bold mb-1"><Globe className="w-4 h-4" /> Herkese Açık</div>
-                                    <div className="text-xs opacity-80">Tüm dünyada görülebilir.</div>
+                                    <div className="text-xs opacity-80">Takipçiler ve herkes görebilir.</div>
                                 </button>
                                 <button 
                                     onClick={() => setVisibility('PRIVATE')}
                                     className={`p-4 rounded-xl border-2 text-left transition-all ${visibility === 'PRIVATE' ? 'border-gray-800 bg-gray-100 text-gray-900' : 'border-gray-100 bg-white hover:bg-gray-50'}`}
                                 >
-                                    <div className="flex items-center gap-2 font-bold mb-1"><Lock className="w-4 h-4" /> Kurum İçi</div>
-                                    <div className="text-xs opacity-80">Sadece personel görür.</div>
+                                    <div className="flex items-center gap-2 font-bold mb-1"><Lock className="w-4 h-4" /> Kurum İçi / Özel</div>
+                                    <div className="text-xs opacity-80">Sadece kurum personeli görür.</div>
                                 </button>
                             </div>
                         </div>

@@ -75,10 +75,12 @@ export interface Organization {
   createdAt: number;
   settings?: OrganizationSettings;
   memberCount?: number;
-  followersCount?: number; // Social Feature
   publicContentEnabled?: boolean;
   subGroups?: string[];
-  followers?: string[]; // List of user IDs following this org
+  
+  // Social Graph
+  followers?: string[];      // Array of User IDs who follow this Org
+  followersCount?: number;   // Denormalized count
 }
 
 export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'REJECTED';
@@ -140,8 +142,8 @@ export interface User {
   isPrivate?: boolean;
   
   // Social Graph
-  followers?: string[];
-  following?: string[]; // IDs of users AND organizations
+  followers?: string[]; // IDs of users following me
+  following?: string[]; // IDs of users AND organizations I follow
   followersCount?: number;
   followingCount?: number;
   
@@ -205,7 +207,7 @@ export interface Category {
 export type AssignmentType = 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
 export type ContentPriority = 'HIGH' | 'NORMAL';
 export type CourseVisibility = 'PRIVATE' | 'PUBLIC' | 'FOLLOWERS_ONLY';
-export type AuthorType = 'USER' | 'ORGANIZATION'; // New Polymorphic Type
+export type AuthorType = 'USER' | 'ORGANIZATION'; 
 export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'UNDER_REVIEW';
 export type PriceType = 'FREE' | 'PAID';
@@ -213,11 +215,11 @@ export type ReviewTag = 'ACCURATE' | 'ENGAGING' | 'BORING' | 'MISLEADING' | 'OUT
 
 export interface Course {
   id: string;
-  organizationId?: string;
+  organizationId?: string; // If posted by OR within an Org
   
-  // Polymorphic Author Details (Denormalized for Performance)
+  // Polymorphic Author Details (Denormalized)
   authorType: AuthorType;
-  authorId: string;
+  authorId: string;       // User ID or Org ID
   authorName: string;
   authorAvatarUrl: string;
 
@@ -225,7 +227,10 @@ export interface Course {
   verificationStatus: VerificationStatus;
   qualityScore: number;
   priceType: PriceType;
+  
+  // Visibility Logic
   visibility: CourseVisibility;
+  
   price: number;
   rating?: number;
   studentCount?: number;
@@ -236,7 +241,7 @@ export interface Course {
   description: string;
   thumbnailUrl: string;
   videoUrl?: string; 
-  duration: number; // Total estimated minutes
+  duration: number; 
   xpReward: number;
   isFeatured?: boolean;
   coverQuote?: string; 
@@ -248,20 +253,21 @@ export interface Course {
   priority?: ContentPriority; 
   createdAt?: number;
   
-  // NEW: Micro-Learning Core
   steps: StoryCard[]; 
-  deepDiveResource?: DeepDiveResource; // Optional long-form content
+  deepDiveResource?: DeepDiveResource; 
 }
 
 export interface FeedPost {
   id: string;
   organizationId: string;
   
-  // Polymorphic Author Details
+  // Polymorphic Author
   authorType: AuthorType;
   authorId: string;
   authorName: string;
   authorAvatar: string;
+
+  visibility: CourseVisibility;
 
   assignmentType?: AssignmentType; 
   targetDepartments: DepartmentType[]; 
