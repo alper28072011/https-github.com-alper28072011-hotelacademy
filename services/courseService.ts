@@ -32,7 +32,7 @@ import { getOrganizationDetails } from './db';
  * - Expert: Can create PRO Courses (Pending Review).
  * - Manager/Admin: Can create OFFICIAL Content (Auto-verified).
  */
-export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'verificationStatus' | 'qualityScore' | 'flagCount' | 'authorType' | 'authorName' | 'authorAvatarUrl'> & { ownerType?: AuthorType }, user: User): Promise<boolean> => {
+export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'verificationStatus' | 'qualityScore' | 'flagCount' | 'authorType' | 'authorName' | 'authorAvatarUrl'> & { ownerType?: string }, user: User): Promise<boolean> => {
     try {
         let tier: ContentTier = 'COMMUNITY';
         let status: VerificationStatus = 'VERIFIED'; // Default open for Community
@@ -71,8 +71,11 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
         }
 
         // 3. Prepare Final Data
+        // Extract ownerType to avoid saving it to DB if not needed, though Firestore ignores extra fields usually if not strictly typed in addDoc (which is generic here)
+        const { ownerType, ...dataToSave } = courseData;
+
         const finalData = {
-            ...courseData,
+            ...dataToSave,
             tier,
             verificationStatus: status,
             qualityScore: 0,
@@ -84,9 +87,6 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
             authorName,
             authorAvatarUrl
         };
-
-        // Remove temporary ownerType before saving
-        delete (finalData as any).ownerType;
 
         // 4. Write to DB
         await addDoc(collection(db, 'courses'), finalData);
