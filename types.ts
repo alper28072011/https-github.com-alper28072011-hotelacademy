@@ -78,9 +78,9 @@ export interface Organization {
   publicContentEnabled?: boolean;
   subGroups?: string[];
   
-  // Social Graph (NEW)
-  followers?: string[];      // Array of User IDs who follow this Org
-  followersCount?: number;   // Denormalized count
+  // Social Graph (NEW - Organizasyon Takipçileri)
+  followers?: string[];      
+  followersCount?: number;   
 }
 
 export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'REJECTED';
@@ -141,9 +141,9 @@ export interface User {
   instructorProfile?: InstructorProfile;
   isPrivate?: boolean;
   
-  // Social Graph (NEW)
-  followers?: string[]; // IDs of users following me
-  following?: string[]; // IDs of users AND organizations I follow
+  // Social Graph (NEW - Kullanıcı Takip Verileri)
+  followers?: string[]; // Beni takip edenler
+  following?: string[]; // Benim takip ettiklerim (Kişi veya Kurum)
   followersCount?: number;
   followingCount?: number;
   
@@ -194,7 +194,6 @@ export interface DeepDiveResource {
   description?: string;
 }
 
-// Legacy support for CourseStep (mapped to StoryCard now)
 export type CourseStep = StoryCard; 
 
 export interface Category {
@@ -215,7 +214,7 @@ export type ReviewTag = 'ACCURATE' | 'ENGAGING' | 'BORING' | 'MISLEADING' | 'OUT
 
 export interface Course {
   id: string;
-  organizationId?: string; // If posted by OR within an Org
+  organizationId?: string; 
   
   // Polymorphic Author Details (Denormalized) - NEW
   authorType: AuthorType;
