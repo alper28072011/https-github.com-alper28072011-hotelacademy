@@ -94,7 +94,7 @@ export const generateMicroCourse = async (
       model: 'gemini-3-pro-preview',
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 2048 }, // Allow it to think about pedagogical structure
+        // REMOVED thinkingConfig to prevent potential model compatibility issues.
         responseMimeType: "application/json",
         responseSchema: schema
       }
