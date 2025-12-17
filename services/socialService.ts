@@ -9,7 +9,7 @@ import { FollowStatus, Relationship, User } from '../types';
 const relationshipsRef = collection(db, 'relationships');
 
 /**
- * Checks relationship status.
+ * Checks relationship status between current user and target (User or Org).
  */
 export const checkFollowStatus = async (currentUserId: string, targetId: string): Promise<FollowStatus> => {
     try {
@@ -31,11 +31,11 @@ export const checkFollowStatus = async (currentUserId: string, targetId: string)
 };
 
 /**
- * Generic Follow Function (Handles both User and Organization targets)
- * This updates:
- * 1. Relationship collection
- * 2. Follower's 'following' list and count
- * 3. Target's 'followers' count
+ * Polymorphic Follow Function
+ * Updates:
+ * 1. Relationships collection
+ * 2. Follower's 'following' array and count
+ * 3. Target's (User or Org) 'followers' count
  */
 export const followEntity = async (
     currentUserId: string, 
@@ -45,23 +45,23 @@ export const followEntity = async (
     try {
         const result = await runTransaction(db, async (transaction) => {
             let isPrivate = false;
-            let currentFollowers = 0;
+            let currentFollowersCount = 0;
 
-            // 1. Get Target Data based on Type
+            // 1. Get Target Data
             if (targetType === 'USER') {
                 const targetRef = doc(db, 'users', targetId);
                 const targetSnap = await transaction.get(targetRef);
-                if (!targetSnap.exists()) throw new Error("User not found");
+                if (!targetSnap.exists()) throw new Error("Target user not found");
                 const data = targetSnap.data() as User;
                 isPrivate = data.isPrivate || false;
-                currentFollowers = data.followersCount || 0;
+                currentFollowersCount = data.followersCount || 0;
             } else {
                 const targetRef = doc(db, 'organizations', targetId);
                 const targetSnap = await transaction.get(targetRef);
-                if (!targetSnap.exists()) throw new Error("Organization not found");
-                // Organizations are always public for now
+                if (!targetSnap.exists()) throw new Error("Target organization not found");
+                // Orgs are public by default in this context
                 isPrivate = false; 
-                currentFollowers = targetSnap.data()?.followersCount || 0;
+                currentFollowersCount = targetSnap.data()?.followersCount || 0;
             }
 
             // 2. Check existing relationship
@@ -71,12 +71,9 @@ export const followEntity = async (
                 where('followingId', '==', targetId)
             );
             const existingSnap = await getDocs(q); 
-            
-            if (!existingSnap.empty) {
-                return { status: existingSnap.docs[0].data().status as FollowStatus, success: false };
-            }
+            if (!existingSnap.empty) return { status: existingSnap.docs[0].data().status as FollowStatus, success: false };
 
-            // 3. Create Relationship Doc
+            // 3. Create Relationship
             const relStatus = isPrivate ? 'PENDING' : 'ACCEPTED';
             const newRelRef = doc(collection(db, 'relationships'));
             
@@ -87,64 +84,42 @@ export const followEntity = async (
                 createdAt: Date.now()
             });
 
-            // 4. Update Counters & Lists (Only if Public/Accepted immediately)
+            // 4. If immediately accepted, update counts and arrays
             if (relStatus === 'ACCEPTED') {
                 const currentUserRef = doc(db, 'users', currentUserId);
-                const currentUserDoc = await transaction.get(currentUserRef);
-                const currentFollowing = currentUserDoc.data()?.following || [];
+                const currentUserSnap = await transaction.get(currentUserRef);
+                const currentFollowing = currentUserSnap.data()?.following || [];
 
-                // Add to My Following List
-                if (!currentFollowing.includes(targetId)) {
-                    transaction.update(currentUserRef, { 
-                        followingCount: (currentUserDoc.data()?.followingCount || 0) + 1,
-                        following: [...currentFollowing, targetId]
-                    });
-                }
+                // Update my following list
+                transaction.update(currentUserRef, { 
+                    following: [...currentFollowing, targetId],
+                    followingCount: (currentUserSnap.data()?.followingCount || 0) + 1
+                });
 
-                // Increment Target's Follower Count
+                // Update target's followers count
                 const targetCollection = targetType === 'USER' ? 'users' : 'organizations';
                 const targetRef = doc(db, targetCollection, targetId);
-                transaction.update(targetRef, { followersCount: currentFollowers + 1 });
-            }
-
-            // 5. Send Notification (If User)
-            if (targetType === 'USER') {
-                const notifRef = doc(collection(db, `users/${targetId}/notifications`));
-                transaction.set(notifRef, {
-                    title: isPrivate ? 'Takip İsteği' : 'Yeni Takipçi',
-                    message: isPrivate ? 'Bir kullanıcı sizi takip etmek istiyor.' : 'Bir kullanıcı sizi takip etmeye başladı.',
-                    type: 'system',
-                    isRead: false,
-                    createdAt: serverTimestamp(),
-                    link: `/user/${currentUserId}`
-                });
+                transaction.update(targetRef, { followersCount: currentFollowersCount + 1 });
             }
 
             return { status: relStatus === 'ACCEPTED' ? 'FOLLOWING' : 'PENDING', success: true };
         });
 
         return result;
-
     } catch (e) {
         console.error("Follow Entity Error:", e);
         return { status: 'NONE', success: false };
     }
 };
 
-// Wrapper for Users
-export const followUserSmart = async (currentUserId: string, targetUserId: string) => {
-    return followEntity(currentUserId, targetUserId, 'USER');
-};
-
-// Wrapper for Orgs
-export const followOrganizationSmart = async (currentUserId: string, targetOrgId: string) => {
-    return followEntity(currentUserId, targetOrgId, 'ORGANIZATION');
-};
-
 /**
- * Unfollow Logic (Generic)
+ * Polymorphic Unfollow Function
  */
-export const unfollowUserSmart = async (currentUserId: string, targetId: string): Promise<boolean> => {
+export const unfollowEntity = async (
+    currentUserId: string, 
+    targetId: string, 
+    targetType: 'USER' | 'ORGANIZATION'
+): Promise<boolean> => {
     try {
         await runTransaction(db, async (transaction) => {
             const q = query(
@@ -155,33 +130,28 @@ export const unfollowUserSmart = async (currentUserId: string, targetId: string)
             const snapshot = await getDocs(q);
             if (snapshot.empty) return;
 
-            const relDoc = snapshot.docs[0];
-            transaction.delete(relDoc.ref);
+            // 1. Delete Relationship Doc
+            transaction.delete(snapshot.docs[0].ref);
 
-            // Update User Counters
+            // 2. Update my counts
             const currentUserRef = doc(db, 'users', currentUserId);
             const userSnap = await transaction.get(currentUserRef);
             if (userSnap.exists()) {
-                const userData = userSnap.data() as User;
-                const newFollowing = (userData.following || []).filter(id => id !== targetId);
+                const newFollowing = (userSnap.data()?.following || []).filter((id: string) => id !== targetId);
                 transaction.update(currentUserRef, { 
-                    followingCount: Math.max(0, (userData.followingCount || 0) - 1),
-                    following: newFollowing
+                    following: newFollowing,
+                    followingCount: Math.max(0, (userSnap.data()?.followingCount || 0) - 1)
                 });
             }
 
-            // Determine if Target is User or Org (to decrement their followers)
-            const userTargetRef = doc(db, 'users', targetId);
-            const userTargetSnap = await transaction.get(userTargetRef);
-            
-            if (userTargetSnap.exists()) {
-                transaction.update(userTargetRef, { followersCount: Math.max(0, (userTargetSnap.data().followersCount || 0) - 1) });
-            } else {
-                const orgTargetRef = doc(db, 'organizations', targetId);
-                const orgTargetSnap = await transaction.get(orgTargetRef);
-                if (orgTargetSnap.exists()) {
-                    transaction.update(orgTargetRef, { followersCount: Math.max(0, (orgTargetSnap.data().followersCount || 0) - 1) });
-                }
+            // 3. Update target's count
+            const targetCollection = targetType === 'USER' ? 'users' : 'organizations';
+            const targetRef = doc(db, targetCollection, targetId);
+            const targetSnap = await transaction.get(targetRef);
+            if (targetSnap.exists()) {
+                transaction.update(targetRef, { 
+                    followersCount: Math.max(0, (targetSnap.data()?.followersCount || 0) - 1) 
+                });
             }
         });
         return true;
@@ -191,17 +161,16 @@ export const unfollowUserSmart = async (currentUserId: string, targetId: string)
     }
 };
 
-export const getFollowers = async (userId: string): Promise<User[]> => {
-    try {
-        const q = query(relationshipsRef, where('followingId', '==', userId), where('status', '==', 'ACCEPTED'), limit(50));
-        const snap = await getDocs(q);
-        const userIds = snap.docs.map(d => d.data().followerId);
-        
-        if (userIds.length === 0) return [];
-        
-        // Batch fetch users
-        const usersQ = query(collection(db, 'users'), where('__name__', 'in', userIds.slice(0, 10))); // Limit 10 for Firestore 'in'
-        const usersSnap = await getDocs(usersQ);
-        return usersSnap.docs.map(d => ({id: d.id, ...d.data()} as User));
-    } catch (e) { return []; }
+// Legacy Wrapper support
+export const followUserSmart = async (currentUserId: string, targetUserId: string) => {
+    return followEntity(currentUserId, targetUserId, 'USER');
+};
+
+export const unfollowUserSmart = async (currentUserId: string, targetId: string) => {
+    return unfollowEntity(currentUserId, targetId, 'USER');
+};
+
+// Added followOrganizationSmart to fix error in OrganizationProfile.tsx
+export const followOrganizationSmart = async (currentUserId: string, orgId: string) => {
+    return followEntity(currentUserId, orgId, 'ORGANIZATION');
 };

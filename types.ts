@@ -78,8 +78,8 @@ export interface Organization {
   publicContentEnabled?: boolean;
   subGroups?: string[];
   
-  // Social Graph (NEW - Organizasyon Takipçileri)
-  followers?: string[];      
+  // Social Graph (NEW)
+  followers?: string[];      // Takip eden User ID'leri
   followersCount?: number;   
 }
 
@@ -141,9 +141,9 @@ export interface User {
   instructorProfile?: InstructorProfile;
   isPrivate?: boolean;
   
-  // Social Graph (NEW - Kullanıcı Takip Verileri)
-  followers?: string[]; // Beni takip edenler
-  following?: string[]; // Benim takip ettiklerim (Kişi veya Kurum)
+  // Social Graph (NEW)
+  followers?: string[]; // Beni takip edenler (User ID)
+  following?: string[]; // Takip ettiklerim (User veya Org ID)
   followersCount?: number;
   followingCount?: number;
   
@@ -163,7 +163,7 @@ export interface Badge {
     lastReceivedAt: number;
 }
 
-// --- MICRO-LEARNING & STORY TYPES ---
+// --- CONTENT MODELS ---
 
 export type StoryCardType = 'INFO' | 'QUIZ' | 'VIDEO' | 'XP_REWARD' | 'POLL';
 export type InteractionType = 'MULTIPLE_CHOICE' | 'TRUE_FALSE' | 'POLL';
@@ -172,19 +172,19 @@ export interface Interaction {
   type: InteractionType;
   question: string;
   options: string[];
-  correctOptionIndex?: number; // For Quiz
-  explanation?: string; // Shown after answer
+  correctOptionIndex?: number;
+  explanation?: string;
 }
 
 export interface StoryCard {
   id: string;
   type: StoryCardType;
   title: string;
-  content: string; // Markdown supported
-  mediaUrl?: string; // Image or Short Video
-  duration: number; // Estimated read time in seconds (for progress bar)
+  content: string;
+  mediaUrl?: string;
+  duration: number;
   interaction?: Interaction;
-  gradient?: string; // Visual style
+  gradient?: string;
 }
 
 export interface DeepDiveResource {
@@ -193,8 +193,6 @@ export interface DeepDiveResource {
   url: string;
   description?: string;
 }
-
-export type CourseStep = StoryCard; 
 
 export interface Category {
   id: string;
@@ -216,9 +214,9 @@ export interface Course {
   id: string;
   organizationId?: string; 
   
-  // Polymorphic Author Details (Denormalized) - NEW
+  // Polymorphic Author Details (NEW)
   authorType: AuthorType;
-  authorId: string;       // User ID or Org ID
+  authorId: string;       // User ID veya Org ID
   authorName: string;
   authorAvatarUrl: string;
 
@@ -227,7 +225,7 @@ export interface Course {
   qualityScore: number;
   priceType: PriceType;
   
-  // Visibility Logic - NEW
+  // Visibility Logic (NEW)
   visibility: CourseVisibility;
   
   price: number;
@@ -260,13 +258,13 @@ export interface FeedPost {
   id: string;
   organizationId: string;
   
-  // Polymorphic Author - NEW
+  // Polymorphic Author (NEW)
   authorType: AuthorType;
   authorId: string;
   authorName: string;
   authorAvatar: string;
 
-  visibility: CourseVisibility; // NEW
+  visibility: CourseVisibility; 
 
   assignmentType?: AssignmentType; 
   targetDepartments: DepartmentType[]; 

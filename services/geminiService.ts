@@ -14,7 +14,7 @@ interface GeneratedMicroCourse {
 /**
  * GENERATE MICRO COURSE
  * Converts raw text/source into a gamified Instagram Story-like course.
- * OPTIMIZED: Uses gemini-2.5-flash for speed and cost-efficiency.
+ * OPTIMIZED: Uses gemini-3-flash-preview for speed and compliance.
  */
 export const generateMicroCourse = async (
   sourceContent: string,
@@ -88,9 +88,9 @@ export const generateMicroCourse = async (
       required: ["title", "description", "cards", "tags"]
     };
 
-    // Switched to gemini-2.5-flash for optimum speed/cost ratio for JSON tasks
+    // Fixed model name to gemini-3-flash-preview as per guidelines for Basic Text Tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash', 
+      model: 'gemini-3-flash-preview', 
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -123,7 +123,7 @@ export const generateMicroCourse = async (
 export const translateContent = async (text: string, targetLanguage: string): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: `Translate to ${targetLanguage}: ${text}`,
     });
     return response.text || text;
