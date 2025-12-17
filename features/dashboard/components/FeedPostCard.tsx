@@ -32,7 +32,8 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
   // -- Author Logic --
   // Fallback to orgId if author info is missing (Legacy support)
   const authorName = post.authorName || (post.organizationId ? 'Kurumsal' : 'Anonim');
-  const authorAvatar = post.authorAvatar || post.authorAvatarUrl;
+  // FIX: Access authorAvatar conditionally to satisfy TypeScript as Course has authorAvatarUrl and FeedPost has authorAvatar
+  const authorAvatar = isCourse ? (post as any).authorAvatarUrl : (post as any).authorAvatar;
   const authorType = (post as any).authorType || 'ORGANIZATION'; 
   const authorId = post.authorId || post.organizationId;
 

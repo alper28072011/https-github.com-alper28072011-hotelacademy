@@ -27,7 +27,7 @@ import { AdminLayout } from './features/admin/AdminLayout';
 import { StaffManager } from './features/admin/StaffManager';
 import { TeamRequests } from './features/admin/TeamRequests'; 
 import { ContentStudio } from './features/admin/ContentStudio';
-import { CourseManager } from './features/admin/CourseManager'; // NEW
+import { CourseManager } from './features/admin/CourseManager';
 import { CareerBuilder } from './features/admin/CareerBuilder';
 import { TalentRadar } from './features/admin/TalentRadar';
 import { SuperAdminDashboard } from './features/superadmin/SuperAdminDashboard';
@@ -58,10 +58,10 @@ const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 // --- SUPER ADMIN GUARD ---
+// FIX: Telefon numarası kontrolü kaldırıldı, sadece rol kontrolü yapılıyor.
 const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { currentUser } = useAuthStore();
-    // Hardcoded safety check + Role check
-    const isSuper = currentUser?.role === 'super_admin' && currentUser?.phoneNumber.replace(/\s/g, '') === '+905417726743';
+    const isSuper = currentUser?.role === 'super_admin';
     
     if (!isSuper) return <Navigate to="/" replace />;
     return <>{children}</>;
@@ -107,9 +107,7 @@ const App: React.FC = () => {
         {/* Protected Routes */}
         {isAuthenticated ? (
            <>
-              {/* REFACTOR: Changed from /hotel to /org for generic business support */}
               <Route path="/org/:orgId" element={<OrganizationProfile />} />
-              {/* Legacy Support Redirect */}
               <Route path="/hotel/:orgId" element={<Navigate to={`/org/${window.location.hash.split('/').pop()}`} replace />} />
 
               <Route path="/course/:courseId" element={<CourseIntroPage />} />
@@ -155,7 +153,6 @@ const App: React.FC = () => {
             />
            </>
         ) : (
-           /* Public Login Route */
            <Route 
              path="/*" 
              element={

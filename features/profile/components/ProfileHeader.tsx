@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     ExternalLink, ShieldCheck, Building2, 
-    ChevronRight, LayoutDashboard, Crown, Eye, Settings
+    ChevronRight, LayoutDashboard, Crown, Eye, Settings, ShieldAlert
 } from 'lucide-react';
 import { User, Organization } from '../../../types';
 import { getOrganizationDetails } from '../../../services/db';
@@ -49,6 +49,10 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       }
   };
 
+  const handleSuperAdminClick = () => {
+      navigate('/super-admin');
+  };
+
   const handleViewPageClick = (e: React.MouseEvent) => {
       e.stopPropagation();
       if (user.currentOrganizationId) {
@@ -70,77 +74,75 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       const roleLabel = getRoleLabel(user.role);
       const orgName = loadingOrg ? "Yükleniyor..." : (org?.name || "Bilinmeyen Kurum");
       const isManagement = ['admin', 'manager', 'super_admin'].includes(user.role);
+      const isSuper = user.role === 'super_admin';
 
       // --- SCENARIO 1: OWN PROFILE ---
       if (isOwnProfile) {
-          // A. Freelancer
-          if (!user.currentOrganizationId) {
-              return (
-                <div 
-                    onClick={handleManagementClick}
-                    className="bg-gray-50 border-2 border-dashed border-gray-300 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all group hover:border-accent mb-6"
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-gray-200 rounded-full group-hover:bg-accent group-hover:text-primary transition-colors">
-                            <Building2 className="w-5 h-5 text-gray-500 group-hover:text-primary" />
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-sm font-bold text-gray-800">Bir İşletme Oluştur / Katıl</span>
-                            <span className="text-[10px] text-gray-500">Kariyerini bir üst seviyeye taşı</span>
-                        </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
-                </div>
-              );
-          }
-
-          // B. Manager / Admin (Dual Actions)
-          if (isManagement) {
-              return (
-                <div className="flex gap-2 mb-6">
-                    <div 
-                        onClick={handleManagementClick}
-                        className="flex-1 bg-primary text-white py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-primary/30 relative overflow-hidden group"
-                    >
-                        <div className="flex items-center gap-3 relative z-10">
-                            <div className="p-1.5 bg-white/10 rounded-lg backdrop-blur-sm">
-                                <Crown className="w-5 h-5 text-accent" />
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                                <span className="text-xs font-bold opacity-80">Yönetim Paneli</span>
-                                <span className="text-sm font-bold truncate">{orgName}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div 
-                        onClick={handleViewPageClick}
-                        className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 px-4 rounded-xl flex items-center justify-center cursor-pointer active:scale-[0.98] transition-all"
-                        title="Sayfayı Görüntüle"
-                    >
-                        <Eye className="w-6 h-6" />
-                    </div>
-                </div>
-              );
-          }
-
-          // C. Staff
           return (
-            <div 
-                onClick={handleViewPageClick}
-                className="bg-white border border-gray-200 shadow-sm py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all hover:bg-gray-50 mb-6"
-            >
-                <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-gray-100 rounded-full text-gray-600">
-                        <LayoutDashboard className="w-5 h-5" />
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-800">{orgName} Sayfasına Git</span>
-                        <span className="text-[10px] text-gray-500">Çalıştığın kurum</span>
-                    </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-gray-400" />
-            </div>
+              <div className="flex flex-col gap-2 mb-6">
+                  {/* SUPER ADMIN SPECIAL ACCESS */}
+                  {isSuper && (
+                      <button 
+                          onClick={handleSuperAdminClick}
+                          className="w-full bg-gradient-to-r from-yellow-500 to-orange-600 text-white py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-orange-500/20 mb-2 border border-yellow-400/30"
+                      >
+                          <div className="flex items-center gap-3">
+                              <div className="p-1.5 bg-white/20 rounded-lg backdrop-blur-sm">
+                                  <ShieldAlert className="w-5 h-5 text-white" />
+                              </div>
+                              <div className="flex flex-col text-left">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">Platform Master Control</span>
+                                  <span className="text-sm font-bold">Süper Admin Paneli</span>
+                              </div>
+                          </div>
+                          <ChevronRight className="w-5 h-5 opacity-50" />
+                      </button>
+                  )}
+
+                  {/* Standard Org Access */}
+                  {!user.currentOrganizationId ? (
+                      <div 
+                          onClick={handleManagementClick}
+                          className="bg-gray-50 border-2 border-dashed border-gray-300 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all group hover:border-accent"
+                      >
+                          <div className="flex items-center gap-3">
+                              <div className="p-2 bg-gray-200 rounded-full group-hover:bg-accent group-hover:text-primary transition-colors">
+                                  <Building2 className="w-5 h-5 text-gray-500 group-hover:text-primary" />
+                              </div>
+                              <div className="flex flex-col">
+                                  <span className="text-sm font-bold text-gray-800">Bir İşletme Oluştur / Katıl</span>
+                                  <span className="text-[10px] text-gray-500">Kariyerini bir üst seviyeye taşı</span>
+                              </div>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-gray-400" />
+                      </div>
+                  ) : (
+                      <div className="flex gap-2">
+                          <div 
+                              onClick={handleManagementClick}
+                              className="flex-1 bg-primary text-white py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-primary/30 relative overflow-hidden group"
+                          >
+                              <div className="flex items-center gap-3 relative z-10">
+                                  <div className="p-1.5 bg-white/10 rounded-lg backdrop-blur-sm">
+                                      <Crown className="w-5 h-5 text-accent" />
+                                  </div>
+                                  <div className="flex flex-col min-w-0 text-left">
+                                      <span className="text-xs font-bold opacity-80">Yönetim Paneli</span>
+                                      <span className="text-sm font-bold truncate">{orgName}</span>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div 
+                              onClick={handleViewPageClick}
+                              className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 px-4 rounded-xl flex items-center justify-center cursor-pointer active:scale-[0.98] transition-all"
+                              title="Sayfayı Görüntüle"
+                          >
+                              <Eye className="w-6 h-6" />
+                          </div>
+                      </div>
+                  )}
+              </div>
           );
       }
 
@@ -166,9 +168,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 
   return (
     <div className="px-4 pb-2">
-        {/* Profile Info Row */}
         <div className="flex items-center gap-6 mb-4">
-            {/* Avatar */}
             <div className="relative shrink-0">
                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-pink-600 shadow-md">
                     <div className="w-full h-full rounded-full border-2 border-white overflow-hidden bg-gray-100">
@@ -179,14 +179,13 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                         )}
                     </div>
                 </div>
-                {user.isSuperAdmin && (
-                    <div className="absolute bottom-0 right-0 bg-blue-500 text-white p-1 rounded-full border-2 border-white">
+                {user.role === 'super_admin' && (
+                    <div className="absolute bottom-0 right-0 bg-blue-500 text-white p-1 rounded-full border-2 border-white shadow-sm">
                         <ShieldCheck className="w-3 h-3" />
                     </div>
                 )}
             </div>
 
-            {/* Stats */}
             <div className="flex-1 flex justify-around text-center">
                 <div>
                     <div className="font-bold text-lg text-gray-900">{postCount}</div>
@@ -203,11 +202,12 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             </div>
         </div>
 
-        {/* Name & Bio */}
         <div className="mb-2">
-            <h2 className="font-bold text-gray-900 text-lg">{user.name}</h2>
+            <div className="flex items-center gap-2">
+                <h2 className="font-bold text-gray-900 text-lg">{user.name}</h2>
+                {user.role === 'super_admin' && <span className="bg-blue-100 text-blue-700 text-[10px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter">Verified Owner</span>}
+            </div>
             
-            {/* Render Badge Here for Others */}
             {!isOwnProfile && renderActionSection()}
             
             <p className="text-sm text-gray-800 whitespace-pre-wrap leading-tight mt-1">
@@ -220,12 +220,10 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             )}
         </div>
 
-        {/* ACTION BUTTON (Only for Self) */}
         {isOwnProfile && (
             <div className="mt-6">
                 {renderActionSection()}
                 
-                {/* Secondary Actions */}
                 <div className="flex gap-2 mb-2">
                     <button 
                         onClick={onEditClick}
