@@ -58,11 +58,11 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
         let authorAvatarUrl = user.avatar;
         let finalAuthorId = user.id;
 
-        // If posting AS Organization (Manager/Admin posting to Org)
-        // Ensure to handle the case where ownerType is 'ORGANIZATION'
+        // CRITICAL FIX: Handle Organization authorship strictly
         if (courseData.ownerType === 'ORGANIZATION' && courseData.organizationId) {
             authorType = 'ORGANIZATION';
-            finalAuthorId = courseData.organizationId;
+            finalAuthorId = courseData.organizationId; // Author ID becomes Org ID
+            
             // Fetch Org details to stamp on the card
             const org = await getOrganizationDetails(courseData.organizationId);
             if (org) {
@@ -93,6 +93,7 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
         await addDoc(collection(db, 'courses'), finalData);
         
         // 5. Update User Stats (Optimistic Reputation for creating)
+        // Note: Even if posting as Org, the user gets some credit/XP for the action
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
             xp: increment(50) 

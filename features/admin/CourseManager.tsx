@@ -33,6 +33,7 @@ export const CourseManager: React.FC = () => {
       if (!currentUser) return;
       setLoading(true);
       try {
+          // CRITICAL: Pass currentOrganization.id so getAdminCourses filters by Org ID, not User ID
           const data = await getAdminCourses(currentUser.id, currentOrganization?.id);
           setCourses(data || []);
       } catch (error) {

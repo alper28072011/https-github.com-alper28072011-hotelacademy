@@ -55,11 +55,26 @@ export const updateCourse = async (courseId: string, data: Partial<Course>): Pro
     }
 };
 
+/**
+ * CRITICAL FIX: fetching courses for Admin Panel.
+ * If orgId is provided, fetch ALL courses belonging to that Org.
+ * Otherwise, fetch courses authored by the User.
+ */
 export const getAdminCourses = async (userId: string, orgId?: string | null): Promise<Course[]> => {
     try {
-        const q = query(coursesRef, where('authorId', '==', userId));
+        let q;
+        if (orgId) {
+            // If inside an Org, show everything belonging to that Org
+            q = query(coursesRef, where('organizationId', '==', orgId));
+        } else {
+            // If Freelancer / Personal, show my own creations
+            q = query(coursesRef, where('authorId', '==', userId));
+        }
+        
         const snap = await getDocs(q);
-        return snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+        return snap.docs
+            .map(d => ({id: d.id, ...d.data()} as Course))
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (e) {
         console.error("Get Admin Courses Error:", e);
         return [];
@@ -81,12 +96,7 @@ export const getOrgCourses = async (orgId: string): Promise<Course[]> => {
 // --- HYBRID SOCIAL FEED ENGINE ---
 
 /**
- * FEED ALGORITHM V2 (Hybrid Social + Corporate)
- * Returns a mixed stream of content based on:
- * 1. Personal: Content I created (I always see my own stuff)
- * 2. Corporate: Private content from my active Organization (Internal Comms)
- * 3. Social: Public content from people/orgs I follow (The Network)
- * 4. Discovery: Trending Public content (Filler)
+ * FEED ALGORITHM V3 (Fixed Visibility Logic)
  */
 export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[]> => {
     try {
@@ -97,23 +107,21 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
         promises.push(getDocs(personalQ));
 
         // 2. CORPORATE POOL (My Job)
-        // Fetches PRIVATE content from the organization I am currently clocked into.
+        // CRITICAL FIX: Removed 'visibility' filter. Employees see ALL content from their Org.
         if (user.currentOrganizationId) {
             const orgQ = query(
                 coursesRef, 
                 where('organizationId', '==', user.currentOrganizationId),
-                where('visibility', '==', 'PRIVATE'),
-                limit(10)
+                limit(20)
             );
             promises.push(getDocs(orgQ));
         }
 
         // 3. SOCIAL POOL (Who I Follow)
-        // Fetches PUBLIC or FOLLOWERS_ONLY content from entities I follow.
         const following = user.following || [];
         if (following.length > 0) {
-            // Firestore 'in' limit is 10. We take the last 10 followed entities for MVP.
             const recentFollowing = following.slice(-10); 
+            // Fetch PUBLIC or FOLLOWERS_ONLY content
             const socialQ = query(
                 coursesRef,
                 where('authorId', 'in', recentFollowing),
@@ -124,7 +132,6 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
         }
 
         // 4. DISCOVERY POOL (Global Public)
-        // Fetched to ensure feed is never empty and to promote new content.
         const discoveryQ = query(
             coursesRef, 
             where('visibility', '==', 'PUBLIC'), 
@@ -136,11 +143,13 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
         // Execute Parallel
         const snapshots = await Promise.all(promises);
         
-        // Merge & Dedup using Map (Key: ID)
+        // Merge & Dedup using Map
         const feedMap = new Map<string, Course | FeedPost>();
         
         snapshots.forEach(snap => {
             snap.docs.forEach(doc => {
+                // Determine if it's a course or a post (collection check not needed if IDs unique, but safer)
+                // For simplicity, we treat everything from coursesRef as Course
                 feedMap.set(doc.id, { id: doc.id, ...doc.data(), type: 'course' } as any);
             });
         });
