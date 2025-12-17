@@ -2,8 +2,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { StoryCard, StoryCardType, DifficultyLevel, CourseTone } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 interface GeneratedCourse {
   title: string;
   description: string;
@@ -12,9 +10,16 @@ interface GeneratedCourse {
 }
 
 /**
+ * Helper: Yanıt metnindeki Markdown kod bloklarını temizler.
+ */
+const cleanJsonResponse = (text: string): string => {
+  // ```json ve ``` bloklarını kaldırır
+  return text.replace(/```json/g, "").replace(/```/g, "").trim();
+};
+
+/**
  * GENERATE MAGIC COURSE
- * Converts raw source into a highly structured, gamified Story-based course.
- * Optimized for high speed using Gemini 3 Flash.
+ * Gemini 3 Flash ile yüksek hızda yapılandırılmış eğitim içeriği üretir.
  */
 export const generateMagicCourse = async (
   sourceContent: string,
@@ -26,6 +31,9 @@ export const generateMagicCourse = async (
   }
 ): Promise<GeneratedCourse | null> => {
   try {
+    // Her çağrıda yeni instance (En güncel API KEY kullanımı için zorunludur)
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const cardCount = config.length === 'SHORT' ? 5 : 10;
     
     const prompt = `
@@ -34,17 +42,17 @@ export const generateMagicCourse = async (
       
       Parameters:
       - Audience Level: ${config.level}
-      - Tone: ${config.tone} (casually friendly for FUN, professional for FORMAL)
+      - Tone: ${config.tone}
       - Language: ${config.language}
-      - Slide Count: Exactly ${cardCount} cards.
+      - Target Slide Count: Approximately ${cardCount} cards.
       
-      Pedagogical Rules:
-      1. Card 1 MUST be 'COVER' type with a hook title.
-      2. Middle cards should be 'INFO' type.
-      3. Every 3 'INFO' cards, insert 1 'QUIZ' or 'POLL' card to test knowledge.
-      4. The last card MUST be 'REWARD' type with a congratulatory message.
-      5. 'mediaPrompt' MUST be a high-quality English image description (e.g., "professional hotel receptionist smiling at guest, cinematic lighting, 8k").
-      6. Content per slide: Max 180 characters. Be extremely concise.
+      Structure:
+      1. Card 1: 'COVER' (Intro)
+      2. Middle: 'INFO' cards (Concise knowledge, max 160 chars)
+      3. Interactivity: Every 2-3 info cards, insert 1 'QUIZ'
+      4. End: 'REWARD' (Success message)
+      
+      'mediaPrompt' guidelines: High-quality English keyword for professional photography.
       
       [SOURCE]:
       ${sourceContent.substring(0, 8000)}
@@ -53,8 +61,8 @@ export const generateMagicCourse = async (
     const schema = {
       type: Type.OBJECT,
       properties: {
-        title: { type: Type.STRING, description: "Catchy course title" },
-        description: { type: Type.STRING, description: "A summary sentence" },
+        title: { type: Type.STRING },
+        description: { type: Type.STRING },
         tags: { type: Type.ARRAY, items: { type: Type.STRING } },
         cards: {
           type: Type.ARRAY,
@@ -65,15 +73,15 @@ export const generateMagicCourse = async (
               type: { type: Type.STRING, enum: ['COVER', 'INFO', 'QUIZ', 'POLL', 'REWARD'] },
               title: { type: Type.STRING },
               content: { type: Type.STRING },
-              mediaPrompt: { type: Type.STRING, description: "English keyword for stock photo search" },
-              duration: { type: Type.NUMBER, description: "Seconds to show this slide (default 7)" },
+              mediaPrompt: { type: Type.STRING },
+              duration: { type: Type.NUMBER },
               interaction: {
                 type: Type.OBJECT,
                 properties: {
                   question: { type: Type.STRING },
                   options: { type: Type.ARRAY, items: { type: Type.STRING } },
                   correctAnswer: { type: Type.STRING },
-                  correctOptionIndex: { type: Type.NUMBER, description: "Index of the correct option (0-based)" },
+                  correctOptionIndex: { type: Type.NUMBER },
                   explanation: { type: Type.STRING }
                 },
                 nullable: true
@@ -87,28 +95,28 @@ export const generateMagicCourse = async (
     };
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview', // Speed optimized model
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        temperature: 0.7, // Balanced creativity and structure
-        thinkingConfig: { thinkingBudget: 0 } // Disable deep thinking for near-instant results
+        temperature: 0.7,
+        maxOutputTokens: 4000, // Çıktı için yeterli alan sağla
+        thinkingConfig: { thinkingBudget: 0 } // Flash hızını maksimize et
       }
     });
 
-    if (response.text) {
-      const data = JSON.parse(response.text.trim()) as GeneratedCourse;
+    const rawText = response.text;
+    if (rawText) {
+      const cleanedJson = cleanJsonResponse(rawText);
+      const data = JSON.parse(cleanedJson) as GeneratedCourse;
       
-      // Auto-assign Unsplash images based on prompts
-      data.cards = data.cards.map((card, i) => {
-          const encodedPrompt = encodeURIComponent(card.mediaPrompt || 'hotel hospitality');
-          return {
-            ...card,
-            id: `card-${Date.now()}-${i}`,
-            mediaUrl: `https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=800&auto=format&fit=crop&sig=${i}` // Default fallback, but using dynamic Unsplash API for some variety
-          };
-      });
+      // StoryCard ID'lerini ve placeholder görsellerini düzenle
+      data.cards = data.cards.map((card, i) => ({
+          ...card,
+          id: `card-${Date.now()}-${i}`,
+          mediaUrl: `https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=800&auto=format&fit=crop&sig=${i}`
+      }));
       
       return data;
     }
