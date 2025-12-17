@@ -7,16 +7,18 @@ import {
     Users, Utensils, BedDouble, ConciergeBell, Settings, ShieldCheck, 
     BarChart3, Edit, Megaphone, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff
 } from 'lucide-react';
-import { getOrganizationDetails, sendJoinRequest, getMyMemberships } from '../../services/db';
+import { getOrganizationDetails, sendJoinRequest, getMyMemberships, switchUserActiveOrganization } from '../../services/db';
 import { Organization, DepartmentType, OrganizationSector, FollowStatus } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { useOrganizationStore } from '../../stores/useOrganizationStore'; // Import Store
 import { checkFollowStatus, followOrganizationSmart, unfollowUserSmart } from '../../services/socialService';
 import confetti from 'canvas-confetti';
 
 export const OrganizationProfile: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
-  const { currentUser } = useAuthStore();
+  const { currentUser, loginSuccess } = useAuthStore();
+  const { switchOrganization } = useOrganizationStore(); // Use Store Action
   
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,6 +87,26 @@ export const OrganizationProfile: React.FC = () => {
           }
       }
       setIsFollowLoading(false);
+  };
+
+  // CORRECTED: Handle "Go to Panel" by switching active org first
+  const handleGoToPanel = async () => {
+      if (!currentUser || !org) return;
+      
+      // If already active, just go home
+      if (currentUser.currentOrganizationId === org.id) {
+          navigate('/');
+          return;
+      }
+
+      // Switch Active Org
+      const success = await switchOrganization(org.id);
+      if (success) {
+          navigate('/');
+          window.location.reload(); // Ensure fresh state load
+      } else {
+          alert("Panele geçiş yapılamadı.");
+      }
   };
 
   const canManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager') && currentUser.currentOrganizationId === orgId;
@@ -215,8 +237,8 @@ export const OrganizationProfile: React.FC = () => {
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 z-30 shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)]">
             {isMember ? (
                 <button 
-                    onClick={() => navigate('/')}
-                    className="w-full bg-green-600 text-white font-bold text-lg py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2"
+                    onClick={handleGoToPanel}
+                    className="w-full bg-green-600 text-white font-bold text-lg py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"
                 >
                     <CheckCircle2 className="w-6 h-6" />
                     Panele Git
