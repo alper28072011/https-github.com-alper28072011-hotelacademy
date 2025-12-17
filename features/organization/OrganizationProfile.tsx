@@ -5,11 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, 
     Users, Utensils, BedDouble, ConciergeBell, Settings, ShieldCheck, 
-    BarChart3, Edit, Megaphone, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark
+    BarChart3, Edit, Megaphone, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff
 } from 'lucide-react';
 import { getOrganizationDetails, sendJoinRequest, getMyMemberships } from '../../services/db';
-import { Organization, DepartmentType, OrganizationSector } from '../../types';
+import { Organization, DepartmentType, OrganizationSector, FollowStatus } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { checkFollowStatus, followOrganizationSmart, unfollowUserSmart } from '../../services/socialService';
 import confetti from 'canvas-confetti';
 
 export const OrganizationProfile: React.FC = () => {
@@ -20,7 +21,8 @@ export const OrganizationProfile: React.FC = () => {
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [isMember, setIsMember] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
+  const [followStatus, setFollowStatus] = useState<FollowStatus>('NONE');
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
   
   // Wizard State
   const [showWizard, setShowWizard] = useState(false);
@@ -39,6 +41,10 @@ export const OrganizationProfile: React.FC = () => {
         if (currentUser) {
             const memberships = await getMyMemberships(currentUser.id);
             if (memberships.some(m => m.organizationId === orgId)) setIsMember(true);
+            
+            // Check follow status
+            const status = await checkFollowStatus(currentUser.id, orgId);
+            setFollowStatus(status);
         }
         setLoading(false);
     };
@@ -62,8 +68,23 @@ export const OrganizationProfile: React.FC = () => {
       }
   };
 
-  const handleFollow = () => {
-      setIsFollowing(!isFollowing);
+  const handleFollow = async () => {
+      if (!currentUser || !org || isFollowLoading) return;
+      setIsFollowLoading(true);
+
+      if (followStatus === 'FOLLOWING') {
+          await unfollowUserSmart(currentUser.id, org.id);
+          setFollowStatus('NONE');
+          setOrg(prev => prev ? ({...prev, followersCount: Math.max(0, (prev.followersCount || 0) - 1)}) : null);
+      } else {
+          const res = await followOrganizationSmart(currentUser.id, org.id);
+          if (res.success) {
+              setFollowStatus('FOLLOWING');
+              setOrg(prev => prev ? ({...prev, followersCount: (prev.followersCount || 0) + 1}) : null);
+              confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
+          }
+      }
+      setIsFollowLoading(false);
   };
 
   const canManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager') && currentUser.currentOrganizationId === orgId;
@@ -204,9 +225,12 @@ export const OrganizationProfile: React.FC = () => {
                 <div className="flex gap-3">
                     <button 
                         onClick={handleFollow}
-                        className={`flex-1 font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all ${isFollowing ? 'bg-gray-100 text-gray-800' : 'bg-blue-600 text-white'}`}
+                        disabled={isFollowLoading}
+                        className={`flex-1 font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all ${followStatus === 'FOLLOWING' ? 'bg-gray-100 text-gray-800' : 'bg-blue-600 text-white'}`}
                     >
-                        {isFollowing ? 'Takip Ediliyor' : <><Bell className="w-5 h-5" /> Takip Et</>}
+                        {isFollowLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 
+                         followStatus === 'FOLLOWING' ? <><BellOff className="w-5 h-5" /> Takiptesin</> : 
+                         <><Bell className="w-5 h-5" /> Takip Et</>}
                     </button>
                     <button 
                         onClick={() => setShowWizard(true)}
@@ -219,7 +243,7 @@ export const OrganizationProfile: React.FC = () => {
             )}
         </div>
 
-        {/* WIZARD MODAL */}
+        {/* WIZARD MODAL (Standard) */}
         <AnimatePresence>
             {showWizard && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
@@ -243,7 +267,7 @@ export const OrganizationProfile: React.FC = () => {
                             {step === 1 && (
                                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="grid grid-cols-2 gap-3">
                                     {[
-                                        { id: 'housekeeping', icon: BedDouble, label: 'Operasyon' }, // Generic
+                                        { id: 'housekeeping', icon: BedDouble, label: 'Operasyon' }, 
                                         { id: 'kitchen', icon: Utensils, label: 'Mutfak/Gıda' },
                                         { id: 'front_office', icon: ConciergeBell, label: 'Ön Büro/Danışma' },
                                         { id: 'management', icon: Users, label: 'Yönetim' },

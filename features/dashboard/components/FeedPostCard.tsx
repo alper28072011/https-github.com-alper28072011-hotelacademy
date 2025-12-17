@@ -30,9 +30,10 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
   const [saved, setSaved] = useState(isSavedByMe);
 
   // -- Author Logic --
+  // Fallback to orgId if author info is missing (Legacy support)
   const authorName = post.authorName || (post.organizationId ? 'Kurumsal' : 'Anonim');
   const authorAvatar = post.authorAvatar || post.authorAvatarUrl;
-  const authorType = (post as any).authorType || 'ORGANIZATION'; // Default fallback
+  const authorType = (post as any).authorType || 'ORGANIZATION'; 
   const authorId = post.authorId || post.organizationId;
 
   const handleLike = async () => {

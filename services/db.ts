@@ -19,7 +19,7 @@ import {
   deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector, PermissionType, AuthorType } from '../types';
+import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector, PermissionType } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -154,39 +154,38 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
         const feedMap = new Map<string, Course | FeedPost>();
         const followingIds = user.following || [];
 
-        // 1. Fetch from Following (Users & Orgs)
-        // Note: Firestore 'in' query supports max 10. For now we fetch limited or chunk.
-        // Optimized: Just fetch recent posts globally and filter in memory for small apps, 
-        // or iterate through following list if small.
-        // Current Strategy: Fetch top 50 recent items and filter by "Following OR My Org OR Public"
-        
-        const globalQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), orderBy('createdAt', 'desc'), limit(20));
+        // 1. GLOBAL PUBLIC DISCOVERY (To ensure feed is never empty)
+        // Fetch recent public content
+        const globalQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), orderBy('createdAt', 'desc'), limit(15));
         const globalSnap = await getDocs(globalQ);
         globalSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data(), type: 'course' } as any));
 
-        // 2. Fetch My Org Content (Private + Public)
+        // 2. ORG SPECIFIC CONTENT (If employed)
         if (user.currentOrganizationId) {
-            const orgQ = query(coursesRef, where('organizationId', '==', user.currentOrganizationId), limit(10));
-            const orgSnap = await getDocs(orgQ);
-            orgSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data(), type: 'course' } as any));
+            // Internal Courses
+            const orgCoursesQ = query(coursesRef, where('organizationId', '==', user.currentOrganizationId), limit(10));
+            const orgCoursesSnap = await getDocs(orgCoursesQ);
+            orgCoursesSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data(), type: 'course' } as any));
 
-            const postsQ = query(postsRef, where('organizationId', '==', user.currentOrganizationId), limit(10));
-            const postsSnap = await getDocs(postsQ);
-            postsSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data() } as FeedPost));
+            // Internal Posts
+            const orgPostsQ = query(postsRef, where('organizationId', '==', user.currentOrganizationId), limit(10));
+            const orgPostsSnap = await getDocs(orgPostsQ);
+            orgPostsSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data() } as FeedPost));
         }
 
-        // 3. Fetch Specific Following Content (If not caught by above)
-        // If user follows people outside their org, we need to fetch their content.
-        // Limited implementation for robustness: Fetch posts from authors I follow.
+        // 3. FOLLOWING CONTENT (The Social Graph)
+        // Firestore limitation: 'in' query allows max 10 items.
+        // Strategy: If user follows < 10, query directly. If > 10, pick top 10 most recently followed or random.
         if (followingIds.length > 0) {
-            // Slice to 10 for Firestore 'in' limit
-            const safeFollowing = followingIds.slice(0, 10);
+            const activeFollowing = followingIds.slice(0, 10); // Simple slice for MVP
             
-            const followingPostsQ = query(postsRef, where('authorId', 'in', safeFollowing), limit(10));
+            // Posts from following
+            const followingPostsQ = query(postsRef, where('authorId', 'in', activeFollowing), limit(10));
             const followingPostsSnap = await getDocs(followingPostsQ);
             followingPostsSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data() } as FeedPost));
 
-            const followingCoursesQ = query(coursesRef, where('authorId', 'in', safeFollowing), where('visibility', '==', 'PUBLIC'), limit(10));
+            // Courses from following (only public ones)
+            const followingCoursesQ = query(coursesRef, where('authorId', 'in', activeFollowing), where('visibility', '==', 'PUBLIC'), limit(10));
             const followingCoursesSnap = await getDocs(followingCoursesQ);
             followingCoursesSnap.docs.forEach(d => feedMap.set(d.id, { id: d.id, ...d.data(), type: 'course' } as any));
         }
@@ -225,8 +224,6 @@ export const createCourse = async (course: Omit<Course, 'id'>) => {
     try { await addDoc(coursesRef, course); return true; } catch(e) { return false; }
 };
 
-// ... (Rest of the existing functions below, unchanged) ...
-
 export const getHybridContent = async (user: User): Promise<Course[]> => {
     const feed = await getDashboardFeed(user);
     return feed.filter((i): i is Course => (i as any).type !== 'kudos' && (i as any).type !== 'image');
@@ -248,6 +245,10 @@ export const searchOrganizations = async (searchTerm: string): Promise<Organizat
     if (!searchTerm || searchTerm.length < 2) return [];
     try {
         const term = searchTerm.toLowerCase();
+        // NOTE: Firestore doesn't support native partial text search like 'LIKE %term%'.
+        // For a real app, use Algolia/Typesense. Here we use a simple prefix match if possible, or client side filter.
+        // For this demo, we fetch a batch and filter client side.
+        
         const q = query(orgsRef, limit(50));
         const snap = await getDocs(q);
         
@@ -259,7 +260,7 @@ export const searchOrganizations = async (searchTerm: string): Promise<Organizat
 
 export const getAllPublicOrganizations = async (): Promise<Organization[]> => {
     try {
-        const q = query(orgsRef, limit(20)); // Removed orderBy
+        const q = query(orgsRef, limit(20));
         const snap = await getDocs(q);
         return snap.docs
             .map(d => ({id: d.id, ...d.data()} as Organization))

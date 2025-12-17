@@ -1,10 +1,10 @@
 
 import { 
     doc, runTransaction, collection, query, where, getDocs, 
-    serverTimestamp, addDoc, deleteDoc, getDoc, limit, orderBy 
+    serverTimestamp, limit
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { FollowStatus, Relationship, User, Organization } from '../types';
+import { FollowStatus, Relationship, User } from '../types';
 
 const relationshipsRef = collection(db, 'relationships');
 
@@ -71,9 +71,12 @@ export const followUserSmart = async (currentUserId: string, targetUserId: strin
             // 4. Update Counters (Only if Public)
             if (!isPrivate) {
                 const currentUserRef = doc(db, 'users', currentUserId);
+                const currentUserDoc = await transaction.get(currentUserRef);
+                const currentFollowing = currentUserDoc.data()?.following || [];
+
                 transaction.update(currentUserRef, { 
-                    followingCount: (await transaction.get(currentUserRef)).data()?.followingCount + 1,
-                    following: (await transaction.get(currentUserRef)).data()?.following ? [...(await transaction.get(currentUserRef)).data()?.following, targetUserId] : [targetUserId]
+                    followingCount: (currentUserDoc.data()?.followingCount || 0) + 1,
+                    following: [...currentFollowing, targetUserId]
                 });
                 transaction.update(targetUserRef, { followersCount: (targetUser.followersCount || 0) + 1 });
             }
@@ -176,7 +179,7 @@ export const unfollowUserSmart = async (currentUserId: string, targetId: string)
                 });
             }
 
-            // Determine if Target is User or Org
+            // Determine if Target is User or Org (to decrement their followers)
             const userTargetRef = doc(db, 'users', targetId);
             const userTargetSnap = await transaction.get(userTargetRef);
             

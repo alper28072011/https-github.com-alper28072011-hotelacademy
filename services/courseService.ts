@@ -59,6 +59,7 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
         let finalAuthorId = user.id;
 
         // If posting AS Organization (Manager/Admin posting to Org)
+        // Ensure to handle the case where ownerType is 'ORGANIZATION'
         if (courseData.ownerType === 'ORGANIZATION' && courseData.organizationId) {
             authorType = 'ORGANIZATION';
             finalAuthorId = courseData.organizationId;
@@ -70,10 +71,10 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
             }
         }
 
-        // 3. Prepare Final Data
-        // Extract ownerType to avoid saving it to DB if not needed, though Firestore ignores extra fields usually if not strictly typed in addDoc (which is generic here)
+        // Remove ownerType helper before saving
         const { ownerType, ...dataToSave } = courseData;
 
+        // 3. Prepare Final Data
         const finalData = {
             ...dataToSave,
             tier,

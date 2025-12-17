@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Wand2, FileText, Link, Type, Loader2, Play, 
     CheckCircle2, Save, RotateCcw, Smartphone, Image as ImageIcon,
-    Settings, Globe, Lock, ChevronRight, Upload, Edit, FileType
+    Settings, Globe, Lock, ChevronRight, Upload, Edit, FileType, User, Building2
 } from 'lucide-react';
 import { generateMicroCourse } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
@@ -75,6 +75,7 @@ export const ContentStudio: React.FC = () => {
   const [category, setCategory] = useState('cat_onboarding');
   const [coverImage, setCoverImage] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
+  const [ownerType, setOwnerType] = useState<'USER' | 'ORGANIZATION'>('ORGANIZATION'); // Default to Org for Admins
 
   // INITIALIZE FOR EDIT MODE
   useEffect(() => {
@@ -91,6 +92,7 @@ export const ContentStudio: React.FC = () => {
           setVisibility(course.visibility);
           setCategory(course.categoryId);
           setCoverImage(course.thumbnailUrl);
+          setOwnerType(course.authorType === 'ORGANIZATION' ? 'ORGANIZATION' : 'USER');
           setStage('PREVIEW'); // Skip generation
       }
   }, [location.state]);
@@ -164,8 +166,9 @@ export const ContentStudio: React.FC = () => {
           
           // Defaults for new items
           organizationId: currentOrganization?.id,
-          authorId: currentUser.id,
-          ownerType: currentOrganization ? 'ORGANIZATION' : 'USER',
+          ownerType: ownerType, // Passed to logic
+          authorId: currentUser.id, // Logic will override if ownerType is ORG
+          
           xpReward: 500,
           priority: 'NORMAL',
           price: 0,
@@ -370,6 +373,29 @@ export const ContentStudio: React.FC = () => {
                     </div>
 
                     <div className="space-y-4">
+                        {/* WHO IS POSTING? */}
+                        {currentOrganization && (
+                            <div>
+                                <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Kim Paylaşıyor?</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        onClick={() => setOwnerType('ORGANIZATION')}
+                                        className={`p-3 rounded-xl border-2 text-left transition-all ${ownerType === 'ORGANIZATION' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 bg-white hover:bg-gray-50'}`}
+                                    >
+                                        <div className="flex items-center gap-2 font-bold mb-1"><Building2 className="w-4 h-4" /> {currentOrganization.name}</div>
+                                        <div className="text-[10px] opacity-80">Kurumsal Hesap</div>
+                                    </button>
+                                    <button 
+                                        onClick={() => setOwnerType('USER')}
+                                        className={`p-3 rounded-xl border-2 text-left transition-all ${ownerType === 'USER' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 bg-white hover:bg-gray-50'}`}
+                                    >
+                                        <div className="flex items-center gap-2 font-bold mb-1"><User className="w-4 h-4" /> {currentUser?.name}</div>
+                                        <div className="text-[10px] opacity-80">Kişisel Profil</div>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Privacy */}
                         <div>
                             <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Görünürlük</label>

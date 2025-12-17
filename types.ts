@@ -75,9 +75,10 @@ export interface Organization {
   createdAt: number;
   settings?: OrganizationSettings;
   memberCount?: number;
-  followersCount?: number;
+  followersCount?: number; // Social Feature
   publicContentEnabled?: boolean;
   subGroups?: string[];
+  followers?: string[]; // List of user IDs following this org
 }
 
 export type MembershipStatus = 'PENDING' | 'ACTIVE' | 'REJECTED';
@@ -137,10 +138,13 @@ export interface User {
   organizationHistory: string[];
   instructorProfile?: InstructorProfile;
   isPrivate?: boolean;
+  
+  // Social Graph
   followers?: string[];
-  following?: string[];
+  following?: string[]; // IDs of users AND organizations
   followersCount?: number;
   followingCount?: number;
+  
   completedCourses: string[];
   startedCourses?: string[]; 
   savedCourses?: string[]; 
@@ -211,7 +215,7 @@ export interface Course {
   id: string;
   organizationId?: string;
   
-  // Polymorphic Author Details (Denormalized)
+  // Polymorphic Author Details (Denormalized for Performance)
   authorType: AuthorType;
   authorId: string;
   authorName: string;
@@ -253,7 +257,7 @@ export interface FeedPost {
   id: string;
   organizationId: string;
   
-  // Polymorphic Author Details (Denormalized)
+  // Polymorphic Author Details
   authorType: AuthorType;
   authorId: string;
   authorName: string;
