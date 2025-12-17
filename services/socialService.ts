@@ -32,6 +32,10 @@ export const checkFollowStatus = async (currentUserId: string, targetId: string)
 
 /**
  * Generic Follow Function (Handles both User and Organization targets)
+ * This updates:
+ * 1. Relationship collection
+ * 2. Follower's 'following' list and count
+ * 3. Target's 'followers' count
  */
 export const followEntity = async (
     currentUserId: string, 
@@ -43,7 +47,7 @@ export const followEntity = async (
             let isPrivate = false;
             let currentFollowers = 0;
 
-            // 1. Get Target Data
+            // 1. Get Target Data based on Type
             if (targetType === 'USER') {
                 const targetRef = doc(db, 'users', targetId);
                 const targetSnap = await transaction.get(targetRef);
@@ -72,7 +76,7 @@ export const followEntity = async (
                 return { status: existingSnap.docs[0].data().status as FollowStatus, success: false };
             }
 
-            // 3. Create Relationship
+            // 3. Create Relationship Doc
             const relStatus = isPrivate ? 'PENDING' : 'ACCEPTED';
             const newRelRef = doc(collection(db, 'relationships'));
             

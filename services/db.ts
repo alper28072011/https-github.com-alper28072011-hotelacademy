@@ -57,7 +57,6 @@ export const updateCourse = async (courseId: string, data: Partial<Course>): Pro
 
 export const getAdminCourses = async (userId: string, orgId?: string | null): Promise<Course[]> => {
     try {
-        // Simple query for now, filtering usually done client side or specific index
         const q = query(coursesRef, where('authorId', '==', userId));
         const snap = await getDocs(q);
         return snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
@@ -82,11 +81,11 @@ export const getOrgCourses = async (orgId: string): Promise<Course[]> => {
 // --- HYBRID SOCIAL FEED ENGINE ---
 
 /**
- * FEED ALGORITHM V2
+ * FEED ALGORITHM V2 (Hybrid Social + Corporate)
  * Returns a mixed stream of content based on:
  * 1. Personal: Content I created (I always see my own stuff)
- * 2. Corporate: Private content from my active Organization
- * 3. Social: Public content from people/orgs I follow
+ * 2. Corporate: Private content from my active Organization (Internal Comms)
+ * 3. Social: Public content from people/orgs I follow (The Network)
  * 4. Discovery: Trending Public content (Filler)
  */
 export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[]> => {
@@ -98,6 +97,7 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
         promises.push(getDocs(personalQ));
 
         // 2. CORPORATE POOL (My Job)
+        // Fetches PRIVATE content from the organization I am currently clocked into.
         if (user.currentOrganizationId) {
             const orgQ = query(
                 coursesRef, 
@@ -109,10 +109,10 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
         }
 
         // 3. SOCIAL POOL (Who I Follow)
+        // Fetches PUBLIC or FOLLOWERS_ONLY content from entities I follow.
         const following = user.following || [];
         if (following.length > 0) {
-            // Firestore 'in' limit is 10. We take the last 10 followed entities.
-            // In production, you'd use a dedicated 'Timeline' collection fan-out.
+            // Firestore 'in' limit is 10. We take the last 10 followed entities for MVP.
             const recentFollowing = following.slice(-10); 
             const socialQ = query(
                 coursesRef,
@@ -124,7 +124,7 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
         }
 
         // 4. DISCOVERY POOL (Global Public)
-        // Fetched to ensure feed is never empty and to promote new content
+        // Fetched to ensure feed is never empty and to promote new content.
         const discoveryQ = query(
             coursesRef, 
             where('visibility', '==', 'PUBLIC'), 
@@ -136,7 +136,7 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
         // Execute Parallel
         const snapshots = await Promise.all(promises);
         
-        // Merge & Dedup
+        // Merge & Dedup using Map (Key: ID)
         const feedMap = new Map<string, Course | FeedPost>();
         
         snapshots.forEach(snap => {

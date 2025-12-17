@@ -78,7 +78,7 @@ export interface Organization {
   publicContentEnabled?: boolean;
   subGroups?: string[];
   
-  // Social Graph
+  // Social Graph (NEW)
   followers?: string[];      // Array of User IDs who follow this Org
   followersCount?: number;   // Denormalized count
 }
@@ -141,7 +141,7 @@ export interface User {
   instructorProfile?: InstructorProfile;
   isPrivate?: boolean;
   
-  // Social Graph
+  // Social Graph (NEW)
   followers?: string[]; // IDs of users following me
   following?: string[]; // IDs of users AND organizations I follow
   followersCount?: number;
@@ -206,8 +206,8 @@ export interface Category {
 
 export type AssignmentType = 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
 export type ContentPriority = 'HIGH' | 'NORMAL';
-export type CourseVisibility = 'PRIVATE' | 'PUBLIC' | 'FOLLOWERS_ONLY';
-export type AuthorType = 'USER' | 'ORGANIZATION'; 
+export type CourseVisibility = 'PRIVATE' | 'PUBLIC' | 'FOLLOWERS_ONLY'; // NEW
+export type AuthorType = 'USER' | 'ORGANIZATION'; // NEW
 export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'UNDER_REVIEW';
 export type PriceType = 'FREE' | 'PAID';
@@ -217,7 +217,7 @@ export interface Course {
   id: string;
   organizationId?: string; // If posted by OR within an Org
   
-  // Polymorphic Author Details (Denormalized)
+  // Polymorphic Author Details (Denormalized) - NEW
   authorType: AuthorType;
   authorId: string;       // User ID or Org ID
   authorName: string;
@@ -228,7 +228,7 @@ export interface Course {
   qualityScore: number;
   priceType: PriceType;
   
-  // Visibility Logic
+  // Visibility Logic - NEW
   visibility: CourseVisibility;
   
   price: number;
@@ -261,13 +261,13 @@ export interface FeedPost {
   id: string;
   organizationId: string;
   
-  // Polymorphic Author
+  // Polymorphic Author - NEW
   authorType: AuthorType;
   authorId: string;
   authorName: string;
   authorAvatar: string;
 
-  visibility: CourseVisibility;
+  visibility: CourseVisibility; // NEW
 
   assignmentType?: AssignmentType; 
   targetDepartments: DepartmentType[]; 
