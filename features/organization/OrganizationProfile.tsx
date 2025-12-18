@@ -66,10 +66,13 @@ export const OrganizationProfile: React.FC = () => {
       const deptDefinition = org.definitions?.departments.find(d => d.id === selectedDeptId);
       const protoDefinition = org.definitions?.positionPrototypes.find(p => p.id === selectedPosId);
       
-      const deptName = deptDefinition?.name || selectedDeptId; // Fallback to ID
       const roleTitle = protoDefinition?.title || 'Unknown';
 
-      const result = await sendJoinRequest(currentUser.id, org.id, selectedDeptId, roleTitle, selectedPosId);
+      // FIX: Do NOT send selectedPosId as positionId because selectedPosId is a Prototype ID (e.g. proto_123), 
+      // whereas the backend expects a real Position Node ID (seat) to occupy it.
+      // Sending undefined means "General Application" for this role, not for a specific seat.
+      const result = await sendJoinRequest(currentUser.id, org.id, selectedDeptId, roleTitle, undefined);
+      
       setIsSubmitting(false);
       
       if (result.success) {

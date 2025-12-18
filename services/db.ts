@@ -378,6 +378,13 @@ export const approveJoinRequest = async (requestId: string, request: JoinRequest
         batch.update(doc(db, 'requests', requestId), { status: 'APPROVED' });
         const membershipId = `${request.userId}_${request.organizationId}`;
         
+        // Ensure positionId is treated as null if undefined or if it's a prototype ID (starts with proto_)
+        // This prevents the "Invalid document reference" crash when applying for a generic role
+        let targetPositionId = request.positionId;
+        if (targetPositionId && targetPositionId.startsWith('proto_')) {
+            targetPositionId = undefined; // Treat as general application
+        }
+
         // Create Membership
         batch.set(doc(db, 'memberships', membershipId), {
             id: membershipId, 
@@ -389,7 +396,7 @@ export const approveJoinRequest = async (requestId: string, request: JoinRequest
             department: request.targetDepartment, 
             status: 'ACTIVE', 
             joinedAt: Date.now(), 
-            positionId: request.positionId
+            positionId: targetPositionId || null
         });
         
         // Update User Profile
@@ -397,19 +404,26 @@ export const approveJoinRequest = async (requestId: string, request: JoinRequest
         batch.update(userRef, { 
             currentOrganizationId: request.organizationId,
             department: request.targetDepartment, 
-            positionId: request.positionId, 
+            positionId: targetPositionId || null, 
             roleTitle 
         });
 
-        // Update Position Occupancy (if a specific slot was requested)
-        if (request.positionId) {
-            const posRef = doc(db, 'positions', request.positionId);
-            batch.update(posRef, { occupantId: request.userId });
+        // Update Position Occupancy (if a specific REAL seat was requested)
+        if (targetPositionId) {
+            const posRef = doc(db, 'positions', targetPositionId);
+            // Verify doc exists before update to prevent crash
+            const posSnap = await getDoc(posRef);
+            if (posSnap.exists()) {
+                batch.update(posRef, { occupantId: request.userId });
+            }
         }
 
         await batch.commit();
         return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+        console.error("Approve Request Error:", e);
+        return false; 
+    }
 };
 
 export const rejectJoinRequest = async (requestId: string) => {

@@ -28,6 +28,7 @@ export const TeamRequests: React.FC = () => {
       const canSeeAll = ['admin', 'manager', 'super_admin'].includes(currentUser.role);
       
       // If Admin/Manager, fetch all (undefined). If Dept Head (future), fetch dept specific.
+      // Use explicit undefined to trigger "fetch all" logic in db service
       const data = await getJoinRequests(currentOrganization.id, canSeeAll ? undefined : currentUser.department);
       
       setRequests(data);
@@ -56,16 +57,23 @@ export const TeamRequests: React.FC = () => {
       );
 
       if (success) {
+          alert("Başarıyla onaylandı.");
           setRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
           setSelectedRequest(null);
+      } else {
+          alert("İşlem sırasında bir hata oluştu.");
       }
       setIsProcessing(false);
   };
 
   const handleReject = async (id: string) => {
-      const success = await rejectJoinRequest(id);
-      if (success) {
-          setRequests(prev => prev.filter(r => r.id !== id));
+      if (window.confirm("Bu isteği reddetmek istediğinize emin misiniz?")) {
+          const success = await rejectJoinRequest(id);
+          if (success) {
+              setRequests(prev => prev.filter(r => r.id !== id));
+          } else {
+              alert("İşlem başarısız.");
+          }
       }
   };
 
