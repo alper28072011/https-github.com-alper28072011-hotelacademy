@@ -293,7 +293,7 @@ export const ContentStudio: React.FC = () => {
                                     value={sourceData} 
                                     onChange={e => setSourceData(e.target.value)} 
                                     placeholder="Eğitimin konusunu, hedef kitlesini ve ana mesajlarını buraya detaylıca yaz..." 
-                                    className="w-full h-48 md:h-40 p-4 md:p-6 bg-transparent outline-none font-medium resize-none text-lg" 
+                                    className="w-full h-48 md:h-40 p-4 md:p-6 bg-transparent outline-none font-medium resize-none text-lg text-gray-900 placeholder-gray-400" 
                                 />
                                 <button 
                                     onClick={() => setStep('TUNING')} 
@@ -417,11 +417,11 @@ export const ContentStudio: React.FC = () => {
                             <div className="h-px bg-gray-50" />
                             <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">Başlık</label>
-                                <input value={courseData.cards[activeCardIndex].title} onChange={e => updateActiveCard({ title: e.target.value })} className="w-full p-2 md:p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-bold focus:border-primary outline-none" />
+                                <input value={courseData.cards[activeCardIndex].title} onChange={e => updateActiveCard({ title: e.target.value })} className="w-full p-2 md:p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-bold focus:border-primary outline-none text-gray-900" />
                             </div>
                             <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">İçerik</label>
-                                <textarea value={courseData.cards[activeCardIndex].content} onChange={e => updateActiveCard({ content: e.target.value })} rows={3} className="w-full p-2 md:p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-medium focus:border-primary outline-none resize-none" />
+                                <textarea value={courseData.cards[activeCardIndex].content} onChange={e => updateActiveCard({ content: e.target.value })} rows={3} className="w-full p-2 md:p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-medium focus:border-primary outline-none resize-none text-gray-900" />
                             </div>
                             <button onClick={deleteActiveCard} className="w-full py-3 bg-red-50 text-red-500 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"><Trash2 className="w-4 h-4" /> Kartı Sil</button>
                         </div>
