@@ -36,17 +36,39 @@ export const getDescendantPositions = (rootId: string, allPositions: Position[])
 /**
  * THE PERMISSION CALCULATOR
  * Determines exactly who a user can target with content based on their position in the tree.
+ * UPDATED: Includes 'God Mode' for Owners to bypass position checks.
  */
 export const getTargetableAudiences = async (user: User, orgId: string): Promise<{
     scope: 'GLOBAL' | 'LIMITED' | 'NONE';
     allowedDeptIds: string[];
     allowedPositionIds: string[];
 }> => {
+    // 1. Fetch Organization Context First
+    const orgRef = doc(db, 'organizations', orgId);
+    const orgSnap = await getDoc(orgRef);
+    if (!orgSnap.exists()) return { scope: 'NONE', allowedDeptIds: [], allowedPositionIds: [] };
+    const org = orgSnap.data() as Organization;
+
+    // --- GOD MODE START ---
+    // If user is the Owner OR Super Admin, grant full access immediately.
+    // This bypasses the need for a physical 'Position' document.
+    if (user.id === org.ownerId || user.role === 'super_admin' || user.role === 'admin') {
+        const allDeptIds = org.definitions?.departments.map(d => d.id) || [];
+        return { 
+            scope: 'GLOBAL', 
+            allowedDeptIds: allDeptIds, 
+            allowedPositionIds: [] 
+        };
+    }
+    // --- GOD MODE END ---
+
+    // 2. Standard Hierarchy Check for Staff/Managers
     if (!user.positionId) return { scope: 'NONE', allowedDeptIds: [], allowedPositionIds: [] };
 
-    // 1. Fetch User's Position Node
     const posRef = doc(db, 'positions', user.positionId);
     const posSnap = await getDoc(posRef);
+    
+    // If position document is missing (and not owner), deny access
     if (!posSnap.exists()) return { scope: 'NONE', allowedDeptIds: [], allowedPositionIds: [] };
     
     const myPosition = posSnap.data() as Position;
@@ -57,13 +79,9 @@ export const getTargetableAudiences = async (user: User, orgId: string): Promise
         return { scope: 'NONE', allowedDeptIds: [], allowedPositionIds: [] };
     }
 
-    // Rule 2: If GLOBAL scope (e.g., GM, HR Director)
+    // Rule 2: If GLOBAL scope explicitly granted via permissions
     if (permissions.contentTargeting === 'ENTIRE_ORG' || permissions.contentTargeting === 'PUBLIC') {
-        const orgRef = doc(db, 'organizations', orgId);
-        const orgSnap = await getDoc(orgRef);
-        const org = orgSnap.data() as Organization;
         const allDeptIds = org.definitions?.departments.map(d => d.id) || [];
-        
         return { 
             scope: 'GLOBAL', 
             allowedDeptIds: allDeptIds, 
