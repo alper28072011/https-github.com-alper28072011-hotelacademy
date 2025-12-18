@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Users, Film, LogOut, ArrowLeft, Map, BarChart2, Inbox, Settings, Loader2, Building2, LayoutList } from 'lucide-react';
+import { Users, Film, LogOut, ArrowLeft, Map, BarChart2, Inbox, Settings, Loader2, Building2, LayoutList, Network } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 
@@ -48,12 +48,12 @@ export const AdminLayout: React.FC = () => {
 
   const navItems = [
     { path: '/admin/requests', icon: Inbox, label: 'İstekler' }, 
-    { path: '/admin/staff', icon: Users, label: 'Ekip' },
+    { path: '/admin/organization', icon: Network, label: 'Organizasyon' }, // New Unified Hub
     { path: '/admin/career', icon: Map, label: 'Kariyer' },
     { path: '/admin/content', icon: Film, label: 'Stüdyo' },
-    { path: '/admin/courses', icon: LayoutList, label: 'İçerikler' }, // New
+    { path: '/admin/courses', icon: LayoutList, label: 'İçerikler' },
     { path: '/admin/reports', icon: BarChart2, label: 'Analiz' },
-    { path: '/admin/settings', icon: Settings, label: 'Ayarlar' }, 
+    { path: '/admin/settings', icon: Settings, label: 'Kurum Ayarları' }, 
   ];
 
   return (
@@ -113,7 +113,7 @@ export const AdminLayout: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-8 overflow-y-auto w-full">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto h-full">
              <Outlet />
         </div>
       </main>

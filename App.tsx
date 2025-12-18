@@ -24,7 +24,7 @@ import ScrollToTop from './components/utils/ScrollToTop';
 
 // Admin Imports
 import { AdminLayout } from './features/admin/AdminLayout';
-import { StaffManager } from './features/admin/StaffManager';
+import { OrganizationManager } from './features/admin/OrganizationManager'; // Updated
 import { TeamRequests } from './features/admin/TeamRequests'; 
 import { ContentStudio } from './features/admin/ContentStudio';
 import { CourseManager } from './features/admin/CourseManager';
@@ -51,14 +51,13 @@ const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {children}
       </main>
        <footer className="relative z-10 p-4 text-center text-gray-400 text-xs">
-          <p>v2.3.0 &bull; Global Business</p>
+          <p>v2.4.0 &bull; Global Business</p>
        </footer>
     </div>
   );
 };
 
 // --- SUPER ADMIN GUARD ---
-// FIX: Telefon numarası kontrolü kaldırıldı, sadece rol kontrolü yapılıyor.
 const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { currentUser } = useAuthStore();
     const isSuper = currentUser?.role === 'super_admin';
@@ -115,9 +114,9 @@ const App: React.FC = () => {
               
               {/* ORGANIZATION ADMIN ROUTES */}
               <Route path="/admin" element={<AdminLayout />}>
-                  <Route index element={<OrganizationSettings />} /> 
+                  <Route index element={<OrganizationManager />} /> 
+                  <Route path="organization" element={<OrganizationManager />} /> {/* NEW HUB */}
                   <Route path="requests" element={<TeamRequests />} />
-                  <Route path="staff" element={<StaffManager />} />
                   <Route path="career" element={<CareerBuilder />} />
                   <Route path="content" element={<ContentStudio />} />
                   <Route path="courses" element={<CourseManager />} />
