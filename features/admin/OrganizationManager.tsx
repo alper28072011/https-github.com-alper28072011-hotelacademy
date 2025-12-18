@@ -107,13 +107,7 @@ export const OrganizationManager: React.FC = () => {
           occupantId: null,
           level: proto.defaultLevel,
           isManager: proto.isManagerial,
-          permissions: {
-              canCreateContent: false,
-              canInviteStaff: proto.isManagerial,
-              canManageStructure: false,
-              canViewAnalytics: proto.isManagerial,
-              contentTargetingScope: proto.defaultScope
-          }
+          permissions: proto.permissions
       };
       
       const id = await createPosition(newPos);

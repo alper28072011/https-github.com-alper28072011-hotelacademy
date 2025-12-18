@@ -1,59 +1,42 @@
 
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Users, Film, LogOut, ArrowLeft, Map, BarChart2, Inbox, Settings, Loader2, Building2, LayoutList, Network } from 'lucide-react';
+import { Users, Film, LogOut, ArrowLeft, Map, BarChart2, Inbox, Settings, Loader2, Building2, LayoutList, Network, Lock } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
+import { usePermission } from '../../hooks/usePermission';
 
 export const AdminLayout: React.FC = () => {
-  const { logout, currentUser } = useAuthStore();
+  const { logout } = useAuthStore();
   const { currentOrganization, isLoading } = useOrganizationStore();
   const navigate = useNavigate();
+  const { can } = usePermission();
 
-  // Guard Logic inside the Layout
-  const canAccess = ['manager', 'admin', 'super_admin'].includes(currentUser?.role || '');
+  // Guard Logic 1: Basic Auth & Org
+  if (isLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
+  if (!currentOrganization) return <div className="h-screen flex items-center justify-center">Organizasyon verisi alınamadı.</div>;
 
-  // 1. If not authorized at all
-  if (!canAccess) {
+  // Guard Logic 2: Permission Check
+  if (!can('adminAccess')) {
       return (
           <div className="h-screen flex flex-col items-center justify-center bg-gray-50 text-center p-6">
-              <div className="bg-red-100 p-4 rounded-full mb-4"><LogOut className="w-8 h-8 text-red-500" /></div>
-              <h2 className="text-xl font-bold text-gray-800">Yetkisiz Erişim</h2>
-              <p className="text-gray-500 mb-6">Bu alana sadece yöneticiler erişebilir.</p>
-              <button onClick={() => navigate('/')} className="bg-primary text-white px-6 py-2 rounded-xl font-bold">Ana Sayfaya Dön</button>
+              <div className="bg-red-100 p-6 rounded-full mb-6"><Lock className="w-12 h-12 text-red-500" /></div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Erişim Reddedildi</h2>
+              <p className="text-gray-500 mb-8 max-w-md">Bu alana erişmek için gerekli yönetim yetkilerine sahip değilsiniz. Lütfen yöneticinizle görüşün.</p>
+              <button onClick={() => navigate('/')} className="bg-primary text-white px-8 py-3 rounded-xl font-bold shadow-lg">Ana Sayfaya Dön</button>
           </div>
       );
   }
 
-  // 2. If Organization is loading or missing (Safety Net)
-  if (!currentOrganization) {
-      return (
-          <div className="h-screen flex flex-col items-center justify-center bg-gray-50">
-              {isLoading ? (
-                  <>
-                    <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-                    <p className="text-gray-500 font-medium">Yönetim paneli yükleniyor...</p>
-                  </>
-              ) : (
-                  <>
-                    <Building2 className="w-12 h-12 text-gray-300 mb-4" />
-                    <h2 className="text-lg font-bold text-gray-800">İşletme Bulunamadı</h2>
-                    <p className="text-gray-500 mb-6 text-sm">Yönetilecek aktif bir işletmeniz yok.</p>
-                    <button onClick={() => navigate('/lobby')} className="bg-primary text-white px-6 py-2 rounded-xl font-bold">İşletme Seç / Oluştur</button>
-                  </>
-              )}
-          </div>
-      );
-  }
-
+  // --- Dynamic Navigation ---
   const navItems = [
-    { path: '/admin/requests', icon: Inbox, label: 'İstekler' }, 
-    { path: '/admin/organization', icon: Network, label: 'Organizasyon' }, // New Unified Hub
-    { path: '/admin/career', icon: Map, label: 'Kariyer' },
-    { path: '/admin/content', icon: Film, label: 'Stüdyo' },
-    { path: '/admin/courses', icon: LayoutList, label: 'İçerikler' },
-    { path: '/admin/reports', icon: BarChart2, label: 'Analiz' },
-    { path: '/admin/settings', icon: Settings, label: 'Kurum Ayarları' }, 
+    { path: '/admin/requests', icon: Inbox, label: 'İstekler', show: can('canApproveRequests') }, 
+    { path: '/admin/organization', icon: Network, label: 'Organizasyon', show: can('manageStructure') || can('manageStaff') }, 
+    { path: '/admin/career', icon: Map, label: 'Kariyer', show: can('manageStructure') },
+    { path: '/admin/content', icon: Film, label: 'Stüdyo', show: can('canCreateContent') },
+    { path: '/admin/courses', icon: LayoutList, label: 'İçerikler', show: can('canCreateContent') },
+    { path: '/admin/reports', icon: BarChart2, label: 'Analiz', show: can('viewAnalytics') },
+    { path: '/admin/settings', icon: Settings, label: 'Kurum Ayarları', show: can('adminAccess') }, // Only full admins usually, but flexible
   ];
 
   return (
@@ -75,7 +58,7 @@ export const AdminLayout: React.FC = () => {
         </div>
 
         <nav className="flex-1 py-6 flex flex-col gap-2 px-2">
-            {navItems.map((item) => (
+            {navItems.filter(i => i.show).map((item) => (
                 <NavLink
                     key={item.path}
                     to={item.path}

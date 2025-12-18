@@ -1,7 +1,8 @@
 
 import { doc, runTransaction, updateDoc, collection, query, where, getDocs, writeBatch, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Position, Organization, Membership, PermissionSet, OrgDepartmentDefinition, PositionPrototype } from '../types';
+import { User, Position, Organization, Membership, RolePermissions, OrgDepartmentDefinition, PositionPrototype } from '../types';
+import { DEFAULT_PERMISSIONS } from '../hooks/usePermission';
 
 // --- POSITION READ & ENGINE ---
 
@@ -19,7 +20,6 @@ export const getOrgPositions = async (orgId: string): Promise<Position[]> => {
 /**
  * THE TREE WALKER
  * Returns all descendant position IDs from a given root ID.
- * This is the core of the "Authority Engine".
  */
 export const getDescendantPositions = (rootId: string, allPositions: Position[]): string[] => {
     let descendants: string[] = [];
@@ -58,9 +58,7 @@ export const getTargetableAudiences = async (user: User, orgId: string): Promise
     }
 
     // Rule 2: If GLOBAL scope (e.g., GM, HR Director)
-    if (permissions.contentTargetingScope === 'GLOBAL') {
-        // Return explicit GLOBAL flag so UI knows to show "All Departments"
-        // We still fetch departments for detailed selection
+    if (permissions.contentTargeting === 'ENTIRE_ORG' || permissions.contentTargeting === 'PUBLIC') {
         const orgRef = doc(db, 'organizations', orgId);
         const orgSnap = await getDoc(orgRef);
         const org = orgSnap.data() as Organization;
@@ -69,20 +67,24 @@ export const getTargetableAudiences = async (user: User, orgId: string): Promise
         return { 
             scope: 'GLOBAL', 
             allowedDeptIds: allDeptIds, 
-            allowedPositionIds: [] // Empty means "All positions in selected depts"
+            allowedPositionIds: [] 
         };
     }
 
-    // Rule 3: If OWN_NODE_AND_BELOW (e.g., Front Office Manager)
-    if (permissions.contentTargetingScope === 'OWN_NODE_AND_BELOW') {
+    // Rule 3: If OWN_DEPT
+    if (permissions.contentTargeting === 'OWN_DEPT') {
+        return {
+            scope: 'LIMITED',
+            allowedDeptIds: [myPosition.departmentId],
+            allowedPositionIds: []
+        };
+    }
+
+    // Rule 4: If BELOW_HIERARCHY
+    if (permissions.contentTargeting === 'BELOW_HIERARCHY') {
         const allPositions = await getOrgPositions(orgId);
         const descendantIds = getDescendantPositions(myPosition.id, allPositions);
-        
-        // Include self? Usually yes for content viewing, but targeting usually means "my team".
-        // Let's include self + descendants.
         const targetableIds = [myPosition.id, ...descendantIds];
-        
-        // Find which departments these positions belong to
         const relevantPositions = allPositions.filter(p => targetableIds.includes(p.id));
         const relevantDeptIds = Array.from(new Set(relevantPositions.map(p => p.departmentId)));
 
@@ -107,8 +109,6 @@ export const saveOrganizationDefinitions = async (
         await updateDoc(doc(db, 'organizations', orgId), {
             'definitions.departments': departments,
             'definitions.positionPrototypes': prototypes,
-            // Legacy sync
-            'definitions.positionTitles': prototypes.map(p => p.title),
             'settings.customDepartments': departments.map(d => d.name)
         });
         return true;
@@ -123,15 +123,12 @@ export const saveOrganizationDefinitions = async (
 export const createPosition = async (position: Omit<Position, 'id'>): Promise<string | null> => {
     try {
         const ref = doc(collection(db, 'positions'));
-        // Default permissions if not provided
-        const defaultPerms: PermissionSet = {
-            canCreateContent: false,
-            canInviteStaff: false,
-            canManageStructure: false,
-            canViewAnalytics: false,
-            contentTargetingScope: 'NONE'
-        };
-        await setDoc(ref, { ...position, permissions: position.permissions || defaultPerms, id: ref.id });
+        // Use DEFAULT_PERMISSIONS imported from hook logic
+        await setDoc(ref, { 
+            ...position, 
+            permissions: position.permissions || DEFAULT_PERMISSIONS, 
+            id: ref.id 
+        });
         return ref.id;
     } catch (e) {
         console.error("Create Position Error:", e);
@@ -139,7 +136,7 @@ export const createPosition = async (position: Omit<Position, 'id'>): Promise<st
     }
 };
 
-export const updatePositionPermissions = async (positionId: string, permissions: PermissionSet): Promise<boolean> => {
+export const updatePositionPermissions = async (positionId: string, permissions: RolePermissions): Promise<boolean> => {
     try {
         await updateDoc(doc(db, 'positions', positionId), { permissions });
         return true;

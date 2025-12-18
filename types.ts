@@ -30,30 +30,38 @@ export interface OrgDepartmentDefinition {
   color: string; // Hex code
 }
 
-// NEW: Blueprint for a role, now tightly coupled to a department
+// --- NEW PERMISSION MATRIX ---
+export type ContentTargetingScope = 'NONE' | 'OWN_DEPT' | 'BELOW_HIERARCHY' | 'ENTIRE_ORG' | 'PUBLIC';
+
+export interface RolePermissions {
+  // 1. Management
+  adminAccess: boolean;           // Can access /admin dashboard
+  manageStructure: boolean;       // Can edit Org Chart (Add/Remove Positions)
+  manageStaff: boolean;           // Can invite, assign, or fire staff
+  viewAnalytics: boolean;         // Can see Talent Radar & Reports
+
+  // 2. Content & Education
+  canCreateContent: boolean;      // Access to Content Studio
+  contentTargeting: ContentTargetingScope; // Who they can assign content to
+
+  // 3. Social & Operations
+  canPostFeed: boolean;           // Can post to main feed
+  canApproveRequests: boolean;    // Can approve join requests
+}
+
+// Blueprint for a role
 export interface PositionPrototype {
-  id: string; // Added unique ID for easier management
+  id: string;
   title: string;
-  departmentId: string; // STRICT LINK: A position must belong to a department definition
+  departmentId: string;
   defaultLevel: number; // 1 (GM) to 10 (Entry)
-  isManagerial: boolean;
-  defaultScope: ContentTargetingScope;
+  isManagerial: boolean; // Visual tag only now
+  permissions: RolePermissions; // detailed matrix
 }
 
 export interface TargetingConfig {
-  type: 'ALL' | 'DEPARTMENT' | 'POSITION' | 'HIERARCHY'; // Added HIERARCHY
+  type: 'ALL' | 'DEPARTMENT' | 'POSITION' | 'HIERARCHY';
   targetIds: string[]; 
-}
-
-// --- PERMISSIONS & SCOPE ---
-export type ContentTargetingScope = 'GLOBAL' | 'OWN_NODE_AND_BELOW' | 'NONE';
-
-export interface PermissionSet {
-  canCreateContent: boolean;
-  canInviteStaff: boolean;
-  canManageStructure: boolean;
-  canViewAnalytics: boolean;
-  contentTargetingScope: ContentTargetingScope; // NEW: The Engine Rule
 }
 
 // --- CORE POSITION NODE (Firestore Document: 'positions') ---
@@ -61,17 +69,15 @@ export interface Position {
   id: string;
   organizationId: string;
   title: string;
-  departmentId: string; // Matches OrgDepartmentDefinition.id
+  departmentId: string;
   parentId: string | null;
   occupantId: string | null;
   
-  // Hierarchy Logic
-  level: number; // 1-10 hierarchy depth
+  level: number; 
   isManager?: boolean; 
-  permissions?: PermissionSet;
+  permissions: RolePermissions; // Instance specific permissions (copied from prototype)
   
-  // Optimization for queries
-  path?: string[]; // Array of ancestor IDs for fast lookup [grandparent_id, parent_id]
+  path?: string[]; 
 }
 
 export interface User {
@@ -243,15 +249,12 @@ export interface Organization {
   deletionReason?: string; 
   structureType?: 'FLAT' | 'HIERARCHICAL';
   
-  // NEW: Definitions for Structure Builder
   definitions?: {
     departments: OrgDepartmentDefinition[];
-    positionPrototypes: PositionPrototype[]; // Replaces plain string array
-    // Legacy support
+    positionPrototypes: PositionPrototype[]; 
     positionTitles?: string[]; 
   };
   
-  // Legacy (Keep for compatibility until full migration)
   hierarchy?: any[];
 }
 

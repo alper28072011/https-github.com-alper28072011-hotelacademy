@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X, Briefcase, CheckCircle2, User as UserIcon, Shield, Trash2, Edit3, Eye, Target } from 'lucide-react';
 import { OrgChartBuilder } from './OrgChartBuilder';
-import { Position, User, PermissionSet, OrgDepartmentDefinition, PositionPrototype } from '../../types';
+import { Position, User, RolePermissions, OrgDepartmentDefinition, PositionPrototype, ContentTargetingScope } from '../../types';
 import { updatePositionPermissions, deletePosition, createPosition } from '../../services/organizationService';
 
 interface OrgStructureEditorProps {
@@ -23,34 +23,40 @@ export const OrgStructureEditor: React.FC<OrgStructureEditorProps> = ({
     const [activeTab, setActiveTab] = useState<'DETAILS' | 'PERMISSIONS'>('DETAILS');
     
     // --- DRAWER ACTIONS ---
-    const handlePermissionToggle = async (key: keyof PermissionSet) => {
+    const handlePermissionToggle = async (key: keyof RolePermissions) => {
         if (!selectedPos) return;
-        const currentPerms = selectedPos.permissions || {
+        const currentPerms: RolePermissions = selectedPos.permissions || {
+            adminAccess: false,
+            manageStructure: false,
+            manageStaff: false,
+            viewAnalytics: false,
             canCreateContent: false,
-            canInviteStaff: false,
-            canManageStructure: false,
-            canViewAnalytics: false,
-            contentTargetingScope: 'NONE'
+            contentTargeting: 'NONE',
+            canPostFeed: false,
+            canApproveRequests: false
         };
         
         // Handle boolean toggles
-        if (key !== 'contentTargetingScope') {
+        if (key !== 'contentTargeting') {
             const newPerms = { ...currentPerms, [key]: !currentPerms[key] };
             setSelectedPos({ ...selectedPos, permissions: newPerms });
             await updatePositionPermissions(selectedPos.id, newPerms);
         }
     };
 
-    const handleScopeChange = async (scope: 'GLOBAL' | 'OWN_NODE_AND_BELOW' | 'NONE') => {
+    const handleScopeChange = async (scope: ContentTargetingScope) => {
         if (!selectedPos) return;
-        const currentPerms = selectedPos.permissions || {
+        const currentPerms: RolePermissions = selectedPos.permissions || {
+            adminAccess: false,
+            manageStructure: false,
+            manageStaff: false,
+            viewAnalytics: false,
             canCreateContent: false,
-            canInviteStaff: false,
-            canManageStructure: false,
-            canViewAnalytics: false,
-            contentTargetingScope: 'NONE'
+            contentTargeting: 'NONE',
+            canPostFeed: false,
+            canApproveRequests: false
         };
-        const newPerms = { ...currentPerms, contentTargetingScope: scope };
+        const newPerms = { ...currentPerms, contentTargeting: scope };
         setSelectedPos({ ...selectedPos, permissions: newPerms });
         await updatePositionPermissions(selectedPos.id, newPerms);
     };
@@ -205,19 +211,19 @@ export const OrgStructureEditor: React.FC<OrgStructureEditorProps> = ({
                                             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                                                 {[
                                                     { id: 'NONE', label: 'Yetkisiz', desc: 'Kimseye eğitim atayamaz.' },
-                                                    { id: 'OWN_NODE_AND_BELOW', label: 'Sadece Kendi Ekibi', desc: 'Yalnızca kendisine bağlı alt kadroya eğitim verebilir.' },
-                                                    { id: 'GLOBAL', label: 'Global (Tüm Otel)', desc: 'Tüm departmanlara erişebilir (GM, İK vb.)' }
+                                                    { id: 'BELOW_HIERARCHY', label: 'Sadece Kendi Ekibi', desc: 'Yalnızca kendisine bağlı alt kadroya eğitim verebilir.' },
+                                                    { id: 'ENTIRE_ORG', label: 'Global (Tüm Otel)', desc: 'Tüm departmanlara erişebilir (GM, İK vb.)' }
                                                 ].map((opt) => (
                                                     <button 
                                                         key={opt.id}
-                                                        onClick={() => handleScopeChange(opt.id as any)}
-                                                        className={`w-full text-left p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors flex items-start gap-3 ${selectedPos.permissions?.contentTargetingScope === opt.id ? 'bg-blue-50/50' : ''}`}
+                                                        onClick={() => handleScopeChange(opt.id as ContentTargetingScope)}
+                                                        className={`w-full text-left p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors flex items-start gap-3 ${selectedPos.permissions?.contentTargeting === opt.id ? 'bg-blue-50/50' : ''}`}
                                                     >
-                                                        <div className={`mt-1 w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPos.permissions?.contentTargetingScope === opt.id ? 'border-blue-600' : 'border-gray-300'}`}>
-                                                            {selectedPos.permissions?.contentTargetingScope === opt.id && <div className="w-2 h-2 rounded-full bg-blue-600" />}
+                                                        <div className={`mt-1 w-4 h-4 rounded-full border-2 flex items-center justify-center ${selectedPos.permissions?.contentTargeting === opt.id ? 'border-blue-600' : 'border-gray-300'}`}>
+                                                            {selectedPos.permissions?.contentTargeting === opt.id && <div className="w-2 h-2 rounded-full bg-blue-600" />}
                                                         </div>
                                                         <div>
-                                                            <div className={`font-bold text-sm ${selectedPos.permissions?.contentTargetingScope === opt.id ? 'text-blue-700' : 'text-gray-800'}`}>{opt.label}</div>
+                                                            <div className={`font-bold text-sm ${selectedPos.permissions?.contentTargeting === opt.id ? 'text-blue-700' : 'text-gray-800'}`}>{opt.label}</div>
                                                             <div className="text-xs text-gray-500 mt-0.5">{opt.desc}</div>
                                                         </div>
                                                     </button>
@@ -233,13 +239,13 @@ export const OrgStructureEditor: React.FC<OrgStructureEditorProps> = ({
                                             </h4>
                                             {[
                                                 { key: 'canCreateContent', label: 'Eğitim Oluşturabilir', desc: 'Stüdyoyu kullanarak yeni ders içerikleri hazırlayabilir.' },
-                                                { key: 'canInviteStaff', label: 'Personel Davet Edebilir', desc: 'Sisteme yeni kullanıcı ekleyebilir.' },
-                                                { key: 'canManageStructure', label: 'Organizasyonu Yönetebilir', desc: 'Şemayı düzenleyebilir, pozisyon ekleyip silebilir.' },
-                                                { key: 'canViewAnalytics', label: 'Raporları Görebilir', desc: 'Ekip performans verilerine tam erişim.' },
+                                                { key: 'manageStaff', label: 'Personel Davet Edebilir', desc: 'Sisteme yeni kullanıcı ekleyebilir.' },
+                                                { key: 'manageStructure', label: 'Organizasyonu Yönetebilir', desc: 'Şemayı düzenleyebilir, pozisyon ekleyip silebilir.' },
+                                                { key: 'viewAnalytics', label: 'Raporları Görebilir', desc: 'Ekip performans verilerine tam erişim.' },
                                             ].map((perm) => (
-                                                <div key={perm.key} className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => handlePermissionToggle(perm.key as keyof PermissionSet)}>
-                                                    <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedPos.permissions?.[perm.key as keyof PermissionSet] ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300'}`}>
-                                                        {selectedPos.permissions?.[perm.key as keyof PermissionSet] && <CheckCircle2 className="w-3.5 h-3.5" />}
+                                                <div key={perm.key} className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => handlePermissionToggle(perm.key as keyof RolePermissions)}>
+                                                    <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedPos.permissions?.[perm.key as keyof RolePermissions] ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300'}`}>
+                                                        {selectedPos.permissions?.[perm.key as keyof RolePermissions] && <CheckCircle2 className="w-3.5 h-3.5" />}
                                                     </div>
                                                     <div>
                                                         <h4 className="font-bold text-gray-800 text-sm">{perm.label}</h4>

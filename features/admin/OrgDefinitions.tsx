@@ -2,12 +2,15 @@
 import React, { useState } from 'react';
 import { 
     Plus, Trash2, Save, LayoutList, Loader2, Crown, 
-    MoreVertical, ArrowRightLeft, ShieldCheck, User, X
+    MoreVertical, ArrowRightLeft, ShieldCheck, User, X,
+    Settings2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { OrgDepartmentDefinition, Organization, PositionPrototype, ContentTargetingScope } from '../../types';
+import { OrgDepartmentDefinition, Organization, PositionPrototype, RolePermissions } from '../../types';
 import { saveOrganizationDefinitions } from '../../services/organizationService';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
+import { PermissionEditor } from '../organization/components/PermissionEditor';
+import { DEFAULT_PERMISSIONS } from '../../hooks/usePermission';
 
 interface OrgDefinitionsProps {
     organization: Organization;
@@ -25,14 +28,16 @@ export const OrgDefinitions: React.FC<OrgDefinitionsProps> = ({ organization }) 
     // Modal States
     const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
     const [isPosModalOpen, setIsPosModalOpen] = useState(false);
-    const [activeDeptId, setActiveDeptId] = useState<string | null>(null); // For Position Creation context
+    const [activeDeptId, setActiveDeptId] = useState<string | null>(null);
+    const [editingProto, setEditingProto] = useState<PositionPrototype | null>(null);
     
     // Forms
     const [newDeptName, setNewDeptName] = useState('');
     const [newDeptColor, setNewDeptColor] = useState('#3B82F6');
     
-    const [newPosTitle, setNewPosTitle] = useState('');
-    const [newPosIsManager, setNewPosIsManager] = useState(false);
+    // Position Form
+    const [posTitle, setPosTitle] = useState('');
+    const [posPermissions, setPosPermissions] = useState<RolePermissions>(DEFAULT_PERMISSIONS);
 
     // --- ACTIONS: DEPARTMENTS ---
     const handleAddDepartment = () => {
@@ -63,24 +68,48 @@ export const OrgDefinitions: React.FC<OrgDefinitionsProps> = ({ organization }) 
     // --- ACTIONS: POSITIONS ---
     const openAddPositionModal = (deptId: string) => {
         setActiveDeptId(deptId);
-        setNewPosTitle('');
-        setNewPosIsManager(false);
+        setEditingProto(null);
+        setPosTitle('');
+        setPosPermissions(DEFAULT_PERMISSIONS);
         setIsPosModalOpen(true);
     };
 
-    const handleAddPosition = () => {
-        if (!newPosTitle.trim() || !activeDeptId) return;
-        
-        const newProto: PositionPrototype = {
-            id: `proto_${Date.now()}`,
-            title: newPosTitle,
-            departmentId: activeDeptId,
-            defaultLevel: newPosIsManager ? 2 : 8, // Default Logic
-            isManagerial: newPosIsManager,
-            defaultScope: newPosIsManager ? 'OWN_NODE_AND_BELOW' : 'NONE'
-        };
+    const openEditPositionModal = (proto: PositionPrototype) => {
+        setEditingProto(proto);
+        setPosTitle(proto.title);
+        // Ensure permissions object exists, merge with defaults if missing keys
+        setPosPermissions({ ...DEFAULT_PERMISSIONS, ...(proto.permissions || {}) });
+        setIsPosModalOpen(true);
+    };
 
-        setPrototypes([...prototypes, newProto]);
+    const handleSavePosition = () => {
+        if (!posTitle.trim()) return;
+        
+        // Determine "Managerial" visual tag based on key permission
+        const isManager = posPermissions.adminAccess || posPermissions.manageStaff;
+
+        if (editingProto) {
+            // Update Existing
+            const updated = prototypes.map(p => p.id === editingProto.id ? {
+                ...p,
+                title: posTitle,
+                isManagerial: isManager,
+                permissions: posPermissions
+            } : p);
+            setPrototypes(updated);
+        } else if (activeDeptId) {
+            // Create New
+            const newProto: PositionPrototype = {
+                id: `proto_${Date.now()}`,
+                title: posTitle,
+                departmentId: activeDeptId,
+                defaultLevel: isManager ? 2 : 8,
+                isManagerial: isManager,
+                permissions: posPermissions
+            };
+            setPrototypes([...prototypes, newProto]);
+        }
+
         setIsPosModalOpen(false);
     };
 
@@ -88,10 +117,6 @@ export const OrgDefinitions: React.FC<OrgDefinitionsProps> = ({ organization }) 
         if (window.confirm("Bu pozisyon tanımını silmek istediğinize emin misiniz?")) {
             setPrototypes(prototypes.filter(p => p.id !== protoId));
         }
-    };
-
-    const handleMovePosition = (protoId: string, targetDeptId: string) => {
-        setPrototypes(prototypes.map(p => p.id === protoId ? { ...p, departmentId: targetDeptId } : p));
     };
 
     // --- PERSISTENCE ---
@@ -167,7 +192,6 @@ export const OrgDefinitions: React.FC<OrgDefinitionsProps> = ({ organization }) 
                                             <div className="w-3 h-8 rounded-full" style={{ backgroundColor: dept.color }} />
                                             <div>
                                                 <h3 className="font-bold text-gray-800 leading-none">{dept.name}</h3>
-                                                <span className="text-[10px] text-gray-400 font-mono uppercase">{dept.id}</span>
                                             </div>
                                         </div>
                                         <button 
@@ -187,7 +211,11 @@ export const OrgDefinitions: React.FC<OrgDefinitionsProps> = ({ organization }) 
                                         ) : (
                                             <div className="space-y-1">
                                                 {deptPositions.map(pos => (
-                                                    <div key={pos.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-100 group/pos transition-all">
+                                                    <div 
+                                                        key={pos.id} 
+                                                        className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-100 group/pos transition-all cursor-pointer"
+                                                        onClick={() => openEditPositionModal(pos)}
+                                                    >
                                                         <div className="flex items-center gap-2">
                                                             {pos.isManagerial ? (
                                                                 <div className="p-1 bg-yellow-100 text-yellow-600 rounded">
@@ -201,34 +229,14 @@ export const OrgDefinitions: React.FC<OrgDefinitionsProps> = ({ organization }) 
                                                             <span className="text-sm font-bold text-gray-700">{pos.title}</span>
                                                         </div>
                                                         
-                                                        {/* Position Actions */}
                                                         <div className="flex items-center gap-1 opacity-0 group-hover/pos:opacity-100 transition-opacity">
-                                                            {/* Move Dropdown (Simple implementation) */}
-                                                            <div className="relative group/move">
-                                                                <button className="p-1 hover:bg-blue-100 text-gray-400 hover:text-blue-600 rounded">
-                                                                    <ArrowRightLeft className="w-3 h-3" />
-                                                                </button>
-                                                                <div className="absolute right-0 top-full mt-1 w-40 bg-white border border-gray-100 shadow-xl rounded-lg hidden group-hover/move:block z-50 overflow-hidden">
-                                                                    <div className="text-[9px] font-bold text-gray-400 p-2 bg-gray-50 uppercase">Şuraya Taşı:</div>
-                                                                    {departments.filter(d => d.id !== dept.id).map(target => (
-                                                                        <button 
-                                                                            key={target.id}
-                                                                            onClick={() => handleMovePosition(pos.id, target.id)}
-                                                                            className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2"
-                                                                        >
-                                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: target.color }} />
-                                                                            {target.name}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-
                                                             <button 
-                                                                onClick={() => handleDeletePosition(pos.id)}
+                                                                onClick={(e) => { e.stopPropagation(); handleDeletePosition(pos.id); }}
                                                                 className="p-1 hover:bg-red-100 text-gray-400 hover:text-red-500 rounded"
                                                             >
                                                                 <Trash2 className="w-3 h-3" />
                                                             </button>
+                                                            <Settings2 className="w-3 h-3 text-gray-300" />
                                                         </div>
                                                     </div>
                                                 ))}
@@ -293,53 +301,51 @@ export const OrgDefinitions: React.FC<OrgDefinitionsProps> = ({ organization }) 
                 )}
             </AnimatePresence>
 
-            {/* MODAL: ADD POSITION */}
+            {/* MODAL: POSITIONS (WITH PERMISSIONS) */}
             <AnimatePresence>
                 {isPosModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
-                            <div className="flex justify-between items-center mb-4">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                        <motion.div 
+                            initial={{ scale: 0.9, opacity: 0 }} 
+                            animate={{ scale: 1, opacity: 1 }} 
+                            exit={{ scale: 0.9, opacity: 0 }} 
+                            className="bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]"
+                        >
+                            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-3xl">
                                 <div>
-                                    <h3 className="font-bold text-lg text-gray-800">Yeni Pozisyon</h3>
-                                    <p className="text-xs text-primary font-bold uppercase">
-                                        {departments.find(d => d.id === activeDeptId)?.name}
+                                    <h3 className="font-bold text-xl text-gray-800">{editingProto ? 'Pozisyonu Düzenle' : 'Yeni Pozisyon'}</h3>
+                                    <p className="text-xs text-primary font-bold uppercase mt-1">
+                                        {departments.find(d => d.id === (editingProto?.departmentId || activeDeptId))?.name}
                                     </p>
                                 </div>
-                                <button onClick={() => setIsPosModalOpen(false)}><X className="w-5 h-5 text-gray-400" /></button>
+                                <button onClick={() => setIsPosModalOpen(false)} className="p-2 hover:bg-gray-200 rounded-full"><X className="w-6 h-6 text-gray-500" /></button>
                             </div>
                             
-                            <div className="space-y-4">
+                            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                {/* Basic Info */}
                                 <div>
-                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Pozisyon Ünvanı</label>
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Pozisyon Ünvanı</label>
                                     <input 
                                         autoFocus
-                                        value={newPosTitle}
-                                        onChange={e => setNewPosTitle(e.target.value)}
+                                        value={posTitle}
+                                        onChange={e => setPosTitle(e.target.value)}
                                         placeholder="Örn: Şef Garson"
-                                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-primary font-bold"
+                                        className="w-full p-4 bg-gray-50 border-2 border-gray-100 rounded-2xl outline-none focus:border-primary focus:bg-white font-bold text-lg transition-all"
                                     />
                                 </div>
-                                
-                                <div 
-                                    onClick={() => setNewPosIsManager(!newPosIsManager)}
-                                    className={`p-3 rounded-xl border-2 cursor-pointer flex items-center justify-between transition-all ${newPosIsManager ? 'border-primary bg-primary/5' : 'border-gray-100'}`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-full ${newPosIsManager ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'}`}>
-                                            <ShieldCheck className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-bold text-gray-800">Yönetici Rolü</div>
-                                            <div className="text-xs text-gray-500">Ekip yönetimi ve raporlama yetkisi.</div>
-                                        </div>
-                                    </div>
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${newPosIsManager ? 'border-primary bg-primary' : 'border-gray-300'}`}>
-                                        {newPosIsManager && <div className="w-2 h-2 bg-white rounded-full" />}
-                                    </div>
-                                </div>
 
-                                <button onClick={handleAddPosition} className="w-full py-3 bg-primary text-white rounded-xl font-bold mt-2 hover:bg-primary-light">
-                                    Ekle
+                                {/* Permissions Editor */}
+                                <div className="bg-white border border-gray-200 rounded-2xl p-4">
+                                    <PermissionEditor 
+                                        permissions={posPermissions}
+                                        onChange={setPosPermissions}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-3xl">
+                                <button onClick={handleSavePosition} className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-lg hover:bg-primary-light shadow-xl shadow-primary/20 active:scale-[0.98] transition-all">
+                                    {editingProto ? 'Değişiklikleri Kaydet' : 'Pozisyonu Oluştur'}
                                 </button>
                             </div>
                         </motion.div>
