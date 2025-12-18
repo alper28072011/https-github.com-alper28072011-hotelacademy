@@ -57,11 +57,15 @@ export const OrganizationProfile: React.FC = () => {
       if (!currentUser || !org || !selectedDeptId || !selectedPosId) return;
       setIsSubmitting(true);
       
-      // Find titles for context
-      const dept = org.hierarchy?.find(d => d.id === selectedDeptId);
-      const pos = dept?.positions.find(p => p.id === selectedPosId);
-      const roleTitle = pos?.title || 'Unknown';
+      // FIX: Find titles from new DEFINITIONS structure
+      const deptDefinition = org.definitions?.departments.find(d => d.id === selectedDeptId);
+      const protoDefinition = org.definitions?.positionPrototypes.find(p => p.id === selectedPosId);
+      
+      const deptName = deptDefinition?.name || selectedDeptId; // Fallback to ID
+      const roleTitle = protoDefinition?.title || 'Unknown';
 
+      // Note: We use department ID for the logic, but usually display names in UI.
+      // The DB expects the ID for the department field usually.
       const result = await sendJoinRequest(currentUser.id, org.id, selectedDeptId, roleTitle, selectedPosId);
       setIsSubmitting(false);
       
@@ -135,7 +139,10 @@ export const OrganizationProfile: React.FC = () => {
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
   if (!org) return <div>Organization not found</div>;
 
-  const activeDept = org.hierarchy?.find(d => d.id === selectedDeptId);
+  // FIX: Data Preparation for Wizard
+  const availableDepartments = org.definitions?.departments || [];
+  const activeDept = availableDepartments.find(d => d.id === selectedDeptId);
+  const availablePositions = org.definitions?.positionPrototypes.filter(p => p.departmentId === selectedDeptId) || [];
 
   return (
     <div className="min-h-screen bg-white pb-24 relative">
@@ -292,8 +299,8 @@ export const OrganizationProfile: React.FC = () => {
                                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col gap-4">
                                     <label className="text-xs font-bold text-gray-400 uppercase">Departman Seçiniz</label>
                                     <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">
-                                        {org.hierarchy && org.hierarchy.length > 0 ? (
-                                            org.hierarchy.map((dept) => (
+                                        {availableDepartments.length > 0 ? (
+                                            availableDepartments.map((dept) => (
                                                 <button 
                                                     key={dept.id}
                                                     onClick={() => { setSelectedDeptId(dept.id); setStep(2); }}
@@ -321,8 +328,8 @@ export const OrganizationProfile: React.FC = () => {
                                     
                                     <label className="text-xs font-bold text-gray-400 uppercase">Pozisyon (Ünvan) Seçiniz</label>
                                     <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">
-                                        {activeDept.positions.length > 0 ? (
-                                            activeDept.positions.map((pos) => (
+                                        {availablePositions.length > 0 ? (
+                                            availablePositions.map((pos) => (
                                                 <button 
                                                     key={pos.id}
                                                     onClick={() => setSelectedPosId(pos.id)}
