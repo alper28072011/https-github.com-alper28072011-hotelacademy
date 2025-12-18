@@ -15,15 +15,25 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
 
-// --- NEW EDUCATION TYPES ---
 export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
 export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN';
 export type CourseLength = 'SHORT' | 'MEDIUM' | 'LONG';
-/* Add XP_REWARD to StoryCardType to support reward cards in the player */
 export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VIDEO' | 'XP_REWARD';
 
-/* Add AuthMode type for auth store */
 export type AuthMode = 'LOGIN' | 'REGISTER';
+
+// --- HIARARCHY TYPES ---
+export interface Position {
+  id: string;
+  orgId: string;
+  title: string;
+  departmentId: string;
+  parentId: string | null; // Hierarchy link
+  occupantId: string | null; // User ID if occupied
+  requirements: string[]; // Course IDs that are mandatory for this slot
+  salaryRange?: string;
+  level: number; // 0 for root, 1 for heads, 2 for staff etc.
+}
 
 export interface User {
   id: string;
@@ -33,6 +43,7 @@ export interface User {
   phoneNumber: string; 
   avatar: string; 
   currentOrganizationId: string | null; 
+  positionId?: string | null; // Link to specific slot
   department: DepartmentType | null;
   role: UserRole;
   status: UserStatus;
@@ -52,7 +63,6 @@ export interface User {
   instagramHandle?: string;
   assignedPathId?: string;
   badges?: { type: KudosType; count: number }[];
-  /* Add missing social and management properties */
   following?: string[];
   isSuperAdmin?: boolean;
   privacySettings?: {
@@ -74,7 +84,7 @@ export interface Course {
   title: string;
   description: string;
   thumbnailUrl: string;
-  duration: number; // in minutes
+  duration: number; 
   xpReward: number;
   createdAt?: number;
   steps: StoryCard[]; 
@@ -83,7 +93,6 @@ export interface Course {
   config?: CourseConfig;
   price: number;
   priceType: 'FREE' | 'PAID';
-  /* Add missing educational and verification properties */
   coverQuote?: string;
   isFeatured?: boolean;
   assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
@@ -116,13 +125,12 @@ export interface StoryCard {
   title: string;
   content: string;
   mediaUrl: string;
-  mediaPrompt?: string; // AI generated prompt for image search
-  duration: number; // display time in seconds
+  mediaPrompt?: string; 
+  duration: number; 
   interaction?: {
     question: string;
     options: string[];
     correctAnswer: string;
-    /* Add correctOptionIndex for quiz logic in player */
     correctOptionIndex?: number;
     explanation?: string;
   };
@@ -133,12 +141,10 @@ export type ReviewTag = 'ACCURATE' | 'ENGAGING' | 'MISLEADING' | 'OUTDATED';
 export type VerificationStatus = 'VERIFIED' | 'PENDING' | 'UNDER_REVIEW';
 export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
 
-// Other interfaces remain same for compatibility
 export interface Category { id: string; title: string; icon: string; color: string; }
 export interface CareerPath { id: string; organizationId: string; title: string; description: string; targetRole: string; department: DepartmentType; courseIds: string[]; }
 export interface FeedPost { id: string; organizationId: string; authorType: AuthorType; authorId: string; authorName: string; authorAvatar: string; type: 'image' | 'video' | 'kudos' | 'course'; mediaUrl?: string; caption: string; likes: number; createdAt: number; likedBy?: string[]; kudosData?: { badgeType: KudosType; recipientId: string; recipientName: string; }; }
 
-/* Add Task interface for operations */
 export interface Task {
   id: string;
   organizationId: string;
@@ -148,7 +154,6 @@ export interface Task {
   type: 'checklist' | 'photo';
 }
 
-/* Add Issue types for reporting */
 export type IssueType = 'maintenance' | 'housekeeping' | 'security';
 
 export interface Issue {
@@ -163,7 +168,6 @@ export interface Issue {
   createdAt: number;
 }
 
-/* Add JoinRequest for organization recruitment */
 export interface JoinRequest {
   id: string;
   type: 'REQUEST_TO_JOIN';
@@ -171,15 +175,38 @@ export interface JoinRequest {
   organizationId: string;
   targetDepartment: string;
   requestedRoleTitle: string;
+  targetPositionId?: string; // Optional specific slot request
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
 }
 
-export interface Organization { id: string; name: string; sector: OrganizationSector; logoUrl: string; coverUrl?: string; location: string; ownerId: string; code: string; createdAt: number; settings: { allowStaffContentCreation: boolean; customDepartments: string[]; primaryColor: string; }; followersCount: number; memberCount: number; website?: string; description?: string; size?: OrganizationSize; /* Add status for organization management */ status?: 'ACTIVE' | 'ARCHIVED'; }
+export interface Organization { 
+  id: string; 
+  name: string; 
+  sector: OrganizationSector; 
+  logoUrl: string; 
+  coverUrl?: string; 
+  location: string; 
+  ownerId: string; 
+  code: string; 
+  createdAt: number; 
+  settings: { 
+    allowStaffContentCreation: boolean; 
+    customDepartments: string[]; 
+    primaryColor: string; 
+  }; 
+  followersCount: number; 
+  memberCount: number; 
+  website?: string; 
+  description?: string; 
+  size?: OrganizationSize; 
+  status?: 'ACTIVE' | 'ARCHIVED';
+  structureType: 'FLAT' | 'HIERARCHICAL'; // Position management mode
+}
+
 export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
-export type OrganizationSectorExtended = OrganizationSector;
 export type OrganizationSize = '1-10' | '11-50' | '50-200' | '200+';
-export interface Membership { id: string; userId: string; organizationId: string; role: UserRole; department: DepartmentType; status: 'ACTIVE' | 'SUSPENDED'; joinedAt: number; roleTitle?: string; permissions?: PermissionType[]; }
+export interface Membership { id: string; userId: string; organizationId: string; role: UserRole; department: DepartmentType; positionId?: string; status: 'ACTIVE' | 'SUSPENDED'; joinedAt: number; roleTitle?: string; permissions?: PermissionType[]; }
 export type PermissionType = 'CAN_CREATE_CONTENT' | 'CAN_MANAGE_TEAM' | 'CAN_VIEW_ANALYTICS' | 'CAN_EDIT_SETTINGS';
 export type FollowStatus = 'NONE' | 'FOLLOWING' | 'PENDING';
 export interface Relationship { followerId: string; followingId: string; status: 'PENDING' | 'ACCEPTED'; createdAt: number; }

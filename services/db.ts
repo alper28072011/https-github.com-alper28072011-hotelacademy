@@ -154,7 +154,7 @@ export const updateCourse = async (courseId: string, data: Partial<Course>): Pro
 };
 
 export const deleteCourse = async (courseId: string): Promise<boolean> => {
-    try { await deleteDoc(doc(db, 'courses', courseId)); return true; } catch (e) { return false; }
+    try { await deleteDoc(db, 'courses', courseId)); return true; } catch (e) { return false; }
 };
 
 export const getMyMemberships = async (userId: string): Promise<Membership[]> => {
@@ -203,6 +203,9 @@ export const searchOrganizations = async (searchTerm: string): Promise<Organizat
     } catch (e) { return []; }
 };
 
+/**
+ * Fixed: Added structureType property to Organization creation
+ */
 export const createOrganization = async (name: string, sector: OrganizationSector, owner: User): Promise<Organization | null> => {
     try {
         const orgId = name.toLowerCase().replace(/\s/g, '_') + '_' + Math.floor(Math.random() * 1000);
@@ -211,7 +214,8 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
         const newOrg: Organization = {
             id: orgId, name, sector, logoUrl: '', location: 'Global', ownerId: owner.id, code, createdAt: Date.now(),
             settings: { allowStaffContentCreation: false, customDepartments: ['Yönetim', 'Operasyon'], primaryColor: '#0B1E3B' },
-            followersCount: 0, memberCount: 1
+            followersCount: 0, memberCount: 1,
+            structureType: 'FLAT'
         };
         await setDoc(doc(db, 'organizations', orgId), newOrg);
 
