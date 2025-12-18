@@ -70,8 +70,8 @@ export const OrganizationProfile: React.FC = () => {
 
       // FIX: Do NOT send selectedPosId as positionId because selectedPosId is a Prototype ID (e.g. proto_123), 
       // whereas the backend expects a real Position Node ID (seat) to occupy it.
-      // Sending undefined means "General Application" for this role, not for a specific seat.
-      const result = await sendJoinRequest(currentUser.id, org.id, selectedDeptId, roleTitle, undefined);
+      // Sending null means "General Application" for this role, not for a specific seat.
+      const result = await sendJoinRequest(currentUser.id, org.id, selectedDeptId, roleTitle, null);
       
       setIsSubmitting(false);
       

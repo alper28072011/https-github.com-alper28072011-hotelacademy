@@ -13,7 +13,7 @@ import {
   addDoc, 
   onSnapshot, 
   orderBy, 
-  limit,
+  limit, 
   runTransaction,
   setDoc,
   deleteDoc,
@@ -304,7 +304,7 @@ export const subscribeToLeaderboard = (dept: DepartmentType, orgId: string, call
 
 // --- REQUESTS SYSTEM ---
 
-export const sendJoinRequest = async (userId: string, orgId: string, dept: DepartmentType, roleTitle?: string, positionId?: string): Promise<{ success: boolean; message?: string }> => {
+export const sendJoinRequest = async (userId: string, orgId: string, dept: DepartmentType, roleTitle?: string, positionId?: string | null): Promise<{ success: boolean; message?: string }> => {
     try {
         // Check if already exists
         const q = query(requestsRef, 
@@ -317,8 +317,18 @@ export const sendJoinRequest = async (userId: string, orgId: string, dept: Depar
             return { success: false, message: 'Zaten bekleyen bir başvurunuz var.' };
         }
 
+        // FIX: Ensure positionId is null if not provided (undefined causes Firestore crash)
+        const safePositionId = positionId === undefined ? null : positionId;
+
         await addDoc(collection(db, 'requests'), {
-            type: 'REQUEST_TO_JOIN', userId, organizationId: orgId, targetDepartment: dept, requestedRoleTitle: roleTitle || '', positionId, status: 'PENDING', createdAt: Date.now()
+            type: 'REQUEST_TO_JOIN', 
+            userId, 
+            organizationId: orgId, 
+            targetDepartment: dept, 
+            requestedRoleTitle: roleTitle || '', 
+            positionId: safePositionId, 
+            status: 'PENDING', 
+            createdAt: Date.now()
         });
         return { success: true };
     } catch (e: any) { 
