@@ -1,7 +1,7 @@
 
 import { doc, runTransaction, updateDoc, collection, query, where, getDocs, writeBatch, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Position, Organization, Membership } from '../types';
+import { User, Position, Organization, Membership, PermissionSet } from '../types';
 
 // --- POSITION READ ---
 
@@ -24,7 +24,14 @@ export const getOrgPositions = async (orgId: string): Promise<Position[]> => {
 export const createPosition = async (position: Omit<Position, 'id'>): Promise<string | null> => {
     try {
         const ref = doc(collection(db, 'positions'));
-        await setDoc(ref, { ...position, id: ref.id });
+        // Default permissions
+        const defaultPerms: PermissionSet = {
+            canCreateContent: false,
+            canInviteStaff: false,
+            canManageStructure: false,
+            canViewAnalytics: false
+        };
+        await setDoc(ref, { ...position, permissions: position.permissions || defaultPerms, id: ref.id });
         return ref.id;
     } catch (e) {
         console.error("Create Position Error:", e);
@@ -33,12 +40,37 @@ export const createPosition = async (position: Omit<Position, 'id'>): Promise<st
 };
 
 /**
+ * Updates permissions for a specific position/seat.
+ */
+export const updatePositionPermissions = async (positionId: string, permissions: PermissionSet): Promise<boolean> => {
+    try {
+        await updateDoc(doc(db, 'positions', positionId), { permissions });
+        return true;
+    } catch (e) {
+        console.error("Update Permissions Error:", e);
+        return false;
+    }
+};
+
+/**
+ * Creates a placeholder invite for a specific position.
+ * Real implementation would send an email/SMS. 
+ * Here we simulate it by possibly creating a pre-membership or just returning success.
+ */
+export const inviteUserToPosition = async (orgId: string, email: string, positionId: string): Promise<boolean> => {
+    try {
+        // In a real app, write to an 'invitations' collection.
+        // For this demo, we'll assume the email is sent via backend trigger.
+        console.log(`Invited ${email} to position ${positionId} in org ${orgId}`);
+        return true;
+    } catch (e) {
+        return false;
+    }
+};
+
+/**
  * TRANSACTIONAL ASSIGNMENT
  * Ensures User and Position docs are always in sync.
- * Rules:
- * 1. Target Position MUST be empty (or check logic).
- * 2. If User was in another position, vacate it.
- * 3. Update User Profile & Membership.
  */
 export const assignUserToPosition = async (orgId: string, positionId: string, userId: string): Promise<{ success: boolean; message?: string }> => {
     try {
@@ -64,8 +96,6 @@ export const assignUserToPosition = async (orgId: string, positionId: string, us
             // 4. LOGIC: If User has an OLD position, vacate it (Move logic)
             if (userData.positionId && userData.positionId !== positionId) {
                 const oldPosRef = doc(db, 'positions', userData.positionId);
-                // We don't strictly need to read oldPos, just update it if we are sure ID exists.
-                // But reading confirms existence.
                 transaction.update(oldPosRef, { occupantId: null });
             }
 
@@ -82,8 +112,6 @@ export const assignUserToPosition = async (orgId: string, positionId: string, us
             // 7. WRITE: Update Membership (For quick permission checks)
             const membershipId = `${userId}_${orgId}`;
             const memRef = doc(db, 'memberships', membershipId);
-            // Membership might not exist if data is stale, utilize set with merge or update
-            // Using update since invite flow ensures membership exists
             transaction.update(memRef, {
                 positionId: positionId,
                 roleTitle: targetPos.title,
@@ -120,7 +148,7 @@ export const removeUserFromPosition = async (positionId: string, orgId: string):
             // 2. Clear Position
             transaction.update(posRef, { occupantId: null });
 
-            // 3. Clear User (Keep department or clear? Clearing roleTitle/PosId is key)
+            // 3. Clear User
             transaction.update(userRef, { positionId: null, roleTitle: null });
             
             // 4. Clear Membership

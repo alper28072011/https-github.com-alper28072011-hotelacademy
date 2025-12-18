@@ -43,6 +43,14 @@ export interface TargetingConfig {
   targetIds: string[]; 
 }
 
+// --- PERMISSIONS ---
+export interface PermissionSet {
+  canCreateContent: boolean;      // Eğitim oluşturabilir mi?
+  canInviteStaff: boolean;        // Yeni personel davet edebilir mi?
+  canManageStructure: boolean;    // Alt departman/pozisyon ekleyebilir mi?
+  canViewAnalytics: boolean;      // Raporları görebilir mi?
+}
+
 // --- CORE POSITION NODE (Firestore Document: 'positions') ---
 export interface Position {
   id: string;
@@ -54,6 +62,7 @@ export interface Position {
   level: number; // Hierarchy depth (0 = GM, 1 = Manager, etc.)
   baseSalary?: number;
   isOpen?: boolean; // Is this a vacant slot looking for hiring?
+  permissions?: PermissionSet; // Granular control for this specific seat
 }
 
 export interface User {
