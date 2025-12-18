@@ -1,10 +1,7 @@
 
-import { doc, runTransaction, updateDoc, arrayUnion, collection, query, where, getDocs, writeBatch, orderBy, limit, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, runTransaction, updateDoc, collection, query, where, getDocs, writeBatch, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Membership, Position, DepartmentType } from '../types';
-
-// The ID of the System Super Admin (Safety Net)
-const SYSTEM_ADMIN_ID = 'SYSTEM_ARCHIVE_VAULT'; 
+import { User, Membership, Position, Organization } from '../types';
 
 // --- POSITION MANAGEMENT (ORG CHART) ---
 
@@ -12,7 +9,6 @@ export const getOrgPositions = async (orgId: string): Promise<Position[]> => {
     try {
         const q = query(collection(db, 'positions'), where('organizationId', '==', orgId));
         const snap = await getDocs(q);
-        // Sort by level usually handled in UI, but getting all data here
         return snap.docs.map(d => ({ id: d.id, ...d.data() } as Position));
     } catch (e) {
         console.error("Get Positions Error:", e);
@@ -33,8 +29,6 @@ export const createPosition = async (position: Omit<Position, 'id'>): Promise<st
 
 export const deletePosition = async (positionId: string): Promise<boolean> => {
     try {
-        // Check for children first? For now, we allow delete, children become orphans (parentId -> null)
-        // Or strictly block. Let's strictly block in UI, but here we just delete.
         await deleteDoc(doc(db, 'positions', positionId));
         return true;
     } catch (e) {
@@ -42,29 +36,16 @@ export const deletePosition = async (positionId: string): Promise<boolean> => {
     }
 };
 
-/**
- * Assigns a User to a specific Position ("Filling the Seat").
- * This updates:
- * 1. The Position document (occupantId)
- * 2. The User's profile (roleTitle, department, positionId)
- * 3. The Membership record (roleTitle, positionId)
- */
 export const assignUserToPosition = async (orgId: string, positionId: string, userId: string): Promise<boolean> => {
     try {
         await runTransaction(db, async (transaction) => {
-            // 1. Get Position Details
             const posRef = doc(db, 'positions', positionId);
             const posSnap = await transaction.get(posRef);
             if (!posSnap.exists()) throw new Error("Position not found");
             const posData = posSnap.data() as Position;
 
-            // 2. Clear old occupant if exists (Optional: Move them to bench?)
-            // For now, we overwrite.
-
-            // 3. Update Position
             transaction.update(posRef, { occupantId: userId });
 
-            // 4. Update User Profile
             const userRef = doc(db, 'users', userId);
             transaction.update(userRef, { 
                 positionId: positionId,
@@ -72,7 +53,6 @@ export const assignUserToPosition = async (orgId: string, positionId: string, us
                 department: posData.departmentId
             });
 
-            // 5. Update Membership
             const membershipId = `${userId}_${orgId}`;
             const memRef = doc(db, 'memberships', membershipId);
             transaction.update(memRef, {
@@ -98,44 +78,48 @@ export const removeUserFromPosition = async (positionId: string): Promise<boolea
     }
 };
 
-// --- EXISTING FUNCTIONS ---
+// --- OWNER ACTIONS ---
 
 /**
- * Returns a list of potential successors (Admins or Managers), sorted by seniority (joinedAt).
+ * Request Deletion: Owner asks Super Admin to nuke the org.
  */
-export const getBackupAdmins = async (orgId: string, excludeUserId: string): Promise<Membership[]> => {
+export const requestOrganizationDeletion = async (orgId: string, reason: string): Promise<boolean> => {
     try {
-        const q = query(
-            collection(db, 'memberships'),
-            where('organizationId', '==', orgId),
-            where('role', 'in', ['admin', 'manager']),
-            orderBy('joinedAt', 'asc') // Oldest member first
-        );
-        const snapshot = await getDocs(q);
-        return snapshot.docs
-            .map(d => d.data() as Membership)
-            .filter(m => m.userId !== excludeUserId);
-    } catch (e) {
-        console.error("Failed to fetch backup admins:", e);
-        return [];
+        await updateDoc(doc(db, 'organizations', orgId), {
+            status: 'PENDING_DELETION',
+            deletionReason: reason
+        });
+        return true;
+    } catch (error) {
+        console.error("Deletion Request Failed:", error);
+        return false;
     }
 };
 
 /**
- * Transfers ownership of an organization to another user.
+ * Transfer Ownership: Crown passed to another user.
+ * 1. Update Org ownerId
+ * 2. Demote old owner to 'manager'
+ * 3. Promote new owner to 'manager' (Conceptually 'Owner' role is derived from org.ownerId)
  */
-export const transferOwnership = async (orgId: string, newOwnerId: string): Promise<boolean> => {
+export const transferOwnership = async (orgId: string, newOwnerId: string, currentOwnerId: string): Promise<boolean> => {
     try {
         await runTransaction(db, async (transaction) => {
+            // 1. Update Org
             const orgRef = doc(db, 'organizations', orgId);
             transaction.update(orgRef, { ownerId: newOwnerId });
 
-            const membershipId = `${newOwnerId}_${orgId}`;
-            const memRef = doc(db, 'memberships', membershipId);
-            transaction.update(memRef, { role: 'manager' });
+            // 2. Update New Owner Membership
+            const newMemId = `${newOwnerId}_${orgId}`;
+            const newMemRef = doc(db, 'memberships', newMemId);
+            // Ensure they are at least a manager
+            transaction.update(newMemRef, { role: 'manager' });
 
-            const userRef = doc(db, 'users', newOwnerId);
-            transaction.update(userRef, { role: 'manager' });
+            // 3. Update Old Owner Membership (Optional: Keep as manager or downgrade?)
+            // Usually old owner stays as manager to help transition
+            const oldMemId = `${currentOwnerId}_${orgId}`;
+            const oldMemRef = doc(db, 'memberships', oldMemId);
+            transaction.update(oldMemRef, { role: 'manager' });
         });
         return true;
     } catch (error) {
@@ -145,59 +129,47 @@ export const transferOwnership = async (orgId: string, newOwnerId: string): Prom
 };
 
 /**
- * CASCADING DELETE: Deletes an organization and ALL related data.
+ * Returns potential successors (Admins/Managers) for transfer.
  */
-export const deleteOrganizationFully = async (orgId: string): Promise<boolean> => {
+export const getPotentialSuccessors = async (orgId: string, currentOwnerId: string): Promise<User[]> => {
     try {
-        const batch = writeBatch(db);
-
-        // 1. Delete Organization Doc
-        const orgRef = doc(db, 'organizations', orgId);
-        batch.delete(orgRef);
-
-        // 2. Fetch Memberships to detach users
-        const memQ = query(collection(db, 'memberships'), where('organizationId', '==', orgId));
+        const memQ = query(
+            collection(db, 'memberships'),
+            where('organizationId', '==', orgId),
+            where('role', 'in', ['admin', 'manager'])
+        );
         const memSnap = await getDocs(memQ);
+        const userIds = memSnap.docs
+            .map(d => d.data().userId)
+            .filter(id => id !== currentOwnerId);
         
-        memSnap.docs.forEach(memDoc => {
-            const data = memDoc.data();
-            batch.delete(memDoc.ref);
-            
-            const userRef = doc(db, 'users', data.userId);
-            batch.update(userRef, { 
-                currentOrganizationId: null,
-                role: 'staff',
-                positionId: null,
-                roleTitle: null
-            });
-        });
+        if (userIds.length === 0) return [];
 
-        // 3. Delete Related Data
-        const deleteCollectionByOrg = async (colName: string) => {
-            const q = query(collection(db, colName), where('organizationId', '==', orgId));
-            const snap = await getDocs(q);
-            snap.docs.forEach(d => batch.delete(d.ref));
-        };
-
-        await deleteCollectionByOrg('posts');
-        await deleteCollectionByOrg('tasks');
-        await deleteCollectionByOrg('courses');
-        await deleteCollectionByOrg('careerPaths');
-        await deleteCollectionByOrg('requests');
-        await deleteCollectionByOrg('positions'); // Delete Org Chart Nodes
-
-        await batch.commit();
-        return true;
-    } catch (error) {
-        console.error("Cascading Delete Error:", error);
-        return false;
+        const usersQ = query(collection(db, 'users'), where('__name__', 'in', userIds));
+        const usersSnap = await getDocs(usersQ);
+        return usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as User));
+    } catch (e) {
+        return [];
     }
 };
 
-export const detachUserFromAllOrgs = async (userId: string) => {
-    const batch = writeBatch(db);
-    const q = query(collection(db, 'memberships'), where('userId', '==', userId));
-    const snap = await getDocs(q);
-    snap.docs.forEach(d => batch.delete(d.ref));
-    await batch.commit();
+// Legacy support
+export const getBackupAdmins = async (orgId: string, excludeUserId: string): Promise<Membership[]> => {
+    return []; // Deprecated, replaced by getPotentialSuccessors
+};
+
+export const detachUserFromAllOrgs = async (userId: string): Promise<boolean> => {
+    try {
+        const q = query(collection(db, 'memberships'), where('userId', '==', userId));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        return true;
+    } catch (e) {
+        console.error("Detach User Error:", e);
+        return false;
+    }
 };

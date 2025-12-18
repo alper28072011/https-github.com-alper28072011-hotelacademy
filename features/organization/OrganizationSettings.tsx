@@ -4,15 +4,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Building2, Save, Upload, Loader2, Palette, Shield, List, 
     Trash2, Plus, AlertTriangle, XCircle, CheckCircle2, 
-    ArrowRight, Globe, MapPin, X
+    ArrowRight, Globe, MapPin, X, Crown, LogOut
 } from 'lucide-react';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { updateOrganization } from '../../services/db';
-import { deleteOrganizationFully } from '../../services/organizationService';
+import { requestOrganizationDeletion, getPotentialSuccessors, transferOwnership } from '../../services/organizationService';
 import { uploadFile } from '../../services/storage';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { OrganizationSector, OrganizationSize } from '../../types';
+import { OrganizationSector, OrganizationSize, User } from '../../types';
 import confetti from 'canvas-confetti';
 
 export const OrganizationSettings: React.FC = () => {
@@ -23,9 +23,14 @@ export const OrganizationSettings: React.FC = () => {
   
   const [activeTab, setActiveTab] = useState<'BRAND' | 'DEPTS' | 'DANGER'>('BRAND');
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false); 
-  const [deleteConfirm, setDeleteConfirm] = useState('');
   const [showWelcome, setShowWelcome] = useState(false);
+
+  // Danger Zone States
+  const [deleteReason, setDeleteReason] = useState('');
+  const [isRequestingDelete, setIsRequestingDelete] = useState(false);
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [potentialSuccessors, setPotentialSuccessors] = useState<User[]>([]);
+  const [selectedSuccessor, setSelectedSuccessor] = useState<string>('');
 
   // Form State - Brand
   const [name, setName] = useState('');
@@ -39,7 +44,9 @@ export const OrganizationSettings: React.FC = () => {
   const [departments, setDepartments] = useState<string[]>([]);
   const [newDeptInput, setNewDeptInput] = useState('');
 
-  // Sync state when org loads
+  // Identify Role
+  const isOwner = currentOrganization?.ownerId === currentUser?.id;
+
   useEffect(() => {
       if(currentOrganization) {
           setName(currentOrganization.name);
@@ -52,7 +59,6 @@ export const OrganizationSettings: React.FC = () => {
       }
   }, [currentOrganization]);
 
-  // Check for Onboarding Flag
   useEffect(() => {
       if (location.state?.isNewOrg) {
           setShowWelcome(true);
@@ -79,7 +85,7 @@ export const OrganizationSettings: React.FC = () => {
       };
 
       await updateOrganization(currentOrganization.id, updates);
-      await switchOrganization(currentOrganization.id); // Refresh store
+      await switchOrganization(currentOrganization.id);
       
       setIsSaving(false);
       if (showWelcome) setShowWelcome(false);
@@ -96,16 +102,6 @@ export const OrganizationSettings: React.FC = () => {
       }
   };
 
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files?.[0] && currentOrganization) {
-          setIsSaving(true);
-          const url = await uploadFile(e.target.files[0], 'org_covers');
-          await updateOrganization(currentOrganization.id, { coverUrl: url });
-          await switchOrganization(currentOrganization.id);
-          setIsSaving(false);
-      }
-  };
-
   const addDepartment = () => {
       if(newDeptInput.trim() && !departments.includes(newDeptInput.trim())) {
           setDepartments([...departments, newDeptInput.trim()]);
@@ -117,20 +113,41 @@ export const OrganizationSettings: React.FC = () => {
       setDepartments(departments.filter(d => d !== dept));
   };
 
-  const handleDeleteOrg = async () => {
-      if (!currentOrganization || !currentUser) return;
-      if (deleteConfirm !== currentOrganization.name) return;
-      
-      setIsDeleting(true);
-      const success = await deleteOrganizationFully(currentOrganization.id);
-      
+  // --- DANGER ZONE ACTIONS ---
+
+  const handleRequestDelete = async () => {
+      if (!currentOrganization || !deleteReason) return;
+      setIsRequestingDelete(true);
+      const success = await requestOrganizationDeletion(currentOrganization.id, deleteReason);
+      setIsRequestingDelete(false);
       if (success) {
-          alert("Kurum kalıcı olarak silindi. Tüm personel serbest kaldı.");
-          navigate('/');
-          window.location.reload();
+          alert("Silme talebiniz iletildi. Süper Admin onayladığında işlem tamamlanacak.");
+          setDeleteReason('');
       } else {
-          alert("Silme işlemi başarısız oldu.");
-          setIsDeleting(false);
+          alert("Talep iletilemedi.");
+      }
+  };
+
+  const loadSuccessors = async () => {
+      if (!currentOrganization || !currentUser) return;
+      const users = await getPotentialSuccessors(currentOrganization.id, currentUser.id);
+      setPotentialSuccessors(users);
+  };
+
+  const handleTransfer = async () => {
+      if (!currentOrganization || !currentUser || !selectedSuccessor) return;
+      if (!window.confirm("Sahipliği devretmek üzeresiniz. Bu işlemden sonra tam yetki devredilecek ve siz yönetici rolüne geçeceksiniz. Emin misiniz?")) return;
+
+      setIsTransferring(true);
+      const success = await transferOwnership(currentOrganization.id, selectedSuccessor, currentUser.id);
+      setIsTransferring(false);
+
+      if (success) {
+          alert("Devir işlemi başarılı. Sahiplik aktarıldı.");
+          await switchOrganization(currentOrganization.id); // Refresh roles
+          navigate('/admin');
+      } else {
+          alert("Devir işlemi başarısız.");
       }
   };
 
@@ -159,20 +176,6 @@ export const OrganizationSettings: React.FC = () => {
                             </div>
                         </div>
                         <div className="p-8">
-                            <div className="flex flex-col gap-4 mb-8">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">1</div>
-                                    <div className="text-sm text-gray-600">Marka ve Sektör bilgilerini gir.</div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">2</div>
-                                    <div className="text-sm text-gray-600">Departmanlarını yapılandır.</div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold shrink-0">3</div>
-                                    <div className="text-sm text-gray-600">Ekibini davet etmeye başla!</div>
-                                </div>
-                            </div>
                             <button 
                                 onClick={() => setShowWelcome(false)}
                                 className="w-full bg-primary hover:bg-primary-light text-white font-bold py-4 rounded-xl shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-95"
@@ -206,9 +209,11 @@ export const OrganizationSettings: React.FC = () => {
             <button onClick={() => setActiveTab('DEPTS')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'DEPTS' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
                 <List className="w-4 h-4" /> Departmanlar
             </button>
-            <button onClick={() => setActiveTab('DANGER')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'DANGER' ? 'bg-red-50 text-red-600 border border-red-100' : 'text-gray-500 hover:bg-gray-200'}`}>
-                <AlertTriangle className="w-4 h-4" /> Risk Bölgesi
-            </button>
+            {isOwner && (
+                <button onClick={() => { setActiveTab('DANGER'); loadSuccessors(); }} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'DANGER' ? 'bg-red-50 text-red-600 border border-red-100' : 'text-gray-500 hover:bg-gray-200'}`}>
+                    <AlertTriangle className="w-4 h-4" /> Kritik Bölge
+                </button>
+            )}
         </div>
 
         <div className="p-6">
@@ -221,33 +226,14 @@ export const OrganizationSettings: React.FC = () => {
                 {/* BRAND SETTINGS */}
                 {activeTab === 'BRAND' && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Logo Upload */}
-                            <div className="flex items-center gap-6">
-                                <div className="relative group cursor-pointer w-24 h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-primary">
-                                    {currentOrganization.logoUrl ? <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" /> : <Upload className="w-8 h-8 text-gray-400" />}
-                                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleLogoUpload} />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-gray-800">Kurum Logosu</h3>
-                                    <p className="text-xs text-gray-500">Önerilen: 500x500px PNG</p>
-                                </div>
+                        <div className="flex items-center gap-6">
+                            <div className="relative group cursor-pointer w-24 h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-primary">
+                                {currentOrganization.logoUrl ? <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" /> : <Upload className="w-8 h-8 text-gray-400" />}
+                                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleLogoUpload} />
                             </div>
-
-                            {/* Cover Upload */}
-                            <div className="flex flex-col gap-2">
-                                <label className="text-xs font-bold text-gray-500 uppercase">Kapak Fotoğrafı</label>
-                                <div className="relative group cursor-pointer w-full h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-primary">
-                                    {currentOrganization.coverUrl ? (
-                                        <>
-                                            <img src={currentOrganization.coverUrl} className="w-full h-full object-cover opacity-80" />
-                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Upload className="w-6 h-6 text-white" />
-                                            </div>
-                                        </>
-                                    ) : <Upload className="w-8 h-8 text-gray-400" />}
-                                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleCoverUpload} />
-                                </div>
+                            <div>
+                                <h3 className="font-bold text-gray-800">Kurum Logosu</h3>
+                                <p className="text-xs text-gray-500">Markanızın yüzü.</p>
                             </div>
                         </div>
                         
@@ -258,51 +244,7 @@ export const OrganizationSettings: React.FC = () => {
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Konum</label>
-                                <div className="relative">
-                                    <MapPin className="absolute left-3 top-3.5 w-4 h-4 text-gray-400" />
-                                    <input value={locationStr} onChange={e => setLocationStr(e.target.value)} placeholder="Şehir, Ülke" className="w-full p-3 pl-10 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Web Sitesi</label>
-                            <div className="relative">
-                                <Globe className="absolute left-3 top-3.5 w-4 h-4 text-gray-400" />
-                                <input value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://..." className="w-full p-3 pl-10 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
-                            </div>
-                        </div>
-
-                        {/* SECTOR & SIZE */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Faaliyet Sektörü</label>
-                                <select 
-                                    value={sector}
-                                    onChange={(e) => setSector(e.target.value as any)}
-                                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary"
-                                >
-                                    <option value="tourism">Turizm & Otelcilik</option>
-                                    <option value="technology">Teknoloji & Yazılım</option>
-                                    <option value="health">Sağlık Hizmetleri</option>
-                                    <option value="education">Eğitim & Akademi</option>
-                                    <option value="retail">Perakende & Mağazacılık</option>
-                                    <option value="finance">Finans & Danışmanlık</option>
-                                    <option value="other">Diğer</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Kurum Büyüklüğü</label>
-                                <select 
-                                    value={size}
-                                    onChange={(e) => setSize(e.target.value as any)}
-                                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary"
-                                >
-                                    <option value="1-10">1-10 Kişi</option>
-                                    <option value="11-50">11-50 Kişi</option>
-                                    <option value="50-200">50-200 Kişi</option>
-                                    <option value="200+">200+ Kişi</option>
-                                </select>
+                                <input value={locationStr} onChange={e => setLocationStr(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
                             </div>
                         </div>
                         
@@ -313,85 +255,104 @@ export const OrganizationSettings: React.FC = () => {
                     </div>
                 )}
 
-                {/* DEPARTMENTS SETTINGS */}
+                {/* DEPARTMENTS */}
                 {activeTab === 'DEPTS' && (
                     <div className="space-y-6">
-                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex gap-3 text-blue-700 text-sm">
-                            <List className="w-5 h-5 shrink-0" />
-                            <div>
-                                <span className="font-bold block">Departman Yapısı</span>
-                                İşletmenize özgü departmanları buraya ekleyin. Bunlar personel atamalarında ve görev dağılımlarında kullanılacaktır.
-                            </div>
-                        </div>
-
                         <div className="flex gap-2">
                             <input 
                                 value={newDeptInput}
                                 onChange={e => setNewDeptInput(e.target.value)}
-                                placeholder="Yeni departman adı (örn: Spa, Vale)"
+                                placeholder="Yeni departman adı..."
                                 className="flex-1 p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary"
-                                onKeyDown={e => e.key === 'Enter' && addDepartment()}
                             />
-                            <button 
-                                onClick={addDepartment}
-                                disabled={!newDeptInput.trim()}
-                                className="bg-gray-900 text-white px-6 rounded-xl font-bold hover:bg-gray-800 disabled:opacity-50"
-                            >
-                                Ekle
-                            </button>
+                            <button onClick={addDepartment} className="bg-gray-900 text-white px-6 rounded-xl font-bold hover:bg-gray-800">Ekle</button>
                         </div>
-
                         <div className="flex flex-wrap gap-3">
                             {departments.map(dept => (
-                                <div key={dept} className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-3 rounded-xl shadow-sm group hover:border-primary transition-colors">
+                                <div key={dept} className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-3 rounded-xl shadow-sm">
                                     <span className="font-bold text-gray-700">{dept}</span>
-                                    <button onClick={() => removeDepartment(dept)} className="text-gray-400 hover:text-red-500 p-1">
-                                        <X className="w-4 h-4" />
-                                    </button>
+                                    <button onClick={() => removeDepartment(dept)} className="text-gray-400 hover:text-red-500 p-1"><X className="w-4 h-4" /></button>
                                 </div>
                             ))}
-                            {departments.length === 0 && <div className="text-gray-400 text-sm italic py-4">Henüz departman eklenmedi.</div>}
                         </div>
                     </div>
                 )}
 
-                {/* DANGER ZONE */}
-                {activeTab === 'DANGER' && (
-                    <div className="space-y-6">
-                        <div className="bg-red-50 p-6 rounded-xl border border-red-100">
-                            <div className="flex items-start gap-4">
-                                <div className="p-3 bg-white rounded-full text-red-500 shadow-sm"><XCircle className="w-8 h-8" /></div>
-                                <div className="flex-1">
-                                    <h3 className="font-bold text-red-700 text-lg">Kurumu Kalıcı Olarak Sil</h3>
-                                    <p className="text-red-600/80 text-sm mt-2 mb-4 leading-relaxed">
-                                        Bu işlem geri alınamaz. 
-                                        <ul className="list-disc ml-4 mt-2 mb-2">
-                                            <li>Tüm kurslar, gönderiler ve görevler <b>silinecek</b>.</li>
-                                            <li>Personel hesapları <b>silinmeyecek</b>, ancak hepsi kurumdan çıkarılıp serbest (freelancer) statüsüne geçecek.</li>
-                                        </ul>
-                                    </p>
-                                    
-                                    <div className="mb-4">
-                                        <label className="text-xs font-bold text-red-800 uppercase mb-1 block">Onaylamak için kurum adını yazın:</label>
-                                        <input 
-                                            value={deleteConfirm}
-                                            onChange={e => setDeleteConfirm(e.target.value)}
-                                            placeholder={currentOrganization.name}
-                                            className="w-full p-2 bg-white border border-red-200 rounded-lg text-red-900 placeholder-red-200 outline-none focus:ring-2 focus:ring-red-500"
-                                        />
-                                    </div>
-
-                                    <button 
-                                        onClick={handleDeleteOrg}
-                                        disabled={isDeleting || deleteConfirm !== currentOrganization.name}
-                                        className="bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-red-600/20 flex items-center gap-2 transition-all w-full justify-center"
-                                    >
-                                        {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
-                                        Kurumu Sil ve Kapat
-                                    </button>
+                {/* DANGER ZONE (OWNER ONLY) */}
+                {activeTab === 'DANGER' && isOwner && (
+                    <div className="space-y-8">
+                        
+                        {/* 1. Transfer Ownership */}
+                        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                            <div className="flex items-start gap-4 mb-4">
+                                <div className="p-3 bg-white rounded-full text-blue-500 shadow-sm"><Crown className="w-6 h-6" /></div>
+                                <div>
+                                    <h3 className="font-bold text-blue-900 text-lg">Yönetimi Devret</h3>
+                                    <p className="text-blue-800/70 text-sm mt-1">İşletme sahipliğini başka bir yöneticiye aktarır. Siz yönetici rolüne geçersiniz.</p>
                                 </div>
                             </div>
+                            
+                            <div className="flex gap-2">
+                                <select 
+                                    className="flex-1 p-3 bg-white border border-blue-200 rounded-xl outline-none text-sm font-bold text-gray-700"
+                                    value={selectedSuccessor}
+                                    onChange={e => setSelectedSuccessor(e.target.value)}
+                                >
+                                    <option value="">Devredilecek Kişiyi Seç...</option>
+                                    {potentialSuccessors.map(u => (
+                                        <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                                    ))}
+                                </select>
+                                <button 
+                                    onClick={handleTransfer}
+                                    disabled={!selectedSuccessor || isTransferring}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-xl font-bold flex items-center gap-2 disabled:opacity-50 transition-colors"
+                                >
+                                    {isTransferring ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                                    Devret
+                                </button>
+                            </div>
+                            {potentialSuccessors.length === 0 && <p className="text-xs text-red-500 mt-2">Devredecek uygun yönetici bulunamadı. Önce birini yönetici yapmalısınız.</p>}
                         </div>
+
+                        {/* 2. Delete Request */}
+                        <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
+                            <div className="flex items-start gap-4 mb-4">
+                                <div className="p-3 bg-white rounded-full text-red-500 shadow-sm"><Trash2 className="w-6 h-6" /></div>
+                                <div>
+                                    <h3 className="font-bold text-red-900 text-lg">Kurumu Silmeyi Talep Et</h3>
+                                    <p className="text-red-800/70 text-sm mt-1">
+                                        Bu işlem geri alınamaz. Kurum silindiğinde tüm veriler yok olur ve personel serbest kalır. 
+                                        Bu talep <b>Süper Admin</b> onayına gider.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {currentOrganization.status === 'PENDING_DELETION' ? (
+                                <div className="bg-white p-4 rounded-xl border border-red-200 text-red-600 font-bold text-center flex items-center justify-center gap-2">
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Silme Talebi İnceleniyor...
+                                </div>
+                            ) : (
+                                <>
+                                    <textarea 
+                                        value={deleteReason}
+                                        onChange={e => setDeleteReason(e.target.value)}
+                                        placeholder="Silme nedeninizi kısaca belirtin..."
+                                        className="w-full p-3 bg-white border border-red-200 rounded-xl outline-none text-red-900 placeholder-red-200 focus:ring-2 focus:ring-red-500 mb-4 h-24 resize-none"
+                                    />
+                                    <button 
+                                        onClick={handleRequestDelete}
+                                        disabled={!deleteReason || isRequestingDelete}
+                                        className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
+                                    >
+                                        {isRequestingDelete ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                                        Silme Talebi Gönder
+                                    </button>
+                                </>
+                            )}
+                        </div>
+
                     </div>
                 )}
             </motion.div>

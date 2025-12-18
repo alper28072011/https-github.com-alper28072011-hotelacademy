@@ -211,7 +211,8 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
         const newOrg: Organization = {
             id: orgId, name, sector, logoUrl: '', location: 'Global', ownerId: owner.id, code, createdAt: Date.now(),
             settings: { allowStaffContentCreation: false, customDepartments: ['Yönetim', 'Operasyon'], primaryColor: '#0B1E3B' },
-            followersCount: 0, memberCount: 1
+            followersCount: 0, memberCount: 1,
+            status: 'ACTIVE'
         };
         await setDoc(doc(db, 'organizations', orgId), newOrg);
 

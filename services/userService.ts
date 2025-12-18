@@ -111,7 +111,7 @@ export const deleteUserSmart = async (user: User): Promise<{ success: boolean; e
             const successor = backups[0]; // Oldest admin
             
             // Transfer crown
-            await transferOwnership(validation.orgId, successor.userId);
+            await transferOwnership(validation.orgId, successor.userId, user.id);
             
             // Notify Successor
             await addDoc(collection(db, `users/${successor.userId}/notifications`), {

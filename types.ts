@@ -27,14 +27,14 @@ export type AuthMode = 'LOGIN' | 'REGISTER';
 export interface Position {
   id: string;
   organizationId: string;
-  title: string; // e.g. "Front Office Manager"
+  title: string;
   departmentId: DepartmentType;
-  parentId: string | null; // NULL if top-level (GM/Owner)
-  occupantId: string | null; // User ID if filled, null if Vacant
-  requirements?: string[]; // Tag IDs required for this position
-  level: number; // Hierarchy depth (0, 1, 2...)
+  parentId: string | null;
+  occupantId: string | null;
+  requirements?: string[];
+  level: number;
   baseSalary?: number;
-  isOpen?: boolean; // Is this position actively recruiting?
+  isOpen?: boolean;
 }
 
 export interface User {
@@ -47,8 +47,8 @@ export interface User {
   currentOrganizationId: string | null; 
   department: DepartmentType | null;
   role: UserRole;
-  roleTitle?: string; // The display title derived from Position
-  positionId?: string; // Link to the specific Position
+  roleTitle?: string;
+  positionId?: string;
   status: UserStatus;
   xp: number;
   creatorLevel: CreatorLevel;
@@ -87,7 +87,7 @@ export interface Course {
   title: string;
   description: string;
   thumbnailUrl: string;
-  duration: number; // in minutes
+  duration: number;
   xpReward: number;
   createdAt?: number;
   steps: StoryCard[]; 
@@ -178,10 +178,12 @@ export interface JoinRequest {
   organizationId: string;
   targetDepartment: string;
   requestedRoleTitle: string;
-  positionId?: string; // Optional: Linking request to a specific open position
+  positionId?: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
 }
+
+export type OrganizationStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING_DELETION' | 'ARCHIVED';
 
 export interface Organization { 
   id: string; 
@@ -199,8 +201,9 @@ export interface Organization {
   website?: string; 
   description?: string; 
   size?: OrganizationSize; 
-  status?: 'ACTIVE' | 'ARCHIVED';
-  structureType?: 'FLAT' | 'HIERARCHICAL'; // New: Defines if using Org Chart mode
+  status: OrganizationStatus; // Updated
+  deletionReason?: string; // New: Why owner wants to delete
+  structureType?: 'FLAT' | 'HIERARCHICAL';
 }
 
 export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
