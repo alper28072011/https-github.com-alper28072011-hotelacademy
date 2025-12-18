@@ -23,7 +23,24 @@ export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VID
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
-// --- HIERARCHY & POSITIONS ---
+// --- HIERARCHY STRUCTURE ---
+export interface OrgPosition {
+  id: string;
+  title: string; // e.g. "Sous Chef"
+}
+
+export interface OrgDepartment {
+  id: string; // e.g. "kitchen"
+  name: string; // e.g. "Mutfak & Gıda"
+  positions: OrgPosition[];
+}
+
+export interface TargetingConfig {
+  type: 'ALL' | 'DEPARTMENT' | 'POSITION';
+  targetIds: string[]; // Dept IDs or Position IDs
+}
+
+// --- HIERARCHY & POSITIONS (Legacy kept for compatibility, new structure in Organization) ---
 export interface Position {
   id: string;
   organizationId: string;
@@ -45,10 +62,10 @@ export interface User {
   phoneNumber: string; 
   avatar: string; 
   currentOrganizationId: string | null; 
-  department: DepartmentType | null;
+  department: string | null; // Stores Department ID
   role: UserRole;
   roleTitle?: string;
-  positionId?: string;
+  positionId?: string; // Stores Position ID from Org Structure
   status: UserStatus;
   xp: number;
   creatorLevel: CreatorLevel;
@@ -100,6 +117,10 @@ export interface Course {
   isFeatured?: boolean;
   assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
   targetDepartments?: string[];
+  
+  // NEW: Precise Targeting
+  targeting?: TargetingConfig;
+
   studentCount?: number;
   isNew?: boolean;
   popularityScore?: number;
@@ -201,9 +222,12 @@ export interface Organization {
   website?: string; 
   description?: string; 
   size?: OrganizationSize; 
-  status: OrganizationStatus; // Updated
-  deletionReason?: string; // New: Why owner wants to delete
+  status: OrganizationStatus; 
+  deletionReason?: string; 
   structureType?: 'FLAT' | 'HIERARCHICAL';
+  
+  // NEW: Official Hierarchy Structure
+  hierarchy?: OrgDepartment[];
 }
 
 export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';

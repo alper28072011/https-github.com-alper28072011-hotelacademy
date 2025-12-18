@@ -54,11 +54,6 @@ export const getAdminCourses = async (userId: string, orgId?: string | null): Pr
 
 // --- HİBRİT HABER KAYNAĞI MOTORU (FEED ENGINE) ---
 
-/**
- * DASHBOARD FEED V4 (Kesin Çözüm)
- * Firestore index hatalarını önlemek için orderBy sorgudan kaldırıldı, 
- * birleştirme aşamasında JS ile sıralanıyor.
- */
 export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[]> => {
     try {
         const promises = [];
@@ -86,7 +81,7 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
             promises.push(getDocs(socialQ));
         }
 
-        // 4. HAVUZ: KEŞFET - Hata veren orderBy buradan kaldırıldı
+        // 4. HAVUZ: KEŞFET
         const discoverQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), limit(10));
         promises.push(getDocs(discoverQ));
 
@@ -99,7 +94,6 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
             });
         });
 
-        // Tüm havuzlar burada kronolojik olarak sıralanıyor
         return Array.from(feedMap.values())
             .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
@@ -110,20 +104,53 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
 };
 
 /**
- * HİKAYELER (STORIES): Sadece Acil veya Kurumsal Görevler
+ * STORIES ENGINE v2 (Precise Targeting)
+ * Filters content based on:
+ * 1. Global Org Content
+ * 2. Department-Specific Content
+ * 3. Position-Specific Content
  */
 export const getDashboardStories = async (user: User): Promise<Course[]> => {
     if (!user.currentOrganizationId) return [];
+    
     try {
+        // Fetch ALL Active/High Priority courses for this Org
         const q = query(
             coursesRef, 
             where('organizationId', '==', user.currentOrganizationId),
             where('priority', '==', 'HIGH')
         );
+        
         const snap = await getDocs(q);
-        const courses = snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
-        return courses.filter(c => !user.completedCourses?.includes(c.id));
-    } catch (error) { return []; }
+        const allOrgCourses = snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+
+        // Filter based on User's Dept & Position
+        const targetedCourses = allOrgCourses.filter(course => {
+            // A. Already completed? Skip.
+            if (user.completedCourses?.includes(course.id)) return false;
+
+            // B. Check Targeting Rules
+            if (!course.targeting || course.targeting.type === 'ALL') {
+                return true; // Everyone sees this
+            }
+
+            if (course.targeting.type === 'DEPARTMENT') {
+                return user.department && course.targeting.targetIds.includes(user.department);
+            }
+
+            if (course.targeting.type === 'POSITION') {
+                return user.positionId && course.targeting.targetIds.includes(user.positionId);
+            }
+
+            return false;
+        });
+
+        return targetedCourses;
+
+    } catch (error) { 
+        console.error("Story Engine Error:", error);
+        return []; 
+    }
 };
 
 // --- DİĞER TEMEL FONKSİYONLAR ---
@@ -208,21 +235,30 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
         const orgId = name.toLowerCase().replace(/\s/g, '_') + '_' + Math.floor(Math.random() * 1000);
         const code = name.substring(0, 3).toUpperCase() + Math.floor(1000 + Math.random() * 9000); 
 
+        // Default Hierarchy
+        const defaultHierarchy = [
+            { id: 'mgmt', name: 'Yönetim', positions: [{ id: 'gm', title: 'Genel Müdür' }] },
+            { id: 'fo', name: 'Ön Büro', positions: [{ id: 'fo_agent', title: 'Resepsiyonist' }] },
+            { id: 'hk', name: 'Kat Hizmetleri', positions: [{ id: 'hk_maid', title: 'Kat Görevlisi' }] }
+        ];
+
         const newOrg: Organization = {
             id: orgId, name, sector, logoUrl: '', location: 'Global', ownerId: owner.id, code, createdAt: Date.now(),
             settings: { allowStaffContentCreation: false, customDepartments: ['Yönetim', 'Operasyon'], primaryColor: '#0B1E3B' },
             followersCount: 0, memberCount: 1,
-            status: 'ACTIVE'
+            status: 'ACTIVE',
+            hierarchy: defaultHierarchy
         };
         await setDoc(doc(db, 'organizations', orgId), newOrg);
 
         const membershipId = `${owner.id}_${orgId}`;
         await setDoc(doc(db, 'memberships', membershipId), {
-            id: membershipId, userId: owner.id, organizationId: orgId, role: 'manager', department: 'management', status: 'ACTIVE', joinedAt: Date.now()
+            id: membershipId, userId: owner.id, organizationId: orgId, role: 'manager', department: 'mgmt', status: 'ACTIVE', joinedAt: Date.now(),
+            positionId: 'gm', roleTitle: 'Genel Müdür'
         });
 
         await updateDoc(doc(db, 'users', owner.id), {
-            currentOrganizationId: orgId, role: 'manager', department: 'management', organizationHistory: arrayUnion(orgId)
+            currentOrganizationId: orgId, role: 'manager', department: 'mgmt', positionId: 'gm', organizationHistory: arrayUnion(orgId)
         });
 
         return newOrg;
@@ -273,10 +309,11 @@ export const subscribeToLeaderboard = (dept: DepartmentType, orgId: string, call
     });
 };
 
-export const sendJoinRequest = async (userId: string, orgId: string, dept: DepartmentType, roleTitle?: string): Promise<{ success: boolean; message?: string }> => {
+// Updated: Accepts Position ID
+export const sendJoinRequest = async (userId: string, orgId: string, dept: DepartmentType, roleTitle?: string, positionId?: string): Promise<{ success: boolean; message?: string }> => {
     try {
         await addDoc(collection(db, 'requests'), {
-            type: 'REQUEST_TO_JOIN', userId, organizationId: orgId, targetDepartment: dept, requestedRoleTitle: roleTitle || '', status: 'PENDING', createdAt: Date.now()
+            type: 'REQUEST_TO_JOIN', userId, organizationId: orgId, targetDepartment: dept, requestedRoleTitle: roleTitle || '', positionId, status: 'PENDING', createdAt: Date.now()
         });
         return { success: true };
     } catch (e: any) { 
@@ -408,8 +445,13 @@ export const approveJoinRequest = async (requestId: string, request: JoinRequest
         batch.update(doc(db, 'requests', requestId), { status: 'APPROVED' });
         const membershipId = `${request.userId}_${request.organizationId}`;
         batch.set(doc(db, 'memberships', membershipId), {
-            id: membershipId, userId: request.userId, organizationId: request.organizationId, role: 'staff', roleTitle, permissions, department: request.targetDepartment, status: 'ACTIVE', joinedAt: Date.now()
+            id: membershipId, userId: request.userId, organizationId: request.organizationId, role: 'staff', roleTitle, permissions, department: request.targetDepartment, status: 'ACTIVE', joinedAt: Date.now(), positionId: request.positionId
         });
+        
+        // Also update User profile
+        const userRef = doc(db, 'users', request.userId);
+        batch.update(userRef, { department: request.targetDepartment, positionId: request.positionId, roleTitle });
+
         await batch.commit();
         return true;
     } catch (e) { return false; }

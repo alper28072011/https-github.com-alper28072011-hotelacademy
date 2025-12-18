@@ -5,12 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, 
     Users, Utensils, BedDouble, ConciergeBell, Settings, ShieldCheck, 
-    BarChart3, Edit, Megaphone, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff
+    BarChart3, Edit, Megaphone, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff, ArrowRight
 } from 'lucide-react';
 import { getOrganizationDetails, sendJoinRequest, getMyMemberships, switchUserActiveOrganization } from '../../services/db';
 import { Organization, DepartmentType, OrganizationSector, FollowStatus } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { useOrganizationStore } from '../../stores/useOrganizationStore'; // Import Store
+import { useOrganizationStore } from '../../stores/useOrganizationStore'; 
 import { checkFollowStatus, followOrganizationSmart, unfollowUserSmart } from '../../services/socialService';
 import confetti from 'canvas-confetti';
 
@@ -18,7 +18,7 @@ export const OrganizationProfile: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
   const { currentUser, loginSuccess } = useAuthStore();
-  const { switchOrganization } = useOrganizationStore(); // Use Store Action
+  const { switchOrganization } = useOrganizationStore(); 
   
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,8 +29,8 @@ export const OrganizationProfile: React.FC = () => {
   // Wizard State
   const [showWizard, setShowWizard] = useState(false);
   const [step, setStep] = useState(1);
-  const [selectedDept, setSelectedDept] = useState<DepartmentType | null>(null);
-  const [roleTitle, setRoleTitle] = useState('');
+  const [selectedDeptId, setSelectedDeptId] = useState<string>('');
+  const [selectedPosId, setSelectedPosId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -54,9 +54,15 @@ export const OrganizationProfile: React.FC = () => {
   }, [orgId, currentUser]);
 
   const handleJoin = async () => {
-      if (!currentUser || !org || !selectedDept) return;
+      if (!currentUser || !org || !selectedDeptId || !selectedPosId) return;
       setIsSubmitting(true);
-      const result = await sendJoinRequest(currentUser.id, org.id, selectedDept, roleTitle);
+      
+      // Find titles for context
+      const dept = org.hierarchy?.find(d => d.id === selectedDeptId);
+      const pos = dept?.positions.find(p => p.id === selectedPosId);
+      const roleTitle = pos?.title || 'Unknown';
+
+      const result = await sendJoinRequest(currentUser.id, org.id, selectedDeptId, roleTitle, selectedPosId);
       setIsSubmitting(false);
       
       if (result.success) {
@@ -89,21 +95,16 @@ export const OrganizationProfile: React.FC = () => {
       setIsFollowLoading(false);
   };
 
-  // CORRECTED: Handle "Go to Panel" by switching active org first
   const handleGoToPanel = async () => {
       if (!currentUser || !org) return;
-      
-      // If already active, just go home
       if (currentUser.currentOrganizationId === org.id) {
           navigate('/');
           return;
       }
-
-      // Switch Active Org
       const success = await switchOrganization(org.id);
       if (success) {
           navigate('/');
-          window.location.reload(); // Ensure fresh state load
+          window.location.reload(); 
       } else {
           alert("Panele geçiş yapılamadı.");
       }
@@ -133,6 +134,8 @@ export const OrganizationProfile: React.FC = () => {
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
   if (!org) return <div>Organization not found</div>;
+
+  const activeDept = org.hierarchy?.find(d => d.id === selectedDeptId);
 
   return (
     <div className="min-h-screen bg-white pb-24 relative">
@@ -202,7 +205,6 @@ export const OrganizationProfile: React.FC = () => {
             <div className="mb-6">
                 <h1 className="text-3xl font-bold text-gray-900 leading-tight mb-2">{org.name}</h1>
                 
-                {/* Sector Badge */}
                 <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-xs font-bold mb-3 uppercase tracking-wide">
                     {getSectorIcon(org.sector)}
                     {getSectorLabel(org.sector)}
@@ -212,7 +214,6 @@ export const OrganizationProfile: React.FC = () => {
                     {org.location && <div className="flex items-center gap-1"><MapPin className="w-4 h-4 text-accent" /> {org.location}</div>}
                     {org.website && <div className="flex items-center gap-1"><Globe className="w-4 h-4 text-blue-500" /> {org.website}</div>}
                 </div>
-                {/* Stats Row */}
                 <div className="flex gap-6 mt-4 pb-4 border-b border-gray-100">
                     <div className="text-center">
                         <div className="font-bold text-lg text-gray-900">{org.followersCount || 0}</div>
@@ -265,7 +266,7 @@ export const OrganizationProfile: React.FC = () => {
             )}
         </div>
 
-        {/* WIZARD MODAL (Standard) */}
+        {/* WIZARD MODAL (Structured) */}
         <AnimatePresence>
             {showWizard && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
@@ -284,49 +285,68 @@ export const OrganizationProfile: React.FC = () => {
                     >
                         <div className="p-8">
                             <h2 className="text-2xl font-bold text-gray-900 mb-2">Başvuru Sihirbazı</h2>
-                            <p className="text-gray-500 mb-8 text-sm">Hangi pozisyonda aramıza katılmak istersin?</p>
+                            <p className="text-gray-500 mb-8 text-sm">Doğru pozisyonu seçmek, eğitimlerini belirler.</p>
 
+                            {/* STEP 1: Department Selection */}
                             {step === 1 && (
-                                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="grid grid-cols-2 gap-3">
-                                    {[
-                                        { id: 'housekeeping', icon: BedDouble, label: 'Operasyon' }, 
-                                        { id: 'kitchen', icon: Utensils, label: 'Mutfak/Gıda' },
-                                        { id: 'front_office', icon: ConciergeBell, label: 'Ön Büro/Danışma' },
-                                        { id: 'management', icon: Users, label: 'Yönetim' },
-                                    ].map((item) => (
-                                        <button 
-                                            key={item.id}
-                                            onClick={() => { setSelectedDept(item.id as any); setStep(2); }}
-                                            className="p-4 rounded-2xl border-2 border-gray-100 hover:border-primary hover:bg-primary/5 flex flex-col items-center gap-3 transition-all group"
-                                        >
-                                            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 group-hover:bg-primary group-hover:text-white transition-colors">
-                                                <item.icon className="w-6 h-6" />
+                                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col gap-4">
+                                    <label className="text-xs font-bold text-gray-400 uppercase">Departman Seçiniz</label>
+                                    <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">
+                                        {org.hierarchy && org.hierarchy.length > 0 ? (
+                                            org.hierarchy.map((dept) => (
+                                                <button 
+                                                    key={dept.id}
+                                                    onClick={() => { setSelectedDeptId(dept.id); setStep(2); }}
+                                                    className="p-4 rounded-xl border border-gray-100 hover:border-primary hover:bg-primary/5 flex items-center justify-between transition-all group text-left"
+                                                >
+                                                    <span className="font-bold text-gray-700">{dept.name}</span>
+                                                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-primary" />
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-8 text-gray-400 border-2 border-dashed rounded-xl">
+                                                Bu kurum henüz yapılandırma yapmamış.
                                             </div>
-                                            <span className="font-bold text-gray-700 text-sm">{item.label}</span>
-                                        </button>
-                                    ))}
+                                        )}
+                                    </div>
                                 </motion.div>
                             )}
 
-                            {step === 2 && (
+                            {/* STEP 2: Position Selection */}
+                            {step === 2 && activeDept && (
                                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col gap-4">
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-400 uppercase ml-1">Pozisyon / Unvan (Opsiyonel)</label>
-                                        <input 
-                                            value={roleTitle}
-                                            onChange={e => setRoleTitle(e.target.value)}
-                                            placeholder="Örn: Yazılımcı, Hemşire, Şef"
-                                            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 px-4 font-bold text-gray-900 focus:border-accent focus:outline-none mt-1"
-                                        />
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded">{activeDept.name}</span>
                                     </div>
-                                    <button 
-                                        onClick={handleJoin}
-                                        disabled={isSubmitting}
-                                        className="w-full bg-primary text-white py-4 rounded-2xl font-bold shadow-lg mt-4 flex items-center justify-center gap-2"
-                                    >
-                                        {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Başvuruyu Tamamla'}
-                                    </button>
-                                    <button onClick={() => setStep(1)} className="text-gray-400 font-medium text-sm">Geri Dön</button>
+                                    
+                                    <label className="text-xs font-bold text-gray-400 uppercase">Pozisyon (Ünvan) Seçiniz</label>
+                                    <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">
+                                        {activeDept.positions.length > 0 ? (
+                                            activeDept.positions.map((pos) => (
+                                                <button 
+                                                    key={pos.id}
+                                                    onClick={() => setSelectedPosId(pos.id)}
+                                                    className={`p-4 rounded-xl border flex items-center justify-between transition-all text-left ${selectedPosId === pos.id ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 hover:bg-gray-50'}`}
+                                                >
+                                                    <span className="font-bold text-gray-800">{pos.title}</span>
+                                                    {selectedPosId === pos.id && <CheckCircle2 className="w-5 h-5 text-primary" />}
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <div className="text-gray-400 text-sm italic">Bu departmanda açık pozisyon yok.</div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-3 mt-4">
+                                        <button onClick={() => setStep(1)} className="flex-1 py-4 text-gray-400 font-bold hover:text-gray-600">Geri</button>
+                                        <button 
+                                            onClick={handleJoin}
+                                            disabled={isSubmitting || !selectedPosId}
+                                            className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Başvuruyu Tamamla'}
+                                        </button>
+                                    </div>
                                 </motion.div>
                             )}
                         </div>

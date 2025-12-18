@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Building2, Save, Upload, Loader2, Palette, Shield, List, 
     Trash2, Plus, AlertTriangle, XCircle, CheckCircle2, 
-    ArrowRight, Globe, MapPin, X, Crown, LogOut
+    ArrowRight, Globe, MapPin, X, Crown, LogOut, Network, Briefcase, ChevronRight
 } from 'lucide-react';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { updateOrganization } from '../../services/db';
@@ -12,7 +12,7 @@ import { requestOrganizationDeletion, getPotentialSuccessors, transferOwnership 
 import { uploadFile } from '../../services/storage';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { OrganizationSector, OrganizationSize, User } from '../../types';
+import { OrganizationSector, OrganizationSize, User, OrgDepartment, OrgPosition } from '../../types';
 import confetti from 'canvas-confetti';
 
 export const OrganizationSettings: React.FC = () => {
@@ -21,7 +21,7 @@ export const OrganizationSettings: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  const [activeTab, setActiveTab] = useState<'BRAND' | 'DEPTS' | 'DANGER'>('BRAND');
+  const [activeTab, setActiveTab] = useState<'BRAND' | 'STRUCTURE' | 'DANGER'>('BRAND');
   const [isSaving, setIsSaving] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
 
@@ -40,9 +40,11 @@ export const OrganizationSettings: React.FC = () => {
   const [sector, setSector] = useState<OrganizationSector>('other');
   const [size, setSize] = useState<OrganizationSize>('1-10');
   
-  // Form State - Departments
-  const [departments, setDepartments] = useState<string[]>([]);
-  const [newDeptInput, setNewDeptInput] = useState('');
+  // Form State - Hierarchy
+  const [departments, setDepartments] = useState<OrgDepartment[]>([]);
+  const [newDeptName, setNewDeptName] = useState('');
+  const [newPosTitle, setNewPosTitle] = useState('');
+  const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
 
   // Identify Role
   const isOwner = currentOrganization?.ownerId === currentUser?.id;
@@ -55,7 +57,8 @@ export const OrganizationSettings: React.FC = () => {
           setWebsite(currentOrganization.website || '');
           setSector(currentOrganization.sector || 'other');
           setSize(currentOrganization.size || '1-10');
-          setDepartments(currentOrganization.settings?.customDepartments || []);
+          // Load Hierarchy
+          setDepartments(currentOrganization.hierarchy || []);
       }
   }, [currentOrganization]);
 
@@ -77,9 +80,9 @@ export const OrganizationSettings: React.FC = () => {
           website,
           sector,
           size,
+          hierarchy: departments,
           settings: {
               ...currentOrganization.settings,
-              customDepartments: departments,
               primaryColor: currentOrganization.settings?.primaryColor || '#0B1E3B'
           }
       };
@@ -102,15 +105,40 @@ export const OrganizationSettings: React.FC = () => {
       }
   };
 
+  // --- HIERARCHY LOGIC ---
   const addDepartment = () => {
-      if(newDeptInput.trim() && !departments.includes(newDeptInput.trim())) {
-          setDepartments([...departments, newDeptInput.trim()]);
-          setNewDeptInput('');
-      }
+      if (!newDeptName.trim()) return;
+      const newId = `dept_${Date.now()}`;
+      setDepartments([...departments, { id: newId, name: newDeptName, positions: [] }]);
+      setNewDeptName('');
   };
 
-  const removeDepartment = (dept: string) => {
-      setDepartments(departments.filter(d => d !== dept));
+  const removeDepartment = (deptId: string) => {
+      setDepartments(departments.filter(d => d.id !== deptId));
+      if (selectedDeptId === deptId) setSelectedDeptId(null);
+  };
+
+  const addPosition = (deptId: string) => {
+      if (!newPosTitle.trim()) return;
+      const newPosId = `pos_${Date.now()}`;
+      const newPos: OrgPosition = { id: newPosId, title: newPosTitle };
+      
+      setDepartments(departments.map(d => {
+          if (d.id === deptId) {
+              return { ...d, positions: [...d.positions, newPos] };
+          }
+          return d;
+      }));
+      setNewPosTitle('');
+  };
+
+  const removePosition = (deptId: string, posId: string) => {
+      setDepartments(departments.map(d => {
+          if (d.id === deptId) {
+              return { ...d, positions: d.positions.filter(p => p.id !== posId) };
+          }
+          return d;
+      }));
   };
 
   // --- DANGER ZONE ACTIONS ---
@@ -206,8 +234,8 @@ export const OrganizationSettings: React.FC = () => {
             <button onClick={() => setActiveTab('BRAND')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'BRAND' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
                 <Palette className="w-4 h-4" /> Marka
             </button>
-            <button onClick={() => setActiveTab('DEPTS')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'DEPTS' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
-                <List className="w-4 h-4" /> Departmanlar
+            <button onClick={() => setActiveTab('STRUCTURE')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'STRUCTURE' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
+                <Network className="w-4 h-4" /> Organizasyon
             </button>
             {isOwner && (
                 <button onClick={() => { setActiveTab('DANGER'); loadSuccessors(); }} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'DANGER' ? 'bg-red-50 text-red-600 border border-red-100' : 'text-gray-500 hover:bg-gray-200'}`}>
@@ -255,25 +283,74 @@ export const OrganizationSettings: React.FC = () => {
                     </div>
                 )}
 
-                {/* DEPARTMENTS */}
-                {activeTab === 'DEPTS' && (
-                    <div className="space-y-6">
-                        <div className="flex gap-2">
-                            <input 
-                                value={newDeptInput}
-                                onChange={e => setNewDeptInput(e.target.value)}
-                                placeholder="Yeni departman adı..."
-                                className="flex-1 p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary"
-                            />
-                            <button onClick={addDepartment} className="bg-gray-900 text-white px-6 rounded-xl font-bold hover:bg-gray-800">Ekle</button>
+                {/* HIERARCHY STRUCTURE */}
+                {activeTab === 'STRUCTURE' && (
+                    <div className="flex flex-col md:flex-row gap-6 h-[500px]">
+                        {/* DEPARTMENTS COLUMN */}
+                        <div className="w-full md:w-1/3 border-r border-gray-100 pr-4 flex flex-col">
+                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <List className="w-4 h-4" /> Departmanlar
+                            </h3>
+                            <div className="flex gap-2 mb-4">
+                                <input 
+                                    value={newDeptName}
+                                    onChange={e => setNewDeptName(e.target.value)}
+                                    placeholder="Yeni Departman..."
+                                    className="flex-1 p-2 bg-gray-50 rounded-lg border border-gray-200 text-sm outline-none"
+                                />
+                                <button onClick={addDepartment} className="bg-primary text-white p-2 rounded-lg"><Plus className="w-4 h-4" /></button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto space-y-2">
+                                {departments.map(dept => (
+                                    <div 
+                                        key={dept.id} 
+                                        onClick={() => setSelectedDeptId(dept.id)}
+                                        className={`flex items-center justify-between p-3 rounded-xl cursor-pointer border transition-all ${selectedDeptId === dept.id ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-white border-gray-100 hover:bg-gray-50'}`}
+                                    >
+                                        <span className="font-bold text-sm">{dept.name}</span>
+                                        <button onClick={(e) => { e.stopPropagation(); removeDepartment(dept.id); }} className="text-gray-300 hover:text-red-500"><X className="w-4 h-4" /></button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <div className="flex flex-wrap gap-3">
-                            {departments.map(dept => (
-                                <div key={dept} className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-3 rounded-xl shadow-sm">
-                                    <span className="font-bold text-gray-700">{dept}</span>
-                                    <button onClick={() => removeDepartment(dept)} className="text-gray-400 hover:text-red-500 p-1"><X className="w-4 h-4" /></button>
+
+                        {/* POSITIONS COLUMN */}
+                        <div className="w-full md:w-2/3 flex flex-col pl-4">
+                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <Briefcase className="w-4 h-4" /> Pozisyonlar (Ünvanlar)
+                            </h3>
+                            
+                            {selectedDeptId ? (
+                                <>
+                                    <div className="flex gap-2 mb-4">
+                                        <input 
+                                            value={newPosTitle}
+                                            onChange={e => setNewPosTitle(e.target.value)}
+                                            placeholder={`${departments.find(d => d.id === selectedDeptId)?.name} için pozisyon...`}
+                                            className="flex-1 p-2 bg-gray-50 rounded-lg border border-gray-200 text-sm outline-none"
+                                        />
+                                        <button onClick={() => addPosition(selectedDeptId)} className="bg-green-600 text-white p-2 rounded-lg"><Plus className="w-4 h-4" /></button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 overflow-y-auto content-start">
+                                        {departments.find(d => d.id === selectedDeptId)?.positions.map(pos => (
+                                            <div key={pos.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
+                                                <span className="text-sm font-medium text-gray-700">{pos.title}</span>
+                                                <button onClick={() => removePosition(selectedDeptId, pos.id)} className="text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                                            </div>
+                                        ))}
+                                        {departments.find(d => d.id === selectedDeptId)?.positions.length === 0 && (
+                                            <div className="col-span-2 text-center text-gray-400 text-sm py-4 border-2 border-dashed border-gray-100 rounded-xl">
+                                                Henüz pozisyon eklenmedi.
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                                    <ChevronRight className="w-8 h-8 opacity-20" />
+                                    <p className="text-sm">Pozisyonları görmek için soldan bir departman seçin.</p>
                                 </div>
-                            ))}
+                            )}
                         </div>
                     </div>
                 )}

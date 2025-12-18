@@ -7,7 +7,7 @@ import {
     Settings, Globe, Lock, ChevronRight, Upload, Edit, 
     FileType, User, Building2, Search, Trash2, Plus, 
     MousePointer2, Sparkles, MessageSquare, Award, AlertCircle,
-    RefreshCw, Image as LucideImage, Copy
+    RefreshCw, Image as LucideImage, Copy, Target
 } from 'lucide-react';
 import { generateMagicCourse } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
@@ -15,10 +15,10 @@ import { updateCourse } from '../../services/db';
 import { uploadFile } from '../../services/storage';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { StoryCard, DifficultyLevel, CourseTone, StoryCardType, Course } from '../../types';
+import { StoryCard, DifficultyLevel, CourseTone, StoryCardType, Course, TargetingConfig } from '../../types';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-type StudioStep = 'SOURCE' | 'TUNING' | 'GENERATING' | 'DIRECTOR' | 'PUBLISH';
+type StudioStep = 'SOURCE' | 'TUNING' | 'GENERATING' | 'DIRECTOR' | 'TARGETING' | 'PUBLISH';
 
 export const ContentStudio: React.FC = () => {
   const { currentUser } = useAuthStore();
@@ -53,7 +53,8 @@ export const ContentStudio: React.FC = () => {
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 
-  // 4. Final Settings
+  // 4. Targeting & Settings
+  const [targeting, setTargeting] = useState<TargetingConfig>({ type: 'ALL', targetIds: [] });
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PRIVATE');
   const [ownerType, setOwnerType] = useState<'USER' | 'ORGANIZATION'>('ORGANIZATION');
   const [isPublishing, setIsPublishing] = useState(false);
@@ -71,6 +72,7 @@ export const ContentStudio: React.FC = () => {
           });
           setVisibility(incoming.visibility);
           setOwnerType(incoming.authorType);
+          setTargeting(incoming.targeting || { type: 'ALL', targetIds: [] });
           setStep('DIRECTOR');
       }
   }, [location.state]);
@@ -156,6 +158,7 @@ export const ContentStudio: React.FC = () => {
           duration: courseData.cards.length,
           xpReward: 100,
           visibility,
+          targeting, // NEW: Save targeting info
           authorType: ownerType,
           organizationId: currentOrganization?.id,
           categoryId: 'cat_genel',
@@ -179,6 +182,16 @@ export const ContentStudio: React.FC = () => {
       }
   };
 
+  // Targeting Selection Helper
+  const toggleTargetId = (id: string) => {
+      const current = targeting.targetIds;
+      if (current.includes(id)) {
+          setTargeting({ ...targeting, targetIds: current.filter(x => x !== id) });
+      } else {
+          setTargeting({ ...targeting, targetIds: [...current, id] });
+      }
+  };
+
   const renderCardIcon = (type: StoryCardType) => {
       switch(type) {
           case 'COVER': return <ImageIcon className="w-4 h-4" />;
@@ -193,17 +206,19 @@ export const ContentStudio: React.FC = () => {
         {/* TOP STATUS BAR */}
         <div className="bg-white border-b border-gray-100 px-8 py-4 flex justify-between items-center shrink-0">
             <div className="flex items-center gap-4">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${step === 'SOURCE' ? 'bg-primary text-white' : 'bg-green-100 text-green-600'}`}>
-                    {step === 'SOURCE' ? '1' : <CheckCircle2 className="w-5 h-5" />}
-                </div>
-                <div className="w-12 h-0.5 bg-gray-100" />
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${step === 'TUNING' ? 'bg-primary text-white' : step === 'SOURCE' ? 'bg-gray-100 text-gray-400' : 'bg-green-100 text-green-600'}`}>
-                    2
-                </div>
-                <div className="w-12 h-0.5 bg-gray-100" />
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${step === 'DIRECTOR' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>
-                    3
-                </div>
+                {[
+                    { id: 'SOURCE', label: '1' }, 
+                    { id: 'TUNING', label: '2' }, 
+                    { id: 'DIRECTOR', label: '3' }, 
+                    { id: 'TARGETING', label: '4' }
+                ].map((s, i) => (
+                    <div key={s.id} className="flex items-center gap-4">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${step === s.id ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>
+                            {s.label}
+                        </div>
+                        {i < 3 && <div className="w-8 h-0.5 bg-gray-100" />}
+                    </div>
+                ))}
             </div>
             <div className="flex items-center gap-2">
                 <span className="text-xs font-black text-primary uppercase">{isEditingExisting ? 'Düzenleme' : 'Stüdyo'}</span>
@@ -247,6 +262,7 @@ export const ContentStudio: React.FC = () => {
                 </div>
             )}
 
+            {/* TUNING & GENERATING STEPS (Keep same as before) */}
             {step === 'TUNING' && (
                 <div className="flex-1 flex flex-col items-center justify-center p-12 max-w-2xl mx-auto">
                     <h1 className="text-3xl font-black text-primary mb-8">İnce Ayarlar</h1>
@@ -288,6 +304,7 @@ export const ContentStudio: React.FC = () => {
                 </div>
             )}
 
+            {/* DIRECTOR STEP (Same as before but Next button goes to TARGETING) */}
             {step === 'DIRECTOR' && courseData && (
                 <div className="flex-1 flex overflow-hidden">
                     <div className="w-72 border-r border-gray-100 flex flex-col bg-white shrink-0">
@@ -325,7 +342,7 @@ export const ContentStudio: React.FC = () => {
                             </div>
                         </div>
                         <div className="absolute bottom-8 right-8 flex gap-4">
-                             <button onClick={() => setStep('PUBLISH')} className="bg-primary text-white px-8 py-3 rounded-2xl font-bold shadow-xl flex items-center gap-2">Sonraki Adım <ChevronRight className="w-5 h-5" /></button>
+                             <button onClick={() => setStep('TARGETING')} className="bg-primary text-white px-8 py-3 rounded-2xl font-bold shadow-xl flex items-center gap-2">Sonraki Adım <ChevronRight className="w-5 h-5" /></button>
                         </div>
                     </div>
 
@@ -333,7 +350,6 @@ export const ContentStudio: React.FC = () => {
                         <h3 className="text-sm font-black text-gray-800 uppercase mb-6 flex items-center gap-2"><Edit className="w-4 h-4" /> Kart Özellikleri</h3>
                         
                         <div className="space-y-6">
-                            {/* MEDIA SECTION */}
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black text-gray-400 uppercase block">Görsel Yönetimi</label>
                                 <div className="relative aspect-video rounded-xl bg-gray-100 overflow-hidden border border-gray-200 group">
@@ -345,11 +361,8 @@ export const ContentStudio: React.FC = () => {
                                     </div>
                                     <input type="file" ref={cardMediaRef} className="hidden" accept="image/*" onChange={handleMediaUpload} />
                                 </div>
-                                <p className="text-[9px] text-gray-400 italic">Bu görseli tek tıkla tüm eğitimin teması yapabilirsiniz.</p>
                             </div>
-
                             <div className="h-px bg-gray-50" />
-
                             <div>
                                 <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">Başlık</label>
                                 <input value={courseData.cards[activeCardIndex].title} onChange={e => updateActiveCard({ title: e.target.value })} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-bold focus:border-primary outline-none" />
@@ -358,24 +371,98 @@ export const ContentStudio: React.FC = () => {
                                 <label className="text-[10px] font-black text-gray-400 uppercase block mb-2">İçerik</label>
                                 <textarea value={courseData.cards[activeCardIndex].content} onChange={e => updateActiveCard({ content: e.target.value })} rows={4} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-100 text-sm font-medium focus:border-primary outline-none resize-none" />
                             </div>
-
-                            {courseData.cards[activeCardIndex].type === 'QUIZ' && (
-                                <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100">
-                                    <span className="text-[10px] font-black text-orange-600 uppercase mb-2 block">Soru Ayarları</span>
-                                    <p className="text-xs text-orange-800 font-bold mb-1">{courseData.cards[activeCardIndex].interaction?.question}</p>
-                                    <div className="space-y-1">
-                                        {courseData.cards[activeCardIndex].interaction?.options.map((opt, i) => (
-                                            <div key={i} className={`text-[10px] p-1 rounded ${i === courseData.cards[activeCardIndex].interaction?.correctOptionIndex ? 'bg-green-100 text-green-700 font-black' : 'text-gray-500'}`}>
-                                                {i + 1}. {opt}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
                             <button onClick={deleteActiveCard} className="w-full py-3 bg-red-50 text-red-500 rounded-xl text-xs font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"><Trash2 className="w-4 h-4" /> Kartı Sil</button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* NEW STEP: TARGETING */}
+            {step === 'TARGETING' && (
+                <div className="flex-1 flex flex-col p-12 max-w-4xl mx-auto w-full">
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full">
+                        <div className="text-center mb-10">
+                            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                                <Target className="w-8 h-8" />
+                            </div>
+                            <h2 className="text-3xl font-black text-gray-900">Kime Yayınlansın?</h2>
+                            <p className="text-gray-500 mt-2">Bu içeriği kimlerin görmesi gerektiğini seçin.</p>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4 mb-8">
+                            <button 
+                                onClick={() => setTargeting({ type: 'ALL', targetIds: [] })}
+                                className={`p-6 rounded-2xl border-2 text-center transition-all ${targeting.type === 'ALL' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 hover:bg-gray-50'}`}
+                            >
+                                <Globe className="w-8 h-8 mx-auto mb-2" />
+                                <span className="font-bold">Tüm İşletme</span>
+                            </button>
+                            <button 
+                                onClick={() => setTargeting({ type: 'DEPARTMENT', targetIds: [] })}
+                                className={`p-6 rounded-2xl border-2 text-center transition-all ${targeting.type === 'DEPARTMENT' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 hover:bg-gray-50'}`}
+                            >
+                                <Building2 className="w-8 h-8 mx-auto mb-2" />
+                                <span className="font-bold">Departmanlar</span>
+                            </button>
+                            <button 
+                                onClick={() => setTargeting({ type: 'POSITION', targetIds: [] })}
+                                className={`p-6 rounded-2xl border-2 text-center transition-all ${targeting.type === 'POSITION' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 hover:bg-gray-50'}`}
+                            >
+                                <User className="w-8 h-8 mx-auto mb-2" />
+                                <span className="font-bold">Pozisyonlar</span>
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto border border-gray-100 rounded-3xl p-6 bg-gray-50">
+                            {targeting.type === 'ALL' && (
+                                <div className="flex items-center justify-center h-full text-gray-400">
+                                    <p>Bu içerik kurumdaki herkese açık olacak.</p>
+                                </div>
+                            )}
+
+                            {targeting.type === 'DEPARTMENT' && (
+                                <div className="grid grid-cols-2 gap-4">
+                                    {currentOrganization?.hierarchy?.map(dept => (
+                                        <button 
+                                            key={dept.id}
+                                            onClick={() => toggleTargetId(dept.id)}
+                                            className={`p-4 rounded-xl border flex items-center justify-between transition-all ${targeting.targetIds.includes(dept.id) ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-200'}`}
+                                        >
+                                            <span className="font-bold">{dept.name}</span>
+                                            {targeting.targetIds.includes(dept.id) && <CheckCircle2 className="w-5 h-5" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {targeting.type === 'POSITION' && (
+                                <div className="space-y-6">
+                                    {currentOrganization?.hierarchy?.map(dept => (
+                                        <div key={dept.id}>
+                                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">{dept.name}</h4>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {dept.positions.map(pos => (
+                                                    <button 
+                                                        key={pos.id}
+                                                        onClick={() => toggleTargetId(pos.id)}
+                                                        className={`p-3 rounded-xl border text-sm font-bold text-left flex items-center justify-between transition-all ${targeting.targetIds.includes(pos.id) ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-700'}`}
+                                                    >
+                                                        {pos.title}
+                                                        {targeting.targetIds.includes(pos.id) && <CheckCircle2 className="w-4 h-4" />}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-between mt-8">
+                            <button onClick={() => setStep('DIRECTOR')} className="px-8 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl">Geri</button>
+                            <button onClick={() => setStep('PUBLISH')} className="px-8 py-3 bg-primary text-white rounded-xl font-bold shadow-lg">Sonraki: Yayınla</button>
+                        </div>
+                    </motion.div>
                 </div>
             )}
 
@@ -391,7 +478,7 @@ export const ContentStudio: React.FC = () => {
                         </div>
                     </div>
                     <div className="flex gap-4 mt-12 w-full">
-                        <button onClick={() => setStep('DIRECTOR')} className="flex-1 py-4 text-gray-400 font-bold">Geri</button>
+                        <button onClick={() => setStep('TARGETING')} className="flex-1 py-4 text-gray-400 font-bold">Geri</button>
                         <button onClick={handlePublish} disabled={isPublishing} className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-2xl flex items-center justify-center gap-2">
                             {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" /> Yayınla & Bitir</>}
                         </button>
