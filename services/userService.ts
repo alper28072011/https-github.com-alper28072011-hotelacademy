@@ -5,6 +5,8 @@ import { db, auth } from './firebase';
 import { User } from '../types';
 import { detachUserFromAllOrgs, getBackupAdmins, transferOwnership } from './organizationService';
 import { checkUserOwnership } from './superAdminService';
+import { deleteFileByUrl } from './storage';
+import { deleteCourseFully } from './courseService';
 
 /**
  * Suspends a user account (Temporary Freeze).
@@ -91,7 +93,7 @@ export const validateUserDeletion = async (userId: string): Promise<{
 
 /**
  * SMART DELETE PROTOCOL
- * Handles ownership transfers and cleanups automatically.
+ * Handles ownership transfers, file cleanups, and data detachment.
  */
 export const deleteUserSmart = async (user: User): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -123,16 +125,33 @@ export const deleteUserSmart = async (user: User): Promise<{ success: boolean; e
             });
         }
 
-        // 3. Anonymize Content (Keep data, remove PII)
+        // 3. STORAGE CLEANUP: Avatar
+        if (user.avatar && user.avatar.includes('firebasestorage')) {
+            await deleteFileByUrl(user.avatar);
+        }
+
+        // 4. DELETE PERSONAL CONTENT (Courses & Media)
+        const coursesQ = query(
+            collection(db, 'courses'), 
+            where('authorId', '==', user.id),
+            where('authorType', '==', 'USER') // Only personal content
+        );
+        const coursesSnap = await getDocs(coursesQ);
+        
+        // Execute course deletions in parallel chunks to avoid timeout
+        const courseDeletions = coursesSnap.docs.map(doc => deleteCourseFully(doc.id));
+        await Promise.all(courseDeletions);
+
+        // 5. ANONYMIZE SOCIAL CONTENT (Posts)
         await anonymizeUserContent(user.id);
 
-        // 4. Detach Memberships
+        // 6. DETACH MEMBERSHIPS
         await detachUserFromAllOrgs(user.id);
 
-        // 5. Delete Firestore Profile
+        // 7. DELETE FIRESTORE PROFILE
         await deleteDoc(doc(db, 'users', user.id));
 
-        // 6. Delete Auth (Client Side)
+        // 8. DELETE AUTH (Client Side)
         const currentUser = auth.currentUser;
         if (currentUser && currentUser.uid === user.id) {
             await deleteUser(currentUser);
@@ -147,7 +166,7 @@ export const deleteUserSmart = async (user: User): Promise<{ success: boolean; e
 };
 
 /**
- * Helper: Anonymize Content
+ * Helper: Anonymize Content (Posts)
  */
 const anonymizeUserContent = async (userId: string) => {
     const batch = writeBatch(db);
@@ -162,7 +181,7 @@ const anonymizeUserContent = async (userId: string) => {
         if (count < MAX_BATCH_SIZE) {
             batch.update(d.ref, {
                 authorName: 'Eski Kullanıcı',
-                authorAvatar: 'https://ui-avatars.com/api/?name=Deleted&background=random',
+                authorAvatar: '',
                 authorId: 'deleted_user'
             });
             count++;

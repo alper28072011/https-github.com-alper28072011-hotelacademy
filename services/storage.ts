@@ -1,14 +1,10 @@
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from './firebase';
 
 /**
  * Uploads a file to Firebase Storage and returns the download URL.
  * Provides progress updates via a callback.
- * 
- * @param file The file to upload
- * @param path The path in storage (e.g., 'staff-photos')
- * @param onProgress Callback function receiving percentage (0-100)
- * @returns Promise resolving to the download URL
  */
 export const uploadFile = (
   file: File, 
@@ -38,4 +34,24 @@ export const uploadFile = (
       }
     );
   });
+};
+
+/**
+ * Safely deletes a file from Firebase Storage using its download URL.
+ * Swallows errors if the file doesn't exist (idempotent operation).
+ */
+export const deleteFileByUrl = async (url: string | undefined | null): Promise<void> => {
+    if (!url || !url.includes('firebasestorage')) return;
+
+    try {
+        // Create a reference from the URL
+        const fileRef = ref(storage, url);
+        await deleteObject(fileRef);
+        console.log(`Deleted file: ${url}`);
+    } catch (error: any) {
+        // Ignore "Object not found" errors, log others
+        if (error.code !== 'storage/object-not-found') {
+            console.warn(`Failed to delete file (${url}):`, error);
+        }
+    }
 };

@@ -6,12 +6,11 @@ import {
     doc, 
     increment, 
     runTransaction, 
-    serverTimestamp, 
     getDoc,
+    deleteDoc,
     query,
     where,
     getDocs,
-    orderBy,
     limit
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -21,10 +20,11 @@ import {
     ReviewTag, 
     ContentTier, 
     VerificationStatus, 
-    CreatorLevel,
-    AuthorType
+    AuthorType,
+    StoryCard
 } from '../types';
 import { getOrganizationDetails } from './db';
+import { deleteFileByUrl } from './storage';
 
 /**
  * Creates a new course with logic based on User Level.
@@ -157,8 +157,6 @@ export const submitReview = async (
 
 /**
  * Intelligent Feed Algorithm
- * Firestore composite index hatalarını önlemek için orderBy sorgudan kaldırıldı, 
- * bellek içinde (JS) sıralama eklendi.
  */
 export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promise<Course[]> => {
     try {
@@ -166,7 +164,6 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
         let q;
 
         if (showVerifiedOnly) {
-            // orderBy kaldırıldı (index hatasını önlemek için)
             q = query(
                 coursesRef, 
                 where('tier', 'in', ['PRO', 'OFFICIAL']),
@@ -184,10 +181,53 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
         const snapshot = await getDocs(q);
         let courses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Course));
         
-        // JS tarafında kronolojik sıralama
         return courses.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (error) {
         console.error("Smart Feed Error:", error);
         return [];
+    }
+};
+
+/**
+ * DELETION ENGINE
+ * Deletes the course document AND all associated media from Storage.
+ */
+export const deleteCourseFully = async (courseId: string): Promise<boolean> => {
+    try {
+        // 1. Fetch Course Data
+        const courseRef = doc(db, 'courses', courseId);
+        const courseSnap = await getDoc(courseRef);
+        
+        if (!courseSnap.exists()) return true; // Already deleted
+        
+        const course = courseSnap.data() as Course;
+
+        // 2. Collect Files to Delete
+        const filesToDelete: Promise<void>[] = [];
+
+        // Cover Image
+        if (course.thumbnailUrl) {
+            filesToDelete.push(deleteFileByUrl(course.thumbnailUrl));
+        }
+
+        // Slide Media
+        if (course.steps && course.steps.length > 0) {
+            course.steps.forEach((step: StoryCard) => {
+                if (step.mediaUrl) {
+                    filesToDelete.push(deleteFileByUrl(step.mediaUrl));
+                }
+            });
+        }
+
+        // 3. Delete Files (Parallel, non-blocking)
+        await Promise.all(filesToDelete);
+
+        // 4. Delete Document
+        await deleteDoc(courseRef);
+
+        return true;
+    } catch (error) {
+        console.error("Course Full Delete Failed:", error);
+        return false;
     }
 };

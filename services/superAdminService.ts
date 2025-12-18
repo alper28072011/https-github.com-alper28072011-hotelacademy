@@ -17,6 +17,8 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { User, UserStatus, Organization, OrganizationStatus } from '../types';
+import { deleteCourseFully } from './courseService';
+import { deleteFileByUrl } from './storage';
 
 const usersRef = collection(db, 'users');
 const orgsRef = collection(db, 'organizations');
@@ -41,64 +43,96 @@ export const setOrganizationStatus = async (orgId: string, status: OrganizationS
 
 /**
  * THE JUDGE'S GAVEL: Full Deletion Protocol
- * 1. Detaches ALL users (sets currentOrg = null, role = staff).
- * 2. Deletes memberships.
- * 3. Deletes Org-specific content (Cascade: Posts, Courses, Tasks, Positions, Requests, Issues, Paths).
- * 4. Deletes the Organization document.
+ * 1. Deletes Org Logo.
+ * 2. Deletes ALL Courses + Media Files.
+ * 3. Deletes ALL Posts + Media Files.
+ * 4. Detaches ALL users (Batch).
+ * 5. Deletes all related collections.
+ * 6. Deletes the Organization document.
  */
 export const executeOrganizationDeathSentence = async (orgId: string): Promise<boolean> => {
     try {
-        const batch = writeBatch(db);
+        // 0. Get Org Data for Logo
+        const orgRef = doc(db, 'organizations', orgId);
+        const orgSnap = await getDoc(orgRef);
+        if (orgSnap.exists()) {
+            const orgData = orgSnap.data() as Organization;
+            if (orgData.logoUrl) await deleteFileByUrl(orgData.logoUrl);
+            if (orgData.coverUrl) await deleteFileByUrl(orgData.coverUrl);
+        }
 
-        // 1. Fetch & Detach Users
+        // 1. DELETE COURSES & FILES
+        const coursesQ = query(collection(db, 'courses'), where('organizationId', '==', orgId));
+        const coursesSnap = await getDocs(coursesQ);
+        // Execute in parallel chunks of 10 to prevent overwhelming
+        const courseChunks = chunkArray(coursesSnap.docs, 10);
+        for (const chunk of courseChunks) {
+            await Promise.all(chunk.map((doc: QueryDocumentSnapshot<DocumentData>) => deleteCourseFully(doc.id)));
+        }
+
+        // 2. DELETE POSTS & FILES
+        const postsQ = query(collection(db, 'posts'), where('organizationId', '==', orgId));
+        const postsSnap = await getDocs(postsQ);
+        for (const postDoc of postsSnap.docs) {
+            const post = postDoc.data();
+            if (post.mediaUrl) await deleteFileByUrl(post.mediaUrl);
+            await deleteDoc(postDoc.ref);
+        }
+
+        // 3. DETACH USERS (BATCHED)
         const memQ = query(collection(db, 'memberships'), where('organizationId', '==', orgId));
         const memSnap = await getDocs(memQ);
         
-        memSnap.docs.forEach(memDoc => {
-            const data = memDoc.data();
-            
-            // Delete Membership
-            batch.delete(memDoc.ref);
-            
-            // Free the User (Update Profile)
-            const userRef = doc(db, 'users', data.userId);
-            batch.update(userRef, { 
-                currentOrganizationId: null,
-                role: 'staff',
-                positionId: null,
-                roleTitle: null,
-                department: null
+        const membershipChunks = chunkArray(memSnap.docs, 400); // Firestore batch limit is 500
+        
+        for (const chunk of membershipChunks) {
+            const batch = writeBatch(db);
+            chunk.forEach((memDoc: QueryDocumentSnapshot<DocumentData>) => {
+                const data = memDoc.data();
+                batch.delete(memDoc.ref); // Delete Membership
+                
+                const userRef = doc(db, 'users', data.userId);
+                batch.update(userRef, { 
+                    currentOrganizationId: null,
+                    role: 'staff',
+                    positionId: null,
+                    roleTitle: null,
+                    department: null,
+                    assignedPathId: null
+                });
             });
-        });
+            await batch.commit();
+        }
 
-        // 2. Cascade Delete Content 
-        // Helper to queue deletions
-        const deleteCollectionByOrg = async (colName: string) => {
+        // 4. CASCADE DELETE OTHER COLLECTIONS
+        const batch = writeBatch(db);
+        const collectionsToDelete = ['tasks', 'positions', 'requests', 'issues', 'careerPaths'];
+        
+        for (const colName of collectionsToDelete) {
             const q = query(collection(db, colName), where('organizationId', '==', orgId));
             const snap = await getDocs(q);
             snap.docs.forEach(d => batch.delete(d.ref));
-        };
-
-        // Execute deletions for all related collections
-        await deleteCollectionByOrg('posts');
-        await deleteCollectionByOrg('courses');
-        await deleteCollectionByOrg('tasks');
-        await deleteCollectionByOrg('positions');   // Org Chart
-        await deleteCollectionByOrg('requests');    // Join Requests (Added)
-        await deleteCollectionByOrg('issues');      // Reports/Issues (Added)
-        await deleteCollectionByOrg('careerPaths'); // Career Paths (Added)
-
-        // 3. Delete The Organization
-        const orgRef = doc(db, 'organizations', orgId);
+        }
+        
+        // 5. DELETE ORGANIZATION DOC
         batch.delete(orgRef);
-
         await batch.commit();
+
         return true;
     } catch (error) {
         console.error("Death Sentence Failed:", error);
         return false;
     }
 };
+
+// Helper: Chunk Array
+function chunkArray<T>(array: T[], size: number): T[][] {
+    const chunked_arr: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+        chunked_arr.push(array.slice(i, i + size));
+    }
+    return chunked_arr;
+}
 
 // --- USER MANAGEMENT (Existing) ---
 
