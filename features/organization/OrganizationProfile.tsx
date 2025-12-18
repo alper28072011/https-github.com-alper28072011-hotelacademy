@@ -8,7 +8,8 @@ import {
     BarChart3, Edit, Megaphone, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff, ArrowRight, Clock
 } from 'lucide-react';
 import { getOrganizationDetails, sendJoinRequest, getMyMemberships, switchUserActiveOrganization, getUserPendingRequests } from '../../services/db';
-import { Organization, DepartmentType, OrganizationSector, FollowStatus } from '../../types';
+import { getOrgPositions } from '../../services/organizationService'; // Import position fetcher
+import { Organization, DepartmentType, OrganizationSector, FollowStatus, Position } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore'; 
 import { checkFollowStatus, followOrganizationSmart, unfollowUserSmart } from '../../services/socialService';
@@ -32,6 +33,7 @@ export const OrganizationProfile: React.FC = () => {
   const [step, setStep] = useState(1);
   const [selectedDeptId, setSelectedDeptId] = useState<string>('');
   const [selectedPosId, setSelectedPosId] = useState<string>('');
+  const [availablePositions, setAvailablePositions] = useState<Position[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -59,19 +61,36 @@ export const OrganizationProfile: React.FC = () => {
     init();
   }, [orgId, currentUser]);
 
+  // Fetch actual positions when wizard opens
+  useEffect(() => {
+      if (showWizard && orgId) {
+          getOrgPositions(orgId).then(setAvailablePositions);
+      }
+  }, [showWizard, orgId]);
+
   const handleJoin = async () => {
-      if (!currentUser || !org || !selectedDeptId || !selectedPosId) return;
+      if (!currentUser || !org || !selectedDeptId) return;
       setIsSubmitting(true);
       
-      const deptDefinition = org.definitions?.departments.find(d => d.id === selectedDeptId);
-      const protoDefinition = org.definitions?.positionPrototypes.find(p => p.id === selectedPosId);
-      
-      const roleTitle = protoDefinition?.title || 'Unknown';
+      let roleTitle = 'Genel Başvuru';
+      let finalPositionId: string | null = null;
 
-      // FIX: Do NOT send selectedPosId as positionId because selectedPosId is a Prototype ID (e.g. proto_123), 
-      // whereas the backend expects a real Position Node ID (seat) to occupy it.
-      // Sending null means "General Application" for this role, not for a specific seat.
-      const result = await sendJoinRequest(currentUser.id, org.id, selectedDeptId, roleTitle, null);
+      // Logic: If user selected a specific seat, use its title and ID.
+      // If user selected "General" (empty string or special ID), send null.
+      
+      if (selectedPosId && selectedPosId !== 'GENERAL') {
+          const pos = availablePositions.find(p => p.id === selectedPosId);
+          if (pos) {
+              roleTitle = pos.title;
+              finalPositionId = pos.id;
+          }
+      } else {
+          // If general application, find dept name
+          const dept = org.definitions?.departments.find(d => d.id === selectedDeptId);
+          roleTitle = `${dept?.name || 'Departman'} Personeli`;
+      }
+
+      const result = await sendJoinRequest(currentUser.id, org.id, selectedDeptId, roleTitle, finalPositionId);
       
       setIsSubmitting(false);
       
@@ -123,6 +142,12 @@ export const OrganizationProfile: React.FC = () => {
 
   const canManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager') && currentUser.currentOrganizationId === orgId;
 
+  // Filter positions for the wizard
+  // Must be in selected dept AND have no occupant
+  const emptyPositionsInDept = availablePositions.filter(p => 
+      p.departmentId === selectedDeptId && !p.occupantId
+  );
+
   const getSectorIcon = (sector: OrganizationSector) => {
       switch(sector) {
           case 'technology': return <Laptop className="w-4 h-4" />;
@@ -148,7 +173,6 @@ export const OrganizationProfile: React.FC = () => {
 
   const availableDepartments = org.definitions?.departments || [];
   const activeDept = availableDepartments.find(d => d.id === selectedDeptId);
-  const availablePositions = org.definitions?.positionPrototypes.filter(p => p.departmentId === selectedDeptId) || [];
 
   return (
     <div className="min-h-screen bg-white pb-24 relative">
@@ -330,29 +354,38 @@ export const OrganizationProfile: React.FC = () => {
                                 </motion.div>
                             )}
 
-                            {/* STEP 2: Position Selection */}
+                            {/* STEP 2: Position Selection (Live Seats) */}
                             {step === 2 && activeDept && (
                                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col gap-4">
                                     <div className="flex items-center gap-2 mb-2">
                                         <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded">{activeDept.name}</span>
                                     </div>
                                     
-                                    <label className="text-xs font-bold text-gray-400 uppercase">Pozisyon (Ünvan) Seçiniz</label>
+                                    <label className="text-xs font-bold text-gray-400 uppercase">Açık Pozisyonlar</label>
                                     <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">
-                                        {availablePositions.length > 0 ? (
-                                            availablePositions.map((pos) => (
-                                                <button 
-                                                    key={pos.id}
-                                                    onClick={() => setSelectedPosId(pos.id)}
-                                                    className={`p-4 rounded-xl border flex items-center justify-between transition-all text-left ${selectedPosId === pos.id ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 hover:bg-gray-50'}`}
-                                                >
-                                                    <span className="font-bold text-gray-800">{pos.title}</span>
-                                                    {selectedPosId === pos.id && <CheckCircle2 className="w-5 h-5 text-primary" />}
-                                                </button>
-                                            ))
-                                        ) : (
-                                            <div className="text-gray-400 text-sm italic">Bu departmanda açık pozisyon yok.</div>
-                                        )}
+                                        {/* OPTION 1: General Application */}
+                                        <button 
+                                            onClick={() => setSelectedPosId('GENERAL')}
+                                            className={`p-4 rounded-xl border flex items-center justify-between transition-all text-left ${selectedPosId === 'GENERAL' ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 hover:bg-gray-50'}`}
+                                        >
+                                            <span className="font-bold text-gray-800">Genel Başvuru (Havuz)</span>
+                                            {selectedPosId === 'GENERAL' && <CheckCircle2 className="w-5 h-5 text-primary" />}
+                                        </button>
+
+                                        {/* OPTION 2: Specific Seats */}
+                                        {emptyPositionsInDept.map((pos) => (
+                                            <button 
+                                                key={pos.id}
+                                                onClick={() => setSelectedPosId(pos.id)}
+                                                className={`p-4 rounded-xl border flex items-center justify-between transition-all text-left ${selectedPosId === pos.id ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 hover:bg-gray-50'}`}
+                                            >
+                                                <div>
+                                                    <span className="font-bold text-gray-800 block">{pos.title}</span>
+                                                    {pos.level && <span className="text-xs text-gray-400">Seviye {pos.level}</span>}
+                                                </div>
+                                                {selectedPosId === pos.id && <CheckCircle2 className="w-5 h-5 text-primary" />}
+                                            </button>
+                                        ))}
                                     </div>
 
                                     <div className="flex gap-3 mt-4">

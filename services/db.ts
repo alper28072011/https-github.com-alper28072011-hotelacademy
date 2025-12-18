@@ -20,7 +20,8 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector, PermissionType, AuthorType } from '../types';
+import { User, DepartmentType, Course, Task, Issue, Category, CareerPath, FeedPost, KudosType, Organization, Membership, JoinRequest, OrganizationSector, PermissionType, AuthorType, Position } from '../types';
+import { DEFAULT_PERMISSIONS } from '../hooks/usePermission';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -384,54 +385,66 @@ export const getJoinRequests = async (orgId: string, dept?: string): Promise<(Jo
 
 export const approveJoinRequest = async (requestId: string, request: JoinRequest, roleTitle: string, permissions: PermissionType[]) => {
     try {
-        const batch = writeBatch(db);
-        batch.update(doc(db, 'requests', requestId), { status: 'APPROVED' });
-        const membershipId = `${request.userId}_${request.organizationId}`;
-        
-        // Ensure positionId is treated as null if undefined or if it's a prototype ID (starts with proto_)
-        // This prevents the "Invalid document reference" crash when applying for a generic role
-        let targetPositionId = request.positionId;
-        if (targetPositionId && targetPositionId.startsWith('proto_')) {
-            targetPositionId = undefined; // Treat as general application
-        }
-
-        // Create Membership
-        batch.set(doc(db, 'memberships', membershipId), {
-            id: membershipId, 
-            userId: request.userId, 
-            organizationId: request.organizationId, 
-            role: 'staff', 
-            roleTitle, 
-            permissions, 
-            department: request.targetDepartment, 
-            status: 'ACTIVE', 
-            joinedAt: Date.now(), 
-            positionId: targetPositionId || null
-        });
-        
-        // Update User Profile
-        const userRef = doc(db, 'users', request.userId);
-        batch.update(userRef, { 
-            currentOrganizationId: request.organizationId,
-            department: request.targetDepartment, 
-            positionId: targetPositionId || null, 
-            roleTitle 
-        });
-
-        // Update Position Occupancy (if a specific REAL seat was requested)
-        if (targetPositionId) {
-            const posRef = doc(db, 'positions', targetPositionId);
-            // Verify doc exists before update to prevent crash
-            const posSnap = await getDoc(posRef);
-            if (posSnap.exists()) {
-                batch.update(posRef, { occupantId: request.userId });
+        return await runTransaction(db, async (transaction) => {
+            // 1. If a specific seat (Position ID) was requested, verify it's still empty
+            let finalPositionId: string | null = null;
+            
+            if (request.positionId) {
+                // Check if this ID isn't a prototype ID (legacy/safety check)
+                if (!request.positionId.startsWith('proto_')) {
+                    const posRef = doc(db, 'positions', request.positionId);
+                    const posSnap = await transaction.get(posRef);
+                    
+                    if (posSnap.exists()) {
+                        const posData = posSnap.data() as Position;
+                        if (!posData.occupantId) {
+                            // Seat is free! Assign it.
+                            finalPositionId = request.positionId;
+                            transaction.update(posRef, { occupantId: request.userId });
+                        } else {
+                            // Seat was taken in the meantime. 
+                            // Strategy: Fallback to Pool (null position) but still approve user
+                            // Optional: Could throw error here if strict.
+                            console.warn("Requested seat is occupied. Assigning to pool.");
+                        }
+                    }
+                }
             }
-        }
 
-        await batch.commit();
-        return true;
+            // 2. Create Membership
+            const membershipId = `${request.userId}_${request.organizationId}`;
+            const memRef = doc(db, 'memberships', membershipId);
+            
+            transaction.set(memRef, {
+                id: membershipId, 
+                userId: request.userId, 
+                organizationId: request.organizationId, 
+                role: 'staff', 
+                roleTitle, 
+                permissions, 
+                department: request.targetDepartment, 
+                status: 'ACTIVE', 
+                joinedAt: Date.now(), 
+                positionId: finalPositionId // Null if pool, ID if seated
+            });
+
+            // 3. Update User Profile
+            const userRef = doc(db, 'users', request.userId);
+            transaction.update(userRef, { 
+                currentOrganizationId: request.organizationId,
+                department: request.targetDepartment, 
+                positionId: finalPositionId, 
+                roleTitle 
+            });
+
+            // 4. Close Request
+            const reqRef = doc(db, 'requests', requestId);
+            transaction.update(reqRef, { status: 'APPROVED' });
+
+            return true;
+        });
     } catch (e) { 
-        console.error("Approve Request Error:", e);
+        console.error("Approve Request Transaction Error:", e);
         return false; 
     }
 };

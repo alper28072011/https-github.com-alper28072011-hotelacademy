@@ -172,10 +172,10 @@ export const OrganizationManager: React.FC = () => {
       }
   };
 
+  // CORRECTED FILTER: Users who have NO position assigned (either null or empty string)
   const unassignedUsers = users.filter(u => !u.positionId);
-  const definitions = currentOrganization?.definitions || { departments: [], positionPrototypes: [] };
   
-  // Filter prototypes by selected department
+  const definitions = currentOrganization?.definitions || { departments: [], positionPrototypes: [] };
   const availablePrototypes = definitions.positionPrototypes?.filter(p => p.departmentId === newPosDeptId) || [];
 
   return (
@@ -301,17 +301,18 @@ export const OrganizationManager: React.FC = () => {
                     <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md flex flex-col h-[500px]">
                         <h2 className="text-lg font-bold mb-4 text-gray-800">Personel Seç</h2>
                         <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                            {/* Same List Logic */}
+                            {/* Pool List */}
                             {unassignedUsers.map(user => (
                                 <button key={user.id} onClick={() => handleAssignUser(user.id)} className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-primary hover:bg-primary/5 transition-all text-left group">
                                     <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">{user.avatar}</div>
                                     <div className="flex-1">
                                         <div className="font-bold text-gray-800">{user.name}</div>
+                                        <div className="text-xs text-orange-500">Havuzda (Atanmamış)</div>
                                     </div>
                                     <CornerDownRight className="w-4 h-4 text-gray-300 group-hover:text-primary" />
                                 </button>
                             ))}
-                            {unassignedUsers.length === 0 && <div className="text-center py-10 text-gray-400">Boşta personel yok.</div>}
+                            {unassignedUsers.length === 0 && <div className="text-center py-10 text-gray-400">Boşta (havuzda) personel yok. Herkes bir pozisyonda.</div>}
                         </div>
                         <button onClick={() => setIsAssignModalOpen(false)} className="mt-4 w-full py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">Kapat</button>
                     </motion.div>

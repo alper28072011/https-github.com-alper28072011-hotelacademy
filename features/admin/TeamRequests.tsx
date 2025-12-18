@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, User as UserIcon, Loader2, Briefcase, Shield } from 'lucide-react';
+import { Check, X, User as UserIcon, Loader2, Briefcase, Shield, MapPin } from 'lucide-react';
 import { JoinRequest, User, PermissionType } from '../../types';
 import { getJoinRequests, approveJoinRequest, rejectJoinRequest } from '../../services/db';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -24,11 +24,7 @@ export const TeamRequests: React.FC = () => {
       if (!currentOrganization || !currentUser) return;
       setLoading(true);
       
-      // LOGIC FIX: Managers and Admins should see ALL requests. Only staff/supervisors might be restricted.
       const canSeeAll = ['admin', 'manager', 'super_admin'].includes(currentUser.role);
-      
-      // If Admin/Manager, fetch all (undefined). If Dept Head (future), fetch dept specific.
-      // Use explicit undefined to trigger "fetch all" logic in db service
       const data = await getJoinRequests(currentOrganization.id, canSeeAll ? undefined : currentUser.department);
       
       setRequests(data);
@@ -57,11 +53,11 @@ export const TeamRequests: React.FC = () => {
       );
 
       if (success) {
-          alert("Başarıyla onaylandı.");
+          alert("Başarıyla onaylandı ve atandı.");
           setRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
           setSelectedRequest(null);
       } else {
-          alert("İşlem sırasında bir hata oluştu.");
+          alert("Onay işlemi sırasında hata oluştu. Pozisyon dolmuş olabilir.");
       }
       setIsProcessing(false);
   };
@@ -113,7 +109,7 @@ export const TeamRequests: React.FC = () => {
                                     <h3 className="font-bold text-gray-900 text-lg">{req.user?.name || "Bilinmeyen Kullanıcı"}</h3>
                                     <div className="flex items-center gap-2 text-sm text-gray-500">
                                         <Briefcase className="w-4 h-4" />
-                                        <span>{req.requestedRoleTitle || "Belirtilmemiş"}</span>
+                                        <span>{req.requestedRoleTitle}</span>
                                     </div>
                                 </div>
                             </div>
@@ -122,6 +118,13 @@ export const TeamRequests: React.FC = () => {
                                 <span className="text-gray-500">Departman:</span>
                                 <span className="font-bold text-primary uppercase">{req.targetDepartment}</span>
                             </div>
+
+                            {req.positionId && (
+                                <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-100">
+                                    <MapPin className="w-3 h-3" />
+                                    Bu kişi spesifik bir koltuğa başvurdu. Onaylarsanız otomatik atanır.
+                                </div>
+                            )}
 
                             <div className="flex gap-3 mt-2">
                                 <button 
@@ -207,7 +210,7 @@ export const TeamRequests: React.FC = () => {
                                 disabled={isProcessing}
                                 className="flex-[2] bg-primary text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2"
                             >
-                                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Onayla'}
+                                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Kabul Et'}
                             </button>
                         </div>
                     </motion.div>

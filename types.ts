@@ -91,7 +91,7 @@ export interface User {
   department: string | null; 
   role: UserRole;
   roleTitle?: string; 
-  positionId?: string; 
+  positionId?: string | null; // Explicitly allow null for Pool users
   status: UserStatus;
   xp: number;
   creatorLevel: CreatorLevel;
@@ -221,8 +221,8 @@ export interface JoinRequest {
   userId: string;
   organizationId: string;
   targetDepartment: string;
-  requestedRoleTitle: string;
-  positionId?: string;
+  requestedRoleTitle: string; // Display name of the role
+  positionId?: string | null; // Specific seat ID if available
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
 }
@@ -261,7 +261,7 @@ export interface Organization {
 export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
 export type OrganizationSectorExtended = OrganizationSector;
 export type OrganizationSize = '1-10' | '11-50' | '50-200' | '200+';
-export interface Membership { id: string; userId: string; organizationId: string; role: UserRole; department: DepartmentType; status: 'ACTIVE' | 'SUSPENDED'; joinedAt: number; roleTitle?: string; positionId?: string; permissions?: PermissionType[]; }
+export interface Membership { id: string; userId: string; organizationId: string; role: UserRole; department: DepartmentType; status: 'ACTIVE' | 'SUSPENDED'; joinedAt: number; roleTitle?: string; positionId?: string | null; permissions?: PermissionType[]; }
 export type PermissionType = 'CAN_CREATE_CONTENT' | 'CAN_MANAGE_TEAM' | 'CAN_VIEW_ANALYTICS' | 'CAN_EDIT_SETTINGS';
 export type FollowStatus = 'NONE' | 'FOLLOWING' | 'PENDING';
 export interface Relationship { followerId: string; followingId: string; status: 'PENDING' | 'ACCEPTED'; createdAt: number; }
