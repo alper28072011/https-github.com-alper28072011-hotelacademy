@@ -12,6 +12,7 @@ import { getUsersByDepartment, searchUserByPhone, inviteUserToOrg, updateOrganiz
 import { getOrgPositions, createPosition, assignUserToPosition, removeUserFromPosition, deletePosition } from '../../services/organizationService';
 import { OrgChartBuilder } from '../organization/OrgChartBuilder';
 import { useNavigate } from 'react-router-dom';
+import confetti from 'canvas-confetti';
 
 export const OrganizationManager: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export const OrganizationManager: React.FC = () => {
   // -- GLOBAL STATE --
   const [activeTab, setActiveTab] = useState<'DIRECTORY' | 'CHART' | 'DEFINITIONS'>('DIRECTORY');
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // -- DATA --
   const [users, setUsers] = useState<User[]>([]);
@@ -142,10 +144,17 @@ export const OrganizationManager: React.FC = () => {
 
   const handleDeletePosition = async (posId: string) => {
       const hasChildren = positions.some(p => p.parentId === posId);
+      const isOccupied = positions.find(p => p.id === posId)?.occupantId;
+
       if (hasChildren) {
           alert("Alt pozisyonları olan bir kutuyu silemezsiniz. Önce alt dalları silin veya taşıyın.");
           return;
       }
+      if (isOccupied) {
+          alert("Dolu bir pozisyonu silemezsiniz. Önce personeli boşa çıkarın.");
+          return;
+      }
+
       if (window.confirm("Bu pozisyonu silmek istediğinize emin misiniz?")) {
           await deletePosition(posId);
           setPositions(prev => prev.filter(p => p.id !== posId));
@@ -160,25 +169,33 @@ export const OrganizationManager: React.FC = () => {
   const handleAssignUser = async (userId: string) => {
       if (!currentOrganization || !targetPosId) return;
       
-      const success = await assignUserToPosition(currentOrganization.id, targetPosId, userId);
-      if (success) {
-          // Optimistic Update
-          setPositions(prev => prev.map(p => p.id === targetPosId ? { ...p, occupantId: userId } : p));
-          // If the user was in another position, clear that one visually too
-          setPositions(prev => prev.map(p => (p.occupantId === userId && p.id !== targetPosId) ? { ...p, occupantId: null } : p));
-          
+      setIsProcessing(true);
+      const result = await assignUserToPosition(currentOrganization.id, targetPosId, userId);
+      setIsProcessing(false);
+
+      if (result.success) {
           setIsAssignModalOpen(false);
           // Reload full data to sync User profile updates
           loadAllData();
+          confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
+      } else {
+          alert(result.message || "Atama başarısız oldu.");
       }
   };
 
   const handleRemoveUser = async (posId: string) => {
       if (!currentOrganization) return;
       if (window.confirm("Koltuk boşaltılsın mı?")) {
-          await removeUserFromPosition(posId, currentOrganization.id);
-          setPositions(prev => prev.map(p => p.id === posId ? { ...p, occupantId: null } : p));
-          loadAllData();
+          setIsProcessing(true);
+          const success = await removeUserFromPosition(posId, currentOrganization.id);
+          setIsProcessing(false);
+          
+          if (success) {
+              setPositions(prev => prev.map(p => p.id === posId ? { ...p, occupantId: null } : p));
+              loadAllData();
+          } else {
+              alert("İşlem başarısız.");
+          }
       }
   };
 
@@ -213,8 +230,18 @@ export const OrganizationManager: React.FC = () => {
   const unassignedUsers = users.filter(u => !u.positionId);
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-t-3xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="flex flex-col h-full bg-white rounded-t-3xl shadow-sm border border-gray-200 overflow-hidden relative">
         
+        {/* BLOCKING OVERLAY */}
+        {isProcessing && (
+            <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-sm flex items-center justify-center">
+                <div className="flex flex-col items-center">
+                    <Loader2 className="w-12 h-12 animate-spin text-primary mb-2" />
+                    <span className="font-bold text-gray-800">İşleniyor...</span>
+                </div>
+            </div>
+        )}
+
         {/* 1. HEADER & TABS */}
         <div className="bg-white border-b border-gray-200">
             <div className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">

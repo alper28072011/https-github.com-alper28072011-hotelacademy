@@ -16,7 +16,7 @@ export const getOrgPositions = async (orgId: string): Promise<Position[]> => {
     }
 };
 
-// --- CORE ACTIONS (STRICT SYNC) ---
+// --- CORE ACTIONS (STRICT SYNC WITH TRANSACTIONS) ---
 
 /**
  * Creates a position node in the chart.
@@ -33,82 +33,79 @@ export const createPosition = async (position: Omit<Position, 'id'>): Promise<st
 };
 
 /**
- * Assigns a User to a Position.
- * Handles the "Swap" logic and ensures 1:1 integrity.
- * 1. Removes User from old position (if any).
- * 2. Removes Old Occupant from target position (if any).
- * 3. Assigns User to Target Position.
- * 4. Updates User Profile (Dept, RoleTitle).
- * 5. Updates Membership.
+ * TRANSACTIONAL ASSIGNMENT
+ * Ensures User and Position docs are always in sync.
+ * Rules:
+ * 1. Target Position MUST be empty (or check logic).
+ * 2. If User was in another position, vacate it.
+ * 3. Update User Profile & Membership.
  */
-export const assignUserToPosition = async (orgId: string, positionId: string, userId: string): Promise<boolean> => {
+export const assignUserToPosition = async (orgId: string, positionId: string, userId: string): Promise<{ success: boolean; message?: string }> => {
     try {
         await runTransaction(db, async (transaction) => {
-            // 1. Get Target Position
+            // 1. READ: Get Target Position
             const targetPosRef = doc(db, 'positions', positionId);
             const targetPosSnap = await transaction.get(targetPosRef);
-            if (!targetPosSnap.exists()) throw new Error("Position not found");
+            if (!targetPosSnap.exists()) throw new Error("Hedef pozisyon bulunamadı.");
+            
             const targetPos = targetPosSnap.data() as Position;
 
-            // 2. Get User
+            // 2. CHECK: Is Target Occupied?
+            if (targetPos.occupantId && targetPos.occupantId !== userId) {
+                throw new Error("Bu pozisyon zaten dolu! Önce mevcut personeli kaldırın.");
+            }
+
+            // 3. READ: Get User
             const userRef = doc(db, 'users', userId);
             const userSnap = await transaction.get(userRef);
-            if (!userSnap.exists()) throw new Error("User not found");
+            if (!userSnap.exists()) throw new Error("Kullanıcı bulunamadı.");
             const userData = userSnap.data() as User;
 
-            // 3. Logic: If User has an OLD position, vacate it
+            // 4. LOGIC: If User has an OLD position, vacate it (Move logic)
             if (userData.positionId && userData.positionId !== positionId) {
                 const oldPosRef = doc(db, 'positions', userData.positionId);
+                // We don't strictly need to read oldPos, just update it if we are sure ID exists.
+                // But reading confirms existence.
                 transaction.update(oldPosRef, { occupantId: null });
             }
 
-            // 4. Logic: If Target Position has an OLD occupant, evict them (softly)
-            if (targetPos.occupantId && targetPos.occupantId !== userId) {
-                const oldOccupantRef = doc(db, 'users', targetPos.occupantId);
-                transaction.update(oldOccupantRef, { 
-                    positionId: null,
-                    roleTitle: null
-                    // Keep department or clear it? Keeping it is safer for now.
-                });
-                
-                // Update their membership too
-                const oldMemId = `${targetPos.occupantId}_${orgId}`;
-                const oldMemRef = doc(db, 'memberships', oldMemId);
-                transaction.update(oldMemRef, { positionId: null, roleTitle: null });
-            }
-
-            // 5. ASSIGN: Update Target Position
+            // 5. WRITE: Occupy Target Position
             transaction.update(targetPosRef, { occupantId: userId });
 
-            // 6. ASSIGN: Update User Profile
+            // 6. WRITE: Update User Profile
             transaction.update(userRef, { 
                 positionId: positionId,
                 roleTitle: targetPos.title,
                 department: targetPos.departmentId
             });
 
-            // 7. ASSIGN: Update Membership
+            // 7. WRITE: Update Membership (For quick permission checks)
             const membershipId = `${userId}_${orgId}`;
             const memRef = doc(db, 'memberships', membershipId);
+            // Membership might not exist if data is stale, utilize set with merge or update
+            // Using update since invite flow ensures membership exists
             transaction.update(memRef, {
                 positionId: positionId,
                 roleTitle: targetPos.title,
                 department: targetPos.departmentId
             });
         });
-        return true;
-    } catch (e) {
-        console.error("Assign User Error:", e);
-        return false;
+
+        return { success: true };
+    } catch (e: any) {
+        console.error("Transaction Failed:", e);
+        return { success: false, message: e.message };
     }
 };
 
 /**
- * Removes a user from a position (Vacates the seat).
+ * TRANSACTIONAL REMOVAL
+ * Vacates the seat and clears user's title.
  */
 export const removeUserFromPosition = async (positionId: string, orgId: string): Promise<boolean> => {
     try {
         await runTransaction(db, async (transaction) => {
+            // 1. Get Position
             const posRef = doc(db, 'positions', positionId);
             const posSnap = await transaction.get(posRef);
             if (!posSnap.exists()) throw new Error("Position not found");
@@ -120,15 +117,18 @@ export const removeUserFromPosition = async (positionId: string, orgId: string):
             const userRef = doc(db, 'users', userId);
             const memRef = doc(db, 'memberships', `${userId}_${orgId}`);
 
-            // Clear Position
+            // 2. Clear Position
             transaction.update(posRef, { occupantId: null });
 
-            // Clear User
+            // 3. Clear User (Keep department or clear? Clearing roleTitle/PosId is key)
             transaction.update(userRef, { positionId: null, roleTitle: null });
+            
+            // 4. Clear Membership
             transaction.update(memRef, { positionId: null, roleTitle: null });
         });
         return true;
     } catch (e) {
+        console.error("Remove Transaction Failed:", e);
         return false;
     }
 };
@@ -150,6 +150,41 @@ export const deletePosition = async (positionId: string): Promise<boolean> => {
         await deleteDoc(doc(db, 'positions', positionId));
         return true;
     } catch (e) {
+        return false;
+    }
+};
+
+/**
+ * SAFETY NET: Deletes a user from Org and ensures their seat is vacated.
+ */
+export const deleteUserFromOrganization = async (userId: string, orgId: string): Promise<boolean> => {
+    try {
+        const batch = writeBatch(db);
+
+        // 1. Delete Membership
+        const memRef = doc(db, 'memberships', `${userId}_${orgId}`);
+        batch.delete(memRef);
+
+        // 2. Update User Profile (Detach)
+        const userRef = doc(db, 'users', userId);
+        batch.update(userRef, { 
+            currentOrganizationId: null,
+            positionId: null,
+            roleTitle: null,
+            department: null
+        });
+
+        // 3. Vacate Position (If any) - Must find the position first
+        const q = query(collection(db, 'positions'), where('occupantId', '==', userId), where('organizationId', '==', orgId));
+        const posSnap = await getDocs(q);
+        posSnap.docs.forEach(d => {
+            batch.update(d.ref, { occupantId: null });
+        });
+
+        await batch.commit();
+        return true;
+    } catch (e) {
+        console.error("Delete User Org Failed:", e);
         return false;
     }
 };
