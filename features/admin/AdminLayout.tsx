@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Users, Film, LogOut, ArrowLeft, Map, BarChart2, Inbox, Settings, Loader2, Building2, LayoutList, GitMerge } from 'lucide-react';
+import { Users, Film, LogOut, ArrowLeft, Map, BarChart2, Inbox, Settings, Loader2, Building2, LayoutList } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 
@@ -10,8 +10,10 @@ export const AdminLayout: React.FC = () => {
   const { currentOrganization, isLoading } = useOrganizationStore();
   const navigate = useNavigate();
 
+  // Guard Logic inside the Layout
   const canAccess = ['manager', 'admin', 'super_admin'].includes(currentUser?.role || '');
 
+  // 1. If not authorized at all
   if (!canAccess) {
       return (
           <div className="h-screen flex flex-col items-center justify-center bg-gray-50 text-center p-6">
@@ -23,6 +25,7 @@ export const AdminLayout: React.FC = () => {
       );
   }
 
+  // 2. If Organization is loading or missing (Safety Net)
   if (!currentOrganization) {
       return (
           <div className="h-screen flex flex-col items-center justify-center bg-gray-50">
@@ -46,17 +49,17 @@ export const AdminLayout: React.FC = () => {
   const navItems = [
     { path: '/admin/requests', icon: Inbox, label: 'İstekler' }, 
     { path: '/admin/staff', icon: Users, label: 'Ekip' },
-    { path: '/admin/org-chart', icon: GitMerge, label: 'Şema' }, // New
     { path: '/admin/career', icon: Map, label: 'Kariyer' },
     { path: '/admin/content', icon: Film, label: 'Stüdyo' },
-    { path: '/admin/courses', icon: LayoutList, label: 'İçerikler' },
+    { path: '/admin/courses', icon: LayoutList, label: 'İçerikler' }, // New
     { path: '/admin/reports', icon: BarChart2, label: 'Analiz' },
     { path: '/admin/settings', icon: Settings, label: 'Ayarlar' }, 
   ];
 
   return (
-    <div className="flex min-h-screen bg-gray-50 font-sans">
-      <aside className="w-20 md:w-64 bg-primary text-white flex flex-col sticky top-0 h-screen z-30 transition-all duration-300">
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <aside className="w-20 md:w-64 bg-primary text-white flex flex-col sticky top-0 h-screen z-30">
         <div className="p-4 md:p-6 flex items-center justify-center md:justify-start gap-3 border-b border-white/10">
             <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center shadow-lg shrink-0">
                {currentOrganization.logoUrl ? (
@@ -85,7 +88,7 @@ export const AdminLayout: React.FC = () => {
                     }
                 >
                     <item.icon className="w-6 h-6 shrink-0" />
-                    <span className="hidden md:block font-medium">{item.label}</span>
+                    <span className="hidden md:block">{item.label}</span>
                 </NavLink>
             ))}
         </nav>
@@ -108,7 +111,8 @@ export const AdminLayout: React.FC = () => {
         </div>
       </aside>
 
-      <main className="flex-1 p-4 md:p-8 overflow-y-auto w-full custom-scrollbar">
+      {/* Main Content */}
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto w-full">
         <div className="max-w-6xl mx-auto">
              <Outlet />
         </div>

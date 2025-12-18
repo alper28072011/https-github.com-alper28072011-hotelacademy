@@ -1,140 +1,195 @@
 
-import { 
-    doc, runTransaction, updateDoc, arrayUnion, collection, 
-    query, where, getDocs, writeBatch, orderBy, limit, 
-    deleteDoc, getDoc, setDoc, addDoc, serverTimestamp 
-} from 'firebase/firestore';
+import { doc, runTransaction, updateDoc, arrayUnion, collection, query, where, getDocs, writeBatch, orderBy, limit, deleteDoc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Membership, Position, Organization } from '../types';
+import { User, Membership, Position, DepartmentType } from '../types';
 
-/**
- * Fetch all positions for an organization
- */
+// The ID of the System Super Admin (Safety Net)
+const SYSTEM_ADMIN_ID = 'SYSTEM_ARCHIVE_VAULT'; 
+
+// --- POSITION MANAGEMENT (ORG CHART) ---
+
 export const getOrgPositions = async (orgId: string): Promise<Position[]> => {
     try {
-        const q = query(collection(db, 'positions'), where('orgId', '==', orgId));
+        const q = query(collection(db, 'positions'), where('organizationId', '==', orgId));
         const snap = await getDocs(q);
+        // Sort by level usually handled in UI, but getting all data here
         return snap.docs.map(d => ({ id: d.id, ...d.data() } as Position));
     } catch (e) {
+        console.error("Get Positions Error:", e);
+        return [];
+    }
+};
+
+export const createPosition = async (position: Omit<Position, 'id'>): Promise<string | null> => {
+    try {
+        const ref = doc(collection(db, 'positions'));
+        await setDoc(ref, { ...position, id: ref.id });
+        return ref.id;
+    } catch (e) {
+        console.error("Create Position Error:", e);
+        return null;
+    }
+};
+
+export const deletePosition = async (positionId: string): Promise<boolean> => {
+    try {
+        // Check for children first? For now, we allow delete, children become orphans (parentId -> null)
+        // Or strictly block. Let's strictly block in UI, but here we just delete.
+        await deleteDoc(doc(db, 'positions', positionId));
+        return true;
+    } catch (e) {
+        return false;
+    }
+};
+
+/**
+ * Assigns a User to a specific Position ("Filling the Seat").
+ * This updates:
+ * 1. The Position document (occupantId)
+ * 2. The User's profile (roleTitle, department, positionId)
+ * 3. The Membership record (roleTitle, positionId)
+ */
+export const assignUserToPosition = async (orgId: string, positionId: string, userId: string): Promise<boolean> => {
+    try {
+        await runTransaction(db, async (transaction) => {
+            // 1. Get Position Details
+            const posRef = doc(db, 'positions', positionId);
+            const posSnap = await transaction.get(posRef);
+            if (!posSnap.exists()) throw new Error("Position not found");
+            const posData = posSnap.data() as Position;
+
+            // 2. Clear old occupant if exists (Optional: Move them to bench?)
+            // For now, we overwrite.
+
+            // 3. Update Position
+            transaction.update(posRef, { occupantId: userId });
+
+            // 4. Update User Profile
+            const userRef = doc(db, 'users', userId);
+            transaction.update(userRef, { 
+                positionId: positionId,
+                roleTitle: posData.title,
+                department: posData.departmentId
+            });
+
+            // 5. Update Membership
+            const membershipId = `${userId}_${orgId}`;
+            const memRef = doc(db, 'memberships', membershipId);
+            transaction.update(memRef, {
+                positionId: positionId,
+                roleTitle: posData.title,
+                department: posData.departmentId
+            });
+        });
+        return true;
+    } catch (e) {
+        console.error("Assign User Error:", e);
+        return false;
+    }
+};
+
+export const removeUserFromPosition = async (positionId: string): Promise<boolean> => {
+    try {
+        const posRef = doc(db, 'positions', positionId);
+        await updateDoc(posRef, { occupantId: null });
+        return true;
+    } catch (e) {
+        return false;
+    }
+};
+
+// --- EXISTING FUNCTIONS ---
+
+/**
+ * Returns a list of potential successors (Admins or Managers), sorted by seniority (joinedAt).
+ */
+export const getBackupAdmins = async (orgId: string, excludeUserId: string): Promise<Membership[]> => {
+    try {
+        const q = query(
+            collection(db, 'memberships'),
+            where('organizationId', '==', orgId),
+            where('role', 'in', ['admin', 'manager']),
+            orderBy('joinedAt', 'asc') // Oldest member first
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs
+            .map(d => d.data() as Membership)
+            .filter(m => m.userId !== excludeUserId);
+    } catch (e) {
+        console.error("Failed to fetch backup admins:", e);
         return [];
     }
 };
 
 /**
- * Create a new position slot
+ * Transfers ownership of an organization to another user.
  */
-export const createPosition = async (data: Omit<Position, 'id'>): Promise<string | null> => {
-    try {
-        const docRef = await addDoc(collection(db, 'positions'), data);
-        return docRef.id;
-    } catch (e) {
-        return null;
-    }
-};
-
-/**
- * Update requirements for a position
- */
-export const updatePositionRequirements = async (positionId: string, courseIds: string[]): Promise<boolean> => {
-    try {
-        await updateDoc(doc(db, 'positions', positionId), { requirements: courseIds });
-        return true;
-    } catch (e) {
-        return false;
-    }
-};
-
-/**
- * SMART OCCUPANCY: Bir kullanıcıyı bir pozisyona oturtur.
- * Hem Pozisyonu, hem Kullanıcıyı, hem de Eğitim Atamalarını günceller.
- */
-export const occupyPosition = async (positionId: string, userId: string): Promise<boolean> => {
-    try {
-        await runTransaction(db, async (transaction) => {
-            const posRef = doc(db, 'positions', positionId);
-            const userRef = doc(db, 'users', userId);
-            
-            const posSnap = await transaction.get(posRef);
-            const userSnap = await transaction.get(userRef);
-
-            if (!posSnap.exists() || !userSnap.exists()) throw new Error("Doc missing");
-
-            const posData = posSnap.data() as Position;
-
-            // 1. Pozisyonu Güncelle
-            transaction.update(posRef, { occupantId: userId });
-
-            // 2. Kullanıcı Profilini Güncelle
-            transaction.update(userRef, {
-                positionId: positionId,
-                department: posData.departmentId,
-                currentOrganizationId: posData.orgId,
-                role: posData.level === 0 ? 'admin' : 'staff'
-            });
-
-            // 3. Eğitim Atamaları (Zorunlu Gereksinimler)
-            if (posData.requirements && posData.requirements.length > 0) {
-                transaction.update(userRef, {
-                    startedCourses: arrayUnion(...posData.requirements)
-                });
-            }
-
-            // 4. Membership oluştur/güncelle
-            const membershipId = `${userId}_${posData.orgId}`;
-            const memRef = doc(db, 'memberships', membershipId);
-            transaction.set(memRef, {
-                id: membershipId,
-                userId,
-                organizationId: posData.orgId,
-                role: posData.level === 0 ? 'admin' : 'staff',
-                department: posData.departmentId,
-                positionId: positionId,
-                status: 'ACTIVE',
-                joinedAt: Date.now(),
-                roleTitle: posData.title
-            });
-        });
-        return true;
-    } catch (error) {
-        console.error("Occupy Error:", error);
-        return false;
-    }
-};
-
-/**
- * Pozisyonu boşalt (İstifa/Kovulma senaryosu)
- */
-export const vacatePosition = async (positionId: string): Promise<boolean> => {
-    try {
-        const posRef = doc(db, 'positions', positionId);
-        const posSnap = await getDoc(posRef);
-        if (!posSnap.exists()) return false;
-        
-        const occupantId = posSnap.data().occupantId;
-        if (occupantId) {
-            const userRef = doc(db, 'users', occupantId);
-            await updateDoc(posRef, { occupantId: null });
-            await updateDoc(userRef, { positionId: null, currentOrganizationId: null });
-        }
-        return true;
-    } catch (e) {
-        return false;
-    }
-};
-
 export const transferOwnership = async (orgId: string, newOwnerId: string): Promise<boolean> => {
     try {
         await runTransaction(db, async (transaction) => {
             const orgRef = doc(db, 'organizations', orgId);
             transaction.update(orgRef, { ownerId: newOwnerId });
+
             const membershipId = `${newOwnerId}_${orgId}`;
             const memRef = doc(db, 'memberships', membershipId);
             transaction.update(memRef, { role: 'manager' });
+
             const userRef = doc(db, 'users', newOwnerId);
             transaction.update(userRef, { role: 'manager' });
         });
         return true;
     } catch (error) {
+        console.error("Transfer Ownership Failed:", error);
+        return false;
+    }
+};
+
+/**
+ * CASCADING DELETE: Deletes an organization and ALL related data.
+ */
+export const deleteOrganizationFully = async (orgId: string): Promise<boolean> => {
+    try {
+        const batch = writeBatch(db);
+
+        // 1. Delete Organization Doc
+        const orgRef = doc(db, 'organizations', orgId);
+        batch.delete(orgRef);
+
+        // 2. Fetch Memberships to detach users
+        const memQ = query(collection(db, 'memberships'), where('organizationId', '==', orgId));
+        const memSnap = await getDocs(memQ);
+        
+        memSnap.docs.forEach(memDoc => {
+            const data = memDoc.data();
+            batch.delete(memDoc.ref);
+            
+            const userRef = doc(db, 'users', data.userId);
+            batch.update(userRef, { 
+                currentOrganizationId: null,
+                role: 'staff',
+                positionId: null,
+                roleTitle: null
+            });
+        });
+
+        // 3. Delete Related Data
+        const deleteCollectionByOrg = async (colName: string) => {
+            const q = query(collection(db, colName), where('organizationId', '==', orgId));
+            const snap = await getDocs(q);
+            snap.docs.forEach(d => batch.delete(d.ref));
+        };
+
+        await deleteCollectionByOrg('posts');
+        await deleteCollectionByOrg('tasks');
+        await deleteCollectionByOrg('courses');
+        await deleteCollectionByOrg('careerPaths');
+        await deleteCollectionByOrg('requests');
+        await deleteCollectionByOrg('positions'); // Delete Org Chart Nodes
+
+        await batch.commit();
+        return true;
+    } catch (error) {
+        console.error("Cascading Delete Error:", error);
         return false;
     }
 };
@@ -145,38 +200,4 @@ export const detachUserFromAllOrgs = async (userId: string) => {
     const snap = await getDocs(q);
     snap.docs.forEach(d => batch.delete(d.ref));
     await batch.commit();
-};
-
-export const getBackupAdmins = async (orgId: string, excludeUserId: string): Promise<Membership[]> => {
-    const q = query(
-        collection(db, 'memberships'),
-        where('organizationId', '==', orgId),
-        where('role', 'in', ['manager', 'admin']),
-        limit(5)
-    );
-    const snap = await getDocs(q);
-    return snap.docs
-        .map(d => d.data() as Membership)
-        .filter(m => m.userId !== excludeUserId);
-};
-
-export const deleteOrganizationFully = async (orgId: string): Promise<boolean> => {
-    try {
-        const batch = writeBatch(db);
-        const orgRef = doc(db, 'organizations', orgId);
-        batch.delete(orgRef);
-
-        const collectionsToClean = ['memberships', 'posts', 'tasks', 'courses', 'positions', 'careerPaths'];
-        for (const col of collectionsToClean) {
-            const q = query(collection(db, col), where(col === 'positions' ? 'orgId' : 'organizationId', '==', orgId));
-            const snap = await getDocs(q);
-            snap.docs.forEach(doc => batch.delete(doc.ref));
-        }
-
-        await batch.commit();
-        return true;
-    } catch (error) {
-        console.error("Cascading Delete Error:", error);
-        return false;
-    }
 };

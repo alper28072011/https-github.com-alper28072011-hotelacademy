@@ -1,304 +1,328 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    Plus, User as UserIcon, Settings, ChevronDown, 
-    Trash2, UserPlus, Shield, Briefcase, Loader2, Check,
-    AlertCircle, Search, Mail, Phone, BookOpen, X, GraduationCap
-} from 'lucide-react';
+import { Plus, User as UserIcon, Trash2, Edit2, AlertCircle, CheckCircle2, MoreVertical, X, CornerDownRight, Briefcase } from 'lucide-react';
+import { Position, User, DepartmentType } from '../../types';
+import { getOrgPositions, createPosition, deletePosition, assignUserToPosition, removeUserFromPosition } from '../../services/organizationService';
+import { getUsersByDepartment } from '../../services/db';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { Position, User, Course } from '../../types';
-import { getOrgPositions, createPosition, occupyPosition, vacatePosition, updatePositionRequirements } from '../../services/organizationService';
-import { getUserById, searchUserByPhone, getCourses } from '../../services/db';
 
+// --- NODE COMPONENT (Recursive) ---
+const OrgNode: React.FC<{
+    position: Position;
+    allPositions: Position[];
+    users: User[];
+    onAddChild: (parentId: string) => void;
+    onAssign: (posId: string) => void;
+    onDelete: (posId: string) => void;
+    onRemoveUser: (posId: string) => void;
+}> = ({ position, allPositions, users, onAddChild, onAssign, onDelete, onRemoveUser }) => {
+    const children = allPositions.filter(p => p.parentId === position.id);
+    const occupant = users.find(u => u.id === position.occupantId);
+
+    return (
+        <div className="flex flex-col items-center">
+            {/* CARD */}
+            <div className={`relative w-64 p-4 rounded-2xl border-2 transition-all group ${occupant ? 'bg-white border-gray-200 shadow-sm' : 'bg-gray-50 border-dashed border-gray-300'}`}>
+                
+                {/* Connector Line Top */}
+                {position.parentId && (
+                    <div className="absolute -top-6 left-1/2 w-0.5 h-6 bg-gray-300 -ml-px" />
+                )}
+
+                <div className="flex justify-between items-start mb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                        {position.departmentId}
+                    </span>
+                    <div className="relative group/menu">
+                        <button className="p-1 hover:bg-gray-100 rounded text-gray-400"><MoreVertical className="w-4 h-4" /></button>
+                        <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-100 hidden group-hover/menu:block z-20">
+                            <button onClick={() => onDelete(position.id)} className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 flex items-center gap-2"><Trash2 className="w-3 h-3" /> Sil</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="text-center mb-3">
+                    <h3 className="font-bold text-gray-800 text-sm">{position.title}</h3>
+                </div>
+
+                {occupant ? (
+                    <div className="flex items-center gap-3 bg-blue-50 p-2 rounded-xl border border-blue-100">
+                        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-xs font-bold text-blue-600 border border-blue-200 overflow-hidden">
+                            {occupant.avatar?.length > 4 ? <img src={occupant.avatar} className="w-full h-full object-cover" /> : occupant.avatar}
+                        </div>
+                        <div className="flex-1 text-left min-w-0">
+                            <div className="text-xs font-bold text-blue-900 truncate">{occupant.name}</div>
+                        </div>
+                        <button onClick={() => onRemoveUser(position.id)} className="text-gray-400 hover:text-red-500"><X className="w-3 h-3" /></button>
+                    </div>
+                ) : (
+                    <button 
+                        onClick={() => onAssign(position.id)}
+                        className="w-full py-2 border-2 border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-400 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-1"
+                    >
+                        <UserIcon className="w-3 h-3" /> Koltuk Boş
+                    </button>
+                )}
+
+                {/* Add Child Button (Hover) */}
+                <button 
+                    onClick={() => onAddChild(position.id)}
+                    className="absolute -bottom-3 left-1/2 -ml-3 w-6 h-6 rounded-full bg-white border border-gray-300 shadow-sm flex items-center justify-center text-gray-500 hover:bg-primary hover:text-white hover:border-primary transition-colors z-10"
+                    title="Alt Pozisyon Ekle"
+                >
+                    <Plus className="w-4 h-4" />
+                </button>
+
+                {/* Connector Line Bottom */}
+                {children.length > 0 && (
+                    <div className="absolute -bottom-6 left-1/2 w-0.5 h-6 bg-gray-300 -ml-px" />
+                )}
+            </div>
+
+            {/* CHILDREN RENDERER */}
+            {children.length > 0 && (
+                <div className="flex gap-8 mt-12 relative">
+                    {/* Horizontal Connector Line */}
+                    {children.length > 1 && (
+                        <div className="absolute -top-6 left-0 right-0 h-px bg-gray-300 mx-[calc(50%/var(--child-count))]"></div>
+                    )}
+                    {children.map(child => (
+                        <OrgNode 
+                            key={child.id} 
+                            position={child} 
+                            allPositions={allPositions} 
+                            users={users}
+                            onAddChild={onAddChild}
+                            onAssign={onAssign}
+                            onDelete={onDelete}
+                            onRemoveUser={onRemoveUser}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- MAIN BUILDER COMPONENT ---
 export const OrgChartBuilder: React.FC = () => {
     const { currentOrganization } = useOrganizationStore();
     const [positions, setPositions] = useState<Position[]>([]);
-    const [courses, setCourses] = useState<Course[]>([]);
+    const [users, setUsers] = useState<User[]>([]); // Pool of all users
     const [loading, setLoading] = useState(true);
-    const [selectedPos, setSelectedPos] = useState<Position | null>(null);
-    const [isAdding, setIsAdding] = useState(false);
+
+    // Modal States
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     
-    // Position Creation Form
-    const [newTitle, setNewTitle] = useState('');
-    const [newDept, setNewDept] = useState('');
-    
-    // Occupancy (Invite) State
-    const [searchQuery, setSearchQuery] = useState('');
-    const [foundUser, setFoundUser] = useState<User | null>(null);
-    const [isSearching, setIsSearching] = useState(false);
+    // Selection States
+    const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
+    const [targetPositionId, setTargetPositionId] = useState<string | null>(null);
+
+    // Form Data
+    const [newPosTitle, setNewPosTitle] = useState('');
+    const [newPosDept, setNewPosDept] = useState<DepartmentType>('front_office');
 
     useEffect(() => {
-        if (currentOrganization) {
-            loadPositions();
-            getCourses(currentOrganization.id).then(setCourses);
-        }
+        if(currentOrganization) loadData();
     }, [currentOrganization]);
 
-    const loadPositions = async () => {
+    const loadData = async () => {
+        if (!currentOrganization) return;
         setLoading(true);
-        const data = await getOrgPositions(currentOrganization!.id);
-        setPositions(data);
+        
+        // 1. Fetch Positions
+        const posData = await getOrgPositions(currentOrganization.id);
+        
+        // 2. Fetch All Users (Optimization: In real app, search instead of fetching all)
+        const depts = currentOrganization.settings.customDepartments || ['housekeeping', 'kitchen', 'front_office', 'management'];
+        let allUsers: User[] = [];
+        for (const d of depts) {
+            const u = await getUsersByDepartment(d, currentOrganization.id);
+            allUsers = [...allUsers, ...u];
+        }
+        
+        // De-duplicate
+        const uniqueUsers = Array.from(new Map(allUsers.map(item => [item.id, item])).values());
+        
+        setPositions(posData);
+        setUsers(uniqueUsers);
         setLoading(false);
     };
 
-    const handleAddSubPosition = async (parentId: string | null) => {
-        if (!newTitle || !currentOrganization) return;
-        const parent = positions.find(p => p.id === parentId);
+    const handleAddPosition = async () => {
+        if (!currentOrganization || !newPosTitle) return;
         
-        await createPosition({
-            orgId: currentOrganization.id,
-            title: newTitle,
-            departmentId: newDept || parent?.departmentId || 'General',
-            parentId,
+        const newPos: Omit<Position, 'id'> = {
+            organizationId: currentOrganization.id,
+            title: newPosTitle,
+            departmentId: newPosDept,
+            parentId: selectedParentId,
             occupantId: null,
-            requirements: [],
-            level: (parent?.level || 0) + 1
-        });
-        
-        setNewTitle('');
-        setIsAdding(false);
-        loadPositions();
-    };
+            level: 0, // Calculate depth if needed
+            isOpen: true
+        };
 
-    const handleSearch = async () => {
-        setIsSearching(true);
-        const user = await searchUserByPhone(searchQuery);
-        setFoundUser(user);
-        setIsSearching(false);
-    };
-
-    const handleAssign = async () => {
-        if (!selectedPos || !foundUser) return;
-        setLoading(true);
-        const success = await occupyPosition(selectedPos.id, foundUser.id);
-        if (success) {
-            setSelectedPos(null);
-            setFoundUser(null);
-            setSearchQuery('');
-            loadPositions();
-        }
-        setLoading(false);
-    };
-
-    const toggleRequirement = async (courseId: string) => {
-        if (!selectedPos) return;
-        const currentReqs = selectedPos.requirements || [];
-        const newReqs = currentReqs.includes(courseId) 
-            ? currentReqs.filter(id => id !== courseId)
-            : [...currentReqs, courseId];
-        
-        const success = await updatePositionRequirements(selectedPos.id, newReqs);
-        if (success) {
-            setSelectedPos({ ...selectedPos, requirements: newReqs });
-            setPositions(prev => prev.map(p => p.id === selectedPos.id ? { ...p, requirements: newReqs } : p));
+        const id = await createPosition(newPos);
+        if (id) {
+            setPositions([...positions, { ...newPos, id }]);
+            setIsAddModalOpen(false);
+            setNewPosTitle('');
         }
     };
 
-    // Recursive component to render tree nodes
-    const PositionNode: React.FC<{ node: Position }> = ({ node }) => {
-        const children = positions.filter(p => p.parentId === node.id);
-        const [occupant, setOccupant] = useState<User | null>(null);
-
-        useEffect(() => {
-            if (node.occupantId) {
-                getUserById(node.occupantId).then(setOccupant);
-            }
-        }, [node.occupantId]);
-
-        return (
-            <div className="flex flex-col items-center">
-                <motion.div 
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    onClick={() => setSelectedPos(node)}
-                    className={`relative w-48 p-4 rounded-2xl border-2 transition-all cursor-pointer group mb-8 ${
-                        node.occupantId 
-                        ? 'bg-white border-primary shadow-lg' 
-                        : 'bg-gray-50 border-dashed border-gray-300 hover:border-accent'
-                    }`}
-                >
-                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{node.departmentId}</div>
-                    <div className="font-bold text-gray-900 text-sm leading-tight mb-3">{node.title}</div>
-                    
-                    {node.occupantId ? (
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-[10px] font-bold overflow-hidden">
-                                {occupant?.avatar && occupant.avatar.length > 3 ? <img src={occupant.avatar} className="w-full h-full object-cover"/> : occupant?.avatar}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="text-[10px] font-bold text-gray-800 truncate">{occupant?.name}</div>
-                                <div className="text-[8px] text-green-600 font-bold uppercase tracking-tighter">Doluruldu</div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-2 text-orange-500 font-bold text-[10px]">
-                            <AlertCircle className="w-3 h-3" /> BOŞ KOLTUK
-                        </div>
-                    )}
-
-                    {/* Quick Add Sub Button */}
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); setIsAdding(true); setSelectedPos(node); }}
-                        className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-8 h-8 bg-accent text-primary rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                    >
-                        <Plus className="w-4 h-4" />
-                    </button>
-                </motion.div>
-
-                {children.length > 0 && (
-                    <div className="flex gap-8 relative">
-                        {/* Horizontal Connection Line */}
-                        <div className="absolute top-0 left-24 right-24 h-px bg-gray-200" />
-                        {children.map(child => (
-                            <PositionNode key={child.id} node={child} />
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
+    const handleAssignUser = async (userId: string) => {
+        if (!currentOrganization || !targetPositionId) return;
+        
+        const success = await assignUserToPosition(currentOrganization.id, targetPositionId, userId);
+        if (success) {
+            setPositions(prev => prev.map(p => p.id === targetPositionId ? { ...p, occupantId: userId } : p));
+            setIsAssignModalOpen(false);
+        }
     };
 
-    if (loading && positions.length === 0) return <div className="p-20 text-center"><Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" /></div>;
+    const handleRemoveUser = async (posId: string) => {
+        if(window.confirm("Bu personeli pozisyondan almak istediğinize emin misiniz?")) {
+            await removeUserFromPosition(posId);
+            setPositions(prev => prev.map(p => p.id === posId ? { ...p, occupantId: null } : p));
+        }
+    };
 
-    const rootPos = positions.find(p => p.parentId === null);
+    const handleDelete = async (posId: string) => {
+        const hasChildren = positions.some(p => p.parentId === posId);
+        if (hasChildren) {
+            alert("Alt pozisyonları olan bir kutuyu silemezsiniz. Önce alt dalları silin.");
+            return;
+        }
+        if (window.confirm("Bu pozisyonu silmek istediğinize emin misiniz?")) {
+            await deletePosition(posId);
+            setPositions(prev => prev.filter(p => p.id !== posId));
+        }
+    };
+
+    // Find Root(s)
+    const rootPositions = positions.filter(p => p.parentId === null);
+
+    // Unassigned Users (Bench)
+    const assignedUserIds = positions.map(p => p.occupantId).filter(Boolean);
+    const benchUsers = users.filter(u => !assignedUserIds.includes(u.id));
 
     return (
-        <div className="flex flex-col gap-8 h-full min-h-[800px]">
-            <div className="flex justify-between items-end">
+        <div className="flex flex-col h-[calc(100vh-100px)]">
+            {/* Header Toolbar */}
+            <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">Organizasyon Şeması</h1>
-                    <p className="text-gray-500 text-sm">Operasyonel hiyerarşiyi kurgula ve koltukları yönet.</p>
+                    <p className="text-gray-500 text-sm">Hiyerarşiyi sürükleyip bırakarak değil, mantıksal olarak inşa edin.</p>
                 </div>
-                {!rootPos && (
-                    <button 
-                        onClick={() => setIsAdding(true)}
-                        className="bg-primary text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg"
-                    >
-                        <Shield className="w-5 h-5 text-accent" /> Kök Pozisyon Oluştur (GM)
-                    </button>
-                )}
+                <div className="flex gap-2">
+                    {rootPositions.length === 0 && (
+                        <button 
+                            onClick={() => { setSelectedParentId(null); setIsAddModalOpen(true); }}
+                            className="bg-primary text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"
+                        >
+                            <Plus className="w-4 h-4" /> Tepe Yönetici Ekle
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* CHART CANVAS */}
-            <div className="flex-1 bg-white rounded-[2.5rem] border border-gray-100 shadow-inner overflow-auto p-12 custom-scrollbar flex justify-center min-h-[600px] relative">
-                {rootPos ? (
-                    <PositionNode node={rootPos} />
+            {/* Canvas Area */}
+            <div className="flex-1 bg-gray-50 rounded-3xl border border-gray-200 overflow-auto p-10 relative custom-scrollbar shadow-inner">
+                {/* Dotted Grid Background */}
+                <div className="absolute inset-0 z-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#0B1E3B 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+                
+                {loading ? (
+                    <div className="flex justify-center items-center h-full text-gray-400">Yükleniyor...</div>
+                ) : rootPositions.length > 0 ? (
+                    <div className="flex justify-center min-w-max relative z-10">
+                        {rootPositions.map(root => (
+                            <OrgNode 
+                                key={root.id}
+                                position={root}
+                                allPositions={positions}
+                                users={users}
+                                onAddChild={(id) => { setSelectedParentId(id); setIsAddModalOpen(true); }}
+                                onAssign={(id) => { setTargetPositionId(id); setIsAssignModalOpen(true); }}
+                                onDelete={handleDelete}
+                                onRemoveUser={handleRemoveUser}
+                            />
+                        ))}
+                    </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center text-gray-400 gap-4 mt-20">
-                        <Briefcase className="w-16 h-16 opacity-10" />
-                        <p className="text-sm font-medium">Hiyerarşi henüz tanımlanmamış.</p>
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                        <Briefcase className="w-16 h-16 mb-4 opacity-20" />
+                        <p>Henüz bir yapı kurulmadı.</p>
+                        <p className="text-xs">"Tepe Yönetici Ekle" butonu ile başlayın.</p>
                     </div>
                 )}
             </div>
 
-            {/* DRAWER / MODAL */}
+            {/* ADD POSITION MODAL */}
             <AnimatePresence>
-                {selectedPos && (
-                    <div className="fixed inset-0 z-50 flex justify-end">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedPos(null)} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-                        <motion.div initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} className="relative w-full max-w-md h-full bg-white shadow-2xl flex flex-col overflow-hidden">
-                            <div className="p-8 border-b border-gray-50 flex justify-between items-start shrink-0">
+                {isAddModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
+                            <h2 className="text-lg font-bold mb-4">{selectedParentId ? 'Alt Pozisyon Ekle' : 'Tepe Pozisyon Ekle'}</h2>
+                            <div className="space-y-4">
                                 <div>
-                                    <span className="bg-primary/10 text-primary text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider mb-2 inline-block">{selectedPos.departmentId}</span>
-                                    <h2 className="text-2xl font-bold text-gray-800">{selectedPos.title}</h2>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ünvan</label>
+                                    <input value={newPosTitle} onChange={e => setNewPosTitle(e.target.value)} placeholder="Örn: Kat Şefi" className="w-full p-3 border rounded-xl outline-none focus:border-primary" />
                                 </div>
-                                <button onClick={() => setSelectedPos(null)} className="p-2 bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Departman</label>
+                                    <select value={newPosDept} onChange={e => setNewPosDept(e.target.value)} className="w-full p-3 border rounded-xl outline-none">
+                                        <option value="housekeeping">Housekeeping</option>
+                                        <option value="kitchen">Kitchen</option>
+                                        <option value="front_office">Front Office</option>
+                                        <option value="management">Management</option>
+                                    </select>
+                                </div>
+                                <div className="flex gap-2 pt-2">
+                                    <button onClick={() => setIsAddModalOpen(false)} className="flex-1 py-2 text-gray-500 font-bold">İptal</button>
+                                    <button onClick={handleAddPosition} className="flex-1 py-2 bg-primary text-white rounded-xl font-bold">Ekle</button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* ASSIGN USER MODAL */}
+            <AnimatePresence>
+                {isAssignModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md h-[500px] flex flex-col">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-lg font-bold">Koltuk Doldurma</h2>
+                                <button onClick={() => setIsAssignModalOpen(false)}><X className="w-5 h-5 text-gray-400" /></button>
+                            </div>
+                            
+                            <div className="bg-blue-50 p-3 rounded-xl mb-4 text-xs text-blue-700 flex items-start gap-2">
+                                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                Personel seçildiğinde, profilindeki departman ve ünvan otomatik olarak bu pozisyona göre güncellenir.
                             </div>
 
-                            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                                {isAdding ? (
-                                    <div className="space-y-6">
-                                        <h3 className="font-bold text-gray-400 text-xs uppercase tracking-widest">Yeni Alt Pozisyon Tanımla</h3>
-                                        <div className="space-y-4">
-                                            <input 
-                                                value={newTitle} onChange={e => setNewTitle(e.target.value)}
-                                                placeholder="Pozisyon Başlığı (Örn: Kat Şefi)"
-                                                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-primary font-bold"
-                                            />
-                                            <select 
-                                                value={newDept} onChange={e => setNewDept(e.target.value)}
-                                                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none font-medium"
-                                            >
-                                                <option value="">Departman Seç...</option>
-                                                {currentOrganization?.settings.customDepartments.map(d => <option key={d} value={d}>{d}</option>)}
-                                            </select>
+                            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                                <h3 className="text-xs font-bold text-gray-400 uppercase mb-2">Boştaki Personel ({benchUsers.length})</h3>
+                                {benchUsers.map(user => (
+                                    <button 
+                                        key={user.id}
+                                        onClick={() => handleAssignUser(user.id)}
+                                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-primary hover:bg-primary/5 transition-all text-left"
+                                    >
+                                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold overflow-hidden">
+                                            {user.avatar.length > 4 ? <img src={user.avatar} className="w-full h-full object-cover"/> : user.avatar}
                                         </div>
-                                        <button onClick={() => handleAddSubPosition(selectedPos.id)} className="w-full bg-primary text-white py-4 rounded-2xl font-bold shadow-xl">Pozisyonu Ekle</button>
-                                        <button onClick={() => setIsAdding(false)} className="w-full text-gray-400 font-bold text-sm py-2">Vazgeç</button>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-10">
-                                        {/* OCCUPANT STATUS */}
-                                        <section>
-                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Koltuk Durumu</h4>
-                                            {selectedPos.occupantId ? (
-                                                <div className="bg-green-50 p-6 rounded-[2rem] border border-green-100 text-center">
-                                                    <p className="text-green-800 font-bold text-sm mb-4">Bu koltuk bir personel tarafından dolduruldu.</p>
-                                                    <button onClick={() => vacatePosition(selectedPos.id).then(loadPositions)} className="w-full py-3 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2">
-                                                        <Trash2 className="w-4 h-4" /> Personeli Koltuktan Çıkar
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-4">
-                                                    <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 flex items-center gap-3">
-                                                        <UserPlus className="w-5 h-5 text-orange-600" />
-                                                        <div className="text-xs text-orange-800 font-medium">Bu koltuk şu an boş. Bir personeli davet et.</div>
-                                                    </div>
-                                                    <div className="relative">
-                                                        <Search className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-                                                        <input 
-                                                            value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                                            placeholder="Telefon No ile ara..." 
-                                                            className="w-full p-4 pl-12 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:border-primary font-bold"
-                                                        />
-                                                        <button onClick={handleSearch} className="absolute right-2 top-2 bg-primary text-white p-2 rounded-xl"><Check className="w-5 h-5" /></button>
-                                                    </div>
-                                                    {foundUser && (
-                                                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-white border border-gray-200 rounded-2xl shadow-sm flex items-center gap-4">
-                                                            <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center font-bold text-white text-xs">{foundUser.avatar}</div>
-                                                            <div className="flex-1">
-                                                                <div className="font-bold text-gray-900 text-sm">{foundUser.name}</div>
-                                                                <div className="text-xs text-gray-500">{foundUser.phoneNumber}</div>
-                                                            </div>
-                                                            <button onClick={handleAssign} className="bg-green-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md">Ata</button>
-                                                        </motion.div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </section>
-
-                                        {/* REQUIREMENTS */}
-                                        <section>
-                                            <div className="flex justify-between items-center mb-4">
-                                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Zorunlu Eğitimler</h4>
-                                                <span className="bg-accent/20 text-primary text-[9px] font-black px-1.5 py-0.5 rounded">Otomatik Atanır</span>
-                                            </div>
-                                            <div className="space-y-2">
-                                                {courses.map(course => {
-                                                    const isRequired = selectedPos.requirements?.includes(course.id);
-                                                    return (
-                                                        <div 
-                                                            key={course.id} 
-                                                            onClick={() => toggleRequirement(course.id)}
-                                                            className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-3 ${isRequired ? 'border-primary bg-primary/5' : 'border-gray-50 hover:border-gray-200'}`}
-                                                        >
-                                                            <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${isRequired ? 'bg-primary text-white' : 'bg-gray-100'}`}>
-                                                                {isRequired && <Check className="w-3 h-3" />}
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <div className="text-xs font-bold text-gray-800 truncate">{course.title}</div>
-                                                                <div className="text-[9px] text-gray-400 uppercase font-black">{course.duration} Dakika</div>
-                                                            </div>
-                                                            <BookOpen className={`w-4 h-4 ${isRequired ? 'text-primary' : 'text-gray-200'}`} />
-                                                        </div>
-                                                    );
-                                                })}
-                                                {courses.length === 0 && <p className="text-xs text-gray-400 italic">Henüz eğitim içeriği yok.</p>}
-                                            </div>
-                                        </section>
-                                    </div>
-                                )}
+                                        <div className="flex-1">
+                                            <div className="font-bold text-gray-800">{user.name}</div>
+                                            <div className="text-xs text-gray-500 capitalize">{user.role}</div>
+                                        </div>
+                                        <CornerDownRight className="w-4 h-4 text-gray-300" />
+                                    </button>
+                                ))}
+                                {benchUsers.length === 0 && <div className="text-center py-4 text-gray-400 text-sm">Atanacak boşta personel yok.</div>}
                             </div>
                         </motion.div>
                     </div>

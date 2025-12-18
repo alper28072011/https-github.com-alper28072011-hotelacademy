@@ -15,6 +15,7 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
 
+// --- NEW EDUCATION TYPES ---
 export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
 export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN';
 export type CourseLength = 'SHORT' | 'MEDIUM' | 'LONG';
@@ -22,17 +23,18 @@ export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VID
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
-// --- HIARARCHY TYPES ---
+// --- HIERARCHY & POSITIONS ---
 export interface Position {
   id: string;
-  orgId: string;
-  title: string;
-  departmentId: string;
-  parentId: string | null; // Hierarchy link
-  occupantId: string | null; // User ID if occupied
-  requirements: string[]; // Course IDs that are mandatory for this slot
-  salaryRange?: string;
-  level: number; // 0 for root, 1 for heads, 2 for staff etc.
+  organizationId: string;
+  title: string; // e.g. "Front Office Manager"
+  departmentId: DepartmentType;
+  parentId: string | null; // NULL if top-level (GM/Owner)
+  occupantId: string | null; // User ID if filled, null if Vacant
+  requirements?: string[]; // Tag IDs required for this position
+  level: number; // Hierarchy depth (0, 1, 2...)
+  baseSalary?: number;
+  isOpen?: boolean; // Is this position actively recruiting?
 }
 
 export interface User {
@@ -43,9 +45,10 @@ export interface User {
   phoneNumber: string; 
   avatar: string; 
   currentOrganizationId: string | null; 
-  positionId?: string | null; // Link to specific slot
   department: DepartmentType | null;
   role: UserRole;
+  roleTitle?: string; // The display title derived from Position
+  positionId?: string; // Link to the specific Position
   status: UserStatus;
   xp: number;
   creatorLevel: CreatorLevel;
@@ -84,7 +87,7 @@ export interface Course {
   title: string;
   description: string;
   thumbnailUrl: string;
-  duration: number; 
+  duration: number; // in minutes
   xpReward: number;
   createdAt?: number;
   steps: StoryCard[]; 
@@ -175,7 +178,7 @@ export interface JoinRequest {
   organizationId: string;
   targetDepartment: string;
   requestedRoleTitle: string;
-  targetPositionId?: string; // Optional specific slot request
+  positionId?: string; // Optional: Linking request to a specific open position
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
 }
@@ -190,23 +193,20 @@ export interface Organization {
   ownerId: string; 
   code: string; 
   createdAt: number; 
-  settings: { 
-    allowStaffContentCreation: boolean; 
-    customDepartments: string[]; 
-    primaryColor: string; 
-  }; 
+  settings: { allowStaffContentCreation: boolean; customDepartments: string[]; primaryColor: string; }; 
   followersCount: number; 
   memberCount: number; 
   website?: string; 
   description?: string; 
   size?: OrganizationSize; 
   status?: 'ACTIVE' | 'ARCHIVED';
-  structureType: 'FLAT' | 'HIERARCHICAL'; // Position management mode
+  structureType?: 'FLAT' | 'HIERARCHICAL'; // New: Defines if using Org Chart mode
 }
 
 export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
+export type OrganizationSectorExtended = OrganizationSector;
 export type OrganizationSize = '1-10' | '11-50' | '50-200' | '200+';
-export interface Membership { id: string; userId: string; organizationId: string; role: UserRole; department: DepartmentType; positionId?: string; status: 'ACTIVE' | 'SUSPENDED'; joinedAt: number; roleTitle?: string; permissions?: PermissionType[]; }
+export interface Membership { id: string; userId: string; organizationId: string; role: UserRole; department: DepartmentType; status: 'ACTIVE' | 'SUSPENDED'; joinedAt: number; roleTitle?: string; positionId?: string; permissions?: PermissionType[]; }
 export type PermissionType = 'CAN_CREATE_CONTENT' | 'CAN_MANAGE_TEAM' | 'CAN_VIEW_ANALYTICS' | 'CAN_EDIT_SETTINGS';
 export type FollowStatus = 'NONE' | 'FOLLOWING' | 'PENDING';
 export interface Relationship { followerId: string; followingId: string; status: 'PENDING' | 'ACCEPTED'; createdAt: number; }
