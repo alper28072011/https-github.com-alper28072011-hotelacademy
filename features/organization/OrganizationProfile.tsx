@@ -5,9 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, 
     Users, Utensils, BedDouble, ConciergeBell, Settings, ShieldCheck, 
-    BarChart3, Edit, Megaphone, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff, ArrowRight
+    BarChart3, Edit, Megaphone, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff, ArrowRight, Clock
 } from 'lucide-react';
-import { getOrganizationDetails, sendJoinRequest, getMyMemberships, switchUserActiveOrganization } from '../../services/db';
+import { getOrganizationDetails, sendJoinRequest, getMyMemberships, switchUserActiveOrganization, getUserPendingRequests } from '../../services/db';
 import { Organization, DepartmentType, OrganizationSector, FollowStatus } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore'; 
@@ -23,6 +23,7 @@ export const OrganizationProfile: React.FC = () => {
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [isMember, setIsMember] = useState(false);
+  const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [followStatus, setFollowStatus] = useState<FollowStatus>('NONE');
   const [isFollowLoading, setIsFollowLoading] = useState(false);
   
@@ -41,9 +42,14 @@ export const OrganizationProfile: React.FC = () => {
         if (data) setOrg(data);
         
         if (currentUser) {
+            // Check Membership
             const memberships = await getMyMemberships(currentUser.id);
             if (memberships.some(m => m.organizationId === orgId)) setIsMember(true);
             
+            // Check Pending Requests
+            const pending = await getUserPendingRequests(currentUser.id);
+            if (pending.some(r => r.organizationId === orgId)) setHasPendingRequest(true);
+
             // Check follow status
             const status = await checkFollowStatus(currentUser.id, orgId);
             setFollowStatus(status);
@@ -57,20 +63,18 @@ export const OrganizationProfile: React.FC = () => {
       if (!currentUser || !org || !selectedDeptId || !selectedPosId) return;
       setIsSubmitting(true);
       
-      // FIX: Find titles from new DEFINITIONS structure
       const deptDefinition = org.definitions?.departments.find(d => d.id === selectedDeptId);
       const protoDefinition = org.definitions?.positionPrototypes.find(p => p.id === selectedPosId);
       
       const deptName = deptDefinition?.name || selectedDeptId; // Fallback to ID
       const roleTitle = protoDefinition?.title || 'Unknown';
 
-      // Note: We use department ID for the logic, but usually display names in UI.
-      // The DB expects the ID for the department field usually.
       const result = await sendJoinRequest(currentUser.id, org.id, selectedDeptId, roleTitle, selectedPosId);
       setIsSubmitting(false);
       
       if (result.success) {
           setShowWizard(false);
+          setHasPendingRequest(true); // Optimistic Update
           confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
           alert("Başvuru gönderildi! Yönetici onayı bekleniyor.");
           navigate('/lobby');
@@ -139,7 +143,6 @@ export const OrganizationProfile: React.FC = () => {
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
   if (!org) return <div>Organization not found</div>;
 
-  // FIX: Data Preparation for Wizard
   const availableDepartments = org.definitions?.departments || [];
   const activeDept = availableDepartments.find(d => d.id === selectedDeptId);
   const availablePositions = org.definitions?.positionPrototypes.filter(p => p.departmentId === selectedDeptId) || [];
@@ -251,6 +254,11 @@ export const OrganizationProfile: React.FC = () => {
                     <CheckCircle2 className="w-6 h-6" />
                     Panele Git
                 </button>
+            ) : hasPendingRequest ? (
+                <div className="w-full bg-orange-100 text-orange-600 font-bold text-lg py-4 rounded-2xl shadow-none border border-orange-200 flex items-center justify-center gap-2 cursor-default">
+                    <Clock className="w-6 h-6" />
+                    Başvuru Değerlendiriliyor
+                </div>
             ) : (
                 <div className="flex gap-3">
                     <button 

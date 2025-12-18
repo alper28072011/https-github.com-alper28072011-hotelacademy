@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Building2, ArrowRight, Loader2, LogOut, MapPin, Briefcase } from 'lucide-react';
+import { Plus, Search, Building2, ArrowRight, Loader2, LogOut, MapPin, Briefcase, Clock, X } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { createOrganization, searchOrganizations } from '../../services/db';
-import { Organization, OrganizationSector, User } from '../../types';
+import { createOrganization, searchOrganizations, getUserPendingRequests, cancelJoinRequest } from '../../services/db';
+import { Organization, OrganizationSector, User, JoinRequest } from '../../types';
 
 export const OrganizationLobby: React.FC = () => {
   const navigate = useNavigate();
@@ -27,11 +27,32 @@ export const OrganizationLobby: React.FC = () => {
   const [newOrgSector, setNewOrgSector] = useState<OrganizationSector>('tourism');
   const [isCreating, setIsCreating] = useState(false);
 
+  // Pending Requests State
+  const [pendingRequests, setPendingRequests] = useState<(JoinRequest & { orgName?: string })[]>([]);
+
   useEffect(() => {
       if (currentUser) {
           fetchMemberships(currentUser.id);
+          fetchPendingRequests();
       }
   }, [currentUser]);
+
+  const fetchPendingRequests = async () => {
+      if (!currentUser) return;
+      const reqs = await getUserPendingRequests(currentUser.id);
+      setPendingRequests(reqs);
+  };
+
+  const handleCancelRequest = async (id: string) => {
+      if (window.confirm("Bu başvuruyu geri çekmek istediğinize emin misiniz?")) {
+          const success = await cancelJoinRequest(id);
+          if (success) {
+              setPendingRequests(prev => prev.filter(r => r.id !== id));
+          } else {
+              alert("İptal işlemi başarısız.");
+          }
+      }
+  };
 
   // Debounced Search
   useEffect(() => {
@@ -131,30 +152,65 @@ export const OrganizationLobby: React.FC = () => {
                     </div>
                 </div>
 
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Üyeliklerim</h3>
-                <div className="flex-1 space-y-3 overflow-y-auto pr-2 custom-scrollbar">
-                    {myMemberships.map(mem => (
-                        <button 
-                            key={mem.id}
-                            onClick={() => handleSelectMembership(mem.organizationId)}
-                            disabled={!!switchingOrgId}
-                            className={`w-full flex items-center gap-3 p-3 rounded-2xl border shadow-sm transition-all group relative overflow-hidden ${
-                                switchingOrgId === mem.organizationId 
-                                ? 'bg-green-50 border-green-500 shadow-green-200 ring-2 ring-green-200' 
-                                : 'bg-white border-gray-100 hover:border-accent hover:shadow-md'
-                            }`}
-                        >
-                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
-                                {switchingOrgId === mem.organizationId ? <Loader2 className="w-5 h-5 animate-spin text-green-600" /> : <Building2 className="w-5 h-5 text-gray-500" />}
-                            </div>
-                            <div className="text-left flex-1 min-w-0">
-                                <div className="font-bold text-gray-800 truncate text-sm">Org {mem.organizationId.substring(0,4)}...</div>
-                                <div className="text-xs text-gray-500 capitalize">{mem.role}</div>
-                            </div>
-                            {switchingOrgId !== mem.organizationId && <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-accent" />}
-                        </button>
-                    ))}
-                    {myMemberships.length === 0 && <div className="text-center py-10 text-gray-400 text-sm">Henüz bir kuruma üye değilsiniz.</div>}
+                <div className="flex-1 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
+                    {/* MEMBERSHIPS */}
+                    <div>
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Üyeliklerim</h3>
+                        <div className="space-y-3">
+                            {myMemberships.map(mem => (
+                                <button 
+                                    key={mem.id}
+                                    onClick={() => handleSelectMembership(mem.organizationId)}
+                                    disabled={!!switchingOrgId}
+                                    className={`w-full flex items-center gap-3 p-3 rounded-2xl border shadow-sm transition-all group relative overflow-hidden ${
+                                        switchingOrgId === mem.organizationId 
+                                        ? 'bg-green-50 border-green-500 shadow-green-200 ring-2 ring-green-200' 
+                                        : 'bg-white border-gray-100 hover:border-accent hover:shadow-md'
+                                    }`}
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
+                                        {switchingOrgId === mem.organizationId ? <Loader2 className="w-5 h-5 animate-spin text-green-600" /> : <Building2 className="w-5 h-5 text-gray-500" />}
+                                    </div>
+                                    <div className="text-left flex-1 min-w-0">
+                                        <div className="font-bold text-gray-800 truncate text-sm">Org {mem.organizationId.substring(0,4)}...</div>
+                                        <div className="text-xs text-gray-500 capitalize">{mem.role}</div>
+                                    </div>
+                                    {switchingOrgId !== mem.organizationId && <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-accent" />}
+                                </button>
+                            ))}
+                            {myMemberships.length === 0 && <div className="text-center py-4 text-gray-400 text-xs bg-white rounded-xl border border-dashed border-gray-200">Henüz bir kuruma üye değilsiniz.</div>}
+                        </div>
+                    </div>
+
+                    {/* PENDING REQUESTS (NEW) */}
+                    <div>
+                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            Bekleyen Başvurular 
+                            <span className="bg-orange-100 text-orange-600 px-1.5 rounded text-[9px]">{pendingRequests.length}</span>
+                        </h3>
+                        <div className="space-y-3">
+                            {pendingRequests.map(req => (
+                                <div key={req.id} className="bg-white p-3 rounded-xl border border-orange-100 shadow-sm relative group">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center text-orange-500">
+                                            <Clock className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-bold text-gray-800 text-sm truncate">{req.orgName || 'Kurum Yükleniyor...'}</div>
+                                            <div className="text-xs text-gray-500 truncate">{req.requestedRoleTitle}</div>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleCancelRequest(req.id)}
+                                        className="w-full py-1.5 text-[10px] font-bold text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-1"
+                                    >
+                                        <X className="w-3 h-3" /> Başvuruyu İptal Et
+                                    </button>
+                                </div>
+                            ))}
+                            {pendingRequests.length === 0 && <div className="text-center py-4 text-gray-400 text-xs bg-white rounded-xl border border-dashed border-gray-200">Bekleyen başvurunuz yok.</div>}
+                        </div>
+                    </div>
                 </div>
 
                 <button onClick={logout} className="mt-4 flex items-center gap-2 text-red-500 text-sm font-bold hover:bg-red-50 p-3 rounded-xl transition-colors">

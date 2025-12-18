@@ -23,8 +23,13 @@ export const TeamRequests: React.FC = () => {
   const fetchRequests = async () => {
       if (!currentOrganization || !currentUser) return;
       setLoading(true);
-      // If Admin/Manager, fetch all. If Dept Head, fetch dept specific
-      const data = await getJoinRequests(currentOrganization.id, currentUser.role === 'admin' ? undefined : currentUser.department);
+      
+      // LOGIC FIX: Managers and Admins should see ALL requests. Only staff/supervisors might be restricted.
+      const canSeeAll = ['admin', 'manager', 'super_admin'].includes(currentUser.role);
+      
+      // If Admin/Manager, fetch all (undefined). If Dept Head (future), fetch dept specific.
+      const data = await getJoinRequests(currentOrganization.id, canSeeAll ? undefined : currentUser.department);
+      
       setRequests(data);
       setLoading(false);
   };
