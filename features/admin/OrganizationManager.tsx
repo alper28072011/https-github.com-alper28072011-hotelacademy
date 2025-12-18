@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Users, Network, Loader2, Plus, CornerDownRight, Settings
 } from 'lucide-react';
-import { User, Position } from '../../types';
+import { User, Position, PositionPrototype } from '../../types';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { getUsersByDepartment, getUserById } from '../../services/db';
@@ -37,7 +37,7 @@ export const OrganizationManager: React.FC = () => {
   const [targetPosId, setTargetPosId] = useState<string | null>(null);
   
   // -- FORM DATA --
-  const [newPosTitle, setNewPosTitle] = useState('');
+  const [selectedPrototypeId, setSelectedPrototypeId] = useState('');
   const [newPosDeptId, setNewPosDeptId] = useState<string>('');
 
   // --- INITIAL LOAD ---
@@ -89,26 +89,38 @@ export const OrganizationManager: React.FC = () => {
   const handleAddChild = (parentId: string | null, deptId?: string) => {
       setTargetParentId(parentId);
       if (deptId) setNewPosDeptId(deptId);
+      setSelectedPrototypeId('');
       setIsAddPosModalOpen(true);
   };
 
   const handleCreatePosition = async () => {
-      if (!currentOrganization || !newPosTitle || !newPosDeptId) return;
+      if (!currentOrganization || !selectedPrototypeId || !newPosDeptId) return;
       
+      const proto = currentOrganization.definitions?.positionPrototypes.find(p => p.id === selectedPrototypeId);
+      if (!proto) return;
+
       const newPos: Omit<Position, 'id'> = {
           organizationId: currentOrganization.id,
-          title: newPosTitle,
+          title: proto.title,
           departmentId: newPosDeptId,
           parentId: targetParentId,
           occupantId: null,
-          level: 0,
+          level: proto.defaultLevel,
+          isManager: proto.isManagerial,
+          permissions: {
+              canCreateContent: false,
+              canInviteStaff: proto.isManagerial,
+              canManageStructure: false,
+              canViewAnalytics: proto.isManagerial,
+              contentTargetingScope: proto.defaultScope
+          }
       };
       
       const id = await createPosition(newPos);
       if (id) {
           setPositions([...positions, { ...newPos, id }]);
           setIsAddPosModalOpen(false);
-          setNewPosTitle('');
+          setSelectedPrototypeId('');
       }
   };
 
@@ -167,7 +179,10 @@ export const OrganizationManager: React.FC = () => {
   };
 
   const unassignedUsers = users.filter(u => !u.positionId);
-  const definitions = currentOrganization?.definitions || { departments: [], positionTitles: [] };
+  const definitions = currentOrganization?.definitions || { departments: [], positionPrototypes: [] };
+  
+  // Filter prototypes by selected department
+  const availablePrototypes = definitions.positionPrototypes?.filter(p => p.departmentId === newPosDeptId) || [];
 
   return (
     <div className="flex flex-col h-full bg-white rounded-t-3xl shadow-sm border border-gray-200 overflow-hidden relative">
@@ -224,7 +239,7 @@ export const OrganizationManager: React.FC = () => {
                             positions={positions}
                             users={users}
                             owner={owner}
-                            definitions={definitions}
+                            definitions={definitions as any}
                             onAddChild={handleAddChild}
                             onAssign={handleOpenAssign}
                             onRemoveUser={handleRemoveUser}
@@ -261,23 +276,23 @@ export const OrganizationManager: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* Title Selector from Pool */}
+                            {/* Title Selector from Prototypes */}
                             <div>
                                 <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Ünvan Seç</label>
                                 <select 
-                                    value={newPosTitle} 
-                                    onChange={e => setNewPosTitle(e.target.value)} 
+                                    value={selectedPrototypeId} 
+                                    onChange={e => setSelectedPrototypeId(e.target.value)} 
                                     className="w-full p-3 border rounded-xl outline-none focus:border-primary font-bold"
                                 >
                                     <option value="">Seçiniz...</option>
-                                    {definitions.positionTitles.map(t => <option key={t} value={t}>{t}</option>)}
+                                    {availablePrototypes.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
                                 </select>
-                                {definitions.positionTitles.length === 0 && <p className="text-xs text-red-500 mt-1">Tanımlarda hiç ünvan yok.</p>}
+                                {availablePrototypes.length === 0 && <p className="text-xs text-red-500 mt-1">Bu departman için tanımlı pozisyon yok. Önce "Tanımlar" sekmesinden ekleyin.</p>}
                             </div>
 
                             <div className="flex gap-2 mt-4">
                                 <button onClick={() => setIsAddPosModalOpen(false)} className="flex-1 py-3 text-gray-500 font-bold bg-gray-100 rounded-xl">İptal</button>
-                                <button onClick={handleCreatePosition} disabled={!newPosTitle} className="flex-1 py-3 bg-primary text-white rounded-xl font-bold disabled:opacity-50">Oluştur</button>
+                                <button onClick={handleCreatePosition} disabled={!selectedPrototypeId} className="flex-1 py-3 bg-primary text-white rounded-xl font-bold disabled:opacity-50">Oluştur</button>
                             </div>
                         </div>
                     </motion.div>

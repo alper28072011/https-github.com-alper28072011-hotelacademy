@@ -30,9 +30,11 @@ export interface OrgDepartmentDefinition {
   color: string; // Hex code
 }
 
-// NEW: Blueprint for a role before it is placed on the chart
+// NEW: Blueprint for a role, now tightly coupled to a department
 export interface PositionPrototype {
+  id: string; // Added unique ID for easier management
   title: string;
+  departmentId: string; // STRICT LINK: A position must belong to a department definition
   defaultLevel: number; // 1 (GM) to 10 (Entry)
   isManagerial: boolean;
   defaultScope: ContentTargetingScope;
