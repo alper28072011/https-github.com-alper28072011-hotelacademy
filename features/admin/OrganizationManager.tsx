@@ -7,7 +7,7 @@ import {
 import { User, Position, PositionPrototype } from '../../types';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { getUsersByDepartment, getUserById } from '../../services/db';
+import { getOrganizationUsers, getUserById } from '../../services/db';
 import { getOrgPositions, createPosition, assignUserToPosition, removeUserFromPosition, deletePosition } from '../../services/organizationService';
 import { OrgChartBuilder } from '../organization/OrgChartBuilder';
 import { StaffList } from '../organization/StaffList';
@@ -59,29 +59,23 @@ export const OrganizationManager: React.FC = () => {
       if (!currentOrganization) return;
       setLoading(true);
       
-      const posData = await getOrgPositions(currentOrganization.id);
-      
-      // Fetch Owner
-      const ownerData = await getUserById(currentOrganization.ownerId);
-      if (ownerData) setOwner(ownerData);
+      try {
+          const posData = await getOrgPositions(currentOrganization.id);
+          
+          // Fetch Owner
+          const ownerData = await getUserById(currentOrganization.ownerId);
+          if (ownerData) setOwner(ownerData);
 
-      // Fetch Staff
-      // Optimization: Fetch all memberships instead of per dept? For now sticking to dept logic or ALL.
-      // Since departments are dynamic now, let's fetch all users in the org safely.
-      // TODO: Implement getAllOrgUsers service for scalability. For now, fetch by known definitions or fallback.
-      const definedDepts = currentOrganization.definitions?.departments.map(d => d.id) || ['management'];
-      let allUsers: User[] = [];
-      
-      // Fallback: fetch management at least
-      const mgmt = await getUsersByDepartment('management', currentOrganization.id);
-      allUsers = [...mgmt];
-
-      // Remove dupes
-      const uniqueUsers = Array.from(new Map(allUsers.map(item => [item.id, item])).values());
-      
-      setPositions(posData);
-      setUsers(uniqueUsers); // In real app, this should be a full staff fetch
-      setLoading(false);
+          // Fetch ALL Staff efficiently
+          const allUsers = await getOrganizationUsers(currentOrganization.id);
+          
+          setPositions(posData);
+          setUsers(allUsers);
+      } catch (error) {
+          console.error("Failed to load org data", error);
+      } finally {
+          setLoading(false);
+      }
   };
 
   // --- ACTIONS ---
@@ -172,7 +166,7 @@ export const OrganizationManager: React.FC = () => {
       }
   };
 
-  // CORRECTED FILTER: Users who have NO position assigned (either null or empty string)
+  // Filter: Users who have NO position assigned (either null or empty string)
   const unassignedUsers = users.filter(u => !u.positionId);
   
   const definitions = currentOrganization?.definitions || { departments: [], positionPrototypes: [] };
@@ -246,7 +240,10 @@ export const OrganizationManager: React.FC = () => {
                             <StaffList 
                                 users={users} 
                                 positions={positions}
-                                onAssignClick={(user) => { alert("Şema üzerinden atama yapınız."); }}
+                                onAssignClick={(user) => { 
+                                    setTargetPosId(null); // No specific position yet
+                                    alert("Lütfen önce Şema ekranından boş bir pozisyon seçerek atama yapınız."); 
+                                }}
                             />
                         </div>
                     )}

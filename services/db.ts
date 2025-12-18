@@ -403,8 +403,6 @@ export const approveJoinRequest = async (requestId: string, request: JoinRequest
                             transaction.update(posRef, { occupantId: request.userId });
                         } else {
                             // Seat was taken in the meantime. 
-                            // Strategy: Fallback to Pool (null position) but still approve user
-                            // Optional: Could throw error here if strict.
                             console.warn("Requested seat is occupied. Assigning to pool.");
                         }
                     }
@@ -490,6 +488,30 @@ export const getUsersByDepartment = async (dept: string, orgId: string): Promise
         const usersSnap = await getDocs(query(usersRef, where('__name__', 'in', userIds.slice(0, 30))));
         return usersSnap.docs.map(d => ({id: d.id, ...d.data()} as User));
     } catch (e) { return []; }
+};
+
+// NEW: FETCH ALL ORG USERS (Fixes "Missing User" bug in Admin Panel)
+export const getOrganizationUsers = async (orgId: string): Promise<User[]> => {
+    try {
+        // Since we don't have a compound index for "currentOrganizationId", we can use Membership collection as index.
+        const memQ = query(membershipsRef, where('organizationId', '==', orgId));
+        const memSnap = await getDocs(memQ);
+        const userIds = memSnap.docs.map(d => d.data().userId);
+        
+        if (userIds.length === 0) return [];
+
+        // Firestore "in" query allows max 10 IDs. We need to chunk it.
+        // OR better: query users directly if we can index it.
+        // Let's use the 'currentOrganizationId' query on Users (requires index, but we can assume simple query works for small scale or fallback)
+        
+        const usersQ = query(usersRef, where('currentOrganizationId', '==', orgId));
+        const usersSnap = await getDocs(usersQ);
+        
+        return usersSnap.docs.map(d => ({id: d.id, ...d.data()} as User));
+    } catch (e) {
+        console.error("Get All Org Users Error:", e);
+        return [];
+    }
 };
 
 export const searchUserByPhone = async (phoneNumber: string): Promise<User | null> => {
