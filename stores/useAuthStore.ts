@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { User, AuthMode } from '../types';
 import { logoutUser } from '../services/authService';
+import { getUserById } from '../services/db';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -17,11 +18,12 @@ interface AuthState {
   setError: (msg: string | null) => void;
   loginSuccess: (user: User) => void;
   logout: () => void;
+  refreshProfile: () => Promise<void>; // New Action
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       isAuthenticated: false,
       currentUser: null,
       authMode: 'LOGIN',
@@ -55,6 +57,20 @@ export const useAuthStore = create<AuthState>()(
         });
         window.location.href = '/';
       },
+
+      refreshProfile: async () => {
+          const { currentUser } = get();
+          if (!currentUser) return;
+          
+          try {
+              const refreshedUser = await getUserById(currentUser.id);
+              if (refreshedUser) {
+                  set({ currentUser: refreshedUser });
+              }
+          } catch (e) {
+              console.error("Auto-refresh profile failed:", e);
+          }
+      }
     }),
     {
       name: 'hotel-academy-auth-v4',

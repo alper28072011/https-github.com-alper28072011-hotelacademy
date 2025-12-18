@@ -191,6 +191,7 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
 /**
  * DELETION ENGINE
  * Deletes the course document AND all associated media from Storage.
+ * Guaranteed Cleanup: Even if media deletion fails, document is removed.
  */
 export const deleteCourseFully = async (courseId: string): Promise<boolean> => {
     try {
@@ -202,27 +203,33 @@ export const deleteCourseFully = async (courseId: string): Promise<boolean> => {
         
         const course = courseSnap.data() as Course;
 
-        // 2. Collect Files to Delete
-        const filesToDelete: Promise<void>[] = [];
+        // 2. Try to Delete Files (Best Effort)
+        try {
+            const filesToDelete: Promise<void>[] = [];
 
-        // Cover Image
-        if (course.thumbnailUrl) {
-            filesToDelete.push(deleteFileByUrl(course.thumbnailUrl));
+            // Cover Image
+            if (course.thumbnailUrl) {
+                filesToDelete.push(deleteFileByUrl(course.thumbnailUrl));
+            }
+
+            // Slide Media
+            if (course.steps && course.steps.length > 0) {
+                course.steps.forEach((step: StoryCard) => {
+                    if (step.mediaUrl) {
+                        filesToDelete.push(deleteFileByUrl(step.mediaUrl));
+                    }
+                });
+            }
+
+            // Execute parallel deletion, wait for all, ignore individual errors inside deleteFileByUrl
+            if (filesToDelete.length > 0) {
+                await Promise.allSettled(filesToDelete);
+            }
+        } catch (fileErr) {
+            console.warn("Media deletion partial failure (ignoring to proceed with doc delete):", fileErr);
         }
 
-        // Slide Media
-        if (course.steps && course.steps.length > 0) {
-            course.steps.forEach((step: StoryCard) => {
-                if (step.mediaUrl) {
-                    filesToDelete.push(deleteFileByUrl(step.mediaUrl));
-                }
-            });
-        }
-
-        // 3. Delete Files (Parallel, non-blocking)
-        await Promise.all(filesToDelete);
-
-        // 4. Delete Document
+        // 3. Delete Document (Guaranteed)
         await deleteDoc(courseRef);
 
         return true;

@@ -53,24 +53,25 @@ export const getAdminCourses = async (userId: string, orgId?: string | null): Pr
 };
 
 // --- HİBRİT HABER KAYNAĞI MOTORU (FEED ENGINE) ---
-
+// REFACTORED: Uses Promise.allSettled for fault tolerance and Map for uniqueness.
 export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[]> => {
     try {
         const promises = [];
 
-        // 1. HAVUZ: KİŞİSEL
+        // 1. HAVUZ: KİŞİSEL (Kendi içeriklerim)
         const myQ = query(coursesRef, where('authorId', '==', user.id), limit(5));
         promises.push(getDocs(myQ));
 
-        // 2. HAVUZ: KURUMSAL
+        // 2. HAVUZ: KURUMSAL (Kurum içi)
         if (user.currentOrganizationId) {
             const orgQ = query(coursesRef, where('organizationId', '==', user.currentOrganizationId), limit(15));
             promises.push(getDocs(orgQ));
         }
 
-        // 3. HAVUZ: SOSYAL
+        // 3. HAVUZ: SOSYAL (Takip edilenler)
         const following = user.following || [];
         if (following.length > 0) {
+            // Firestore 'in' query supports max 10 items. Slice recent 10.
             const recentFollowing = following.slice(-10); 
             const socialQ = query(
                 coursesRef, 
@@ -81,25 +82,36 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
             promises.push(getDocs(socialQ));
         }
 
-        // 4. HAVUZ: KEŞFET
+        // 4. HAVUZ: KEŞFET (Public içerikler)
         const discoverQ = query(coursesRef, where('visibility', '==', 'PUBLIC'), limit(10));
         promises.push(getDocs(discoverQ));
 
-        const snapshots = await Promise.all(promises);
+        // Execute all queries in parallel, tolerating failures
+        const results = await Promise.allSettled(promises);
+        
+        // Use Map to ensure unique items by ID (Priority: Last write wins, or logic based)
         const feedMap = new Map<string, Course | FeedPost>();
         
-        snapshots.forEach(snap => {
-            snap.docs.forEach(doc => {
-                feedMap.set(doc.id, { id: doc.id, ...doc.data(), type: 'course' } as any);
-            });
+        results.forEach((result) => {
+            if (result.status === 'fulfilled') {
+                result.value.docs.forEach(doc => {
+                    // Normalize data structure if needed
+                    const data = doc.data();
+                    feedMap.set(doc.id, { id: doc.id, ...data, type: 'course' } as any);
+                });
+            } else {
+                console.warn("Feed partial fetch error:", result.reason);
+            }
         });
 
-        return Array.from(feedMap.values())
+        const feedList = Array.from(feedMap.values())
             .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
+        return feedList;
+
     } catch (error) {
-        console.error("Hybrid Feed Engine Error:", error);
-        return [];
+        console.error("Hybrid Feed Engine Critical Error:", error);
+        return []; // Return empty array instead of crashing
     }
 };
 

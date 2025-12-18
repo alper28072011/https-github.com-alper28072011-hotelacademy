@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { User, Position } from '../../types';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { getUsersByDepartment, getUserById } from '../../services/db';
 import { getOrgPositions, createPosition, assignUserToPosition, removeUserFromPosition, deletePosition } from '../../services/organizationService';
 import { OrgChartBuilder } from '../organization/OrgChartBuilder';
@@ -15,6 +16,7 @@ import confetti from 'canvas-confetti';
 
 export const OrganizationManager: React.FC = () => {
   const { currentOrganization } = useOrganizationStore();
+  const { currentUser, refreshProfile } = useAuthStore();
   
   // -- GLOBAL STATE --
   const [activeTab, setActiveTab] = useState<'DEFINITIONS' | 'CHART' | 'LIST'>('CHART');
@@ -127,6 +129,12 @@ export const OrganizationManager: React.FC = () => {
       if (!currentOrganization || !targetPosId) return;
       setIsProcessing(true);
       const result = await assignUserToPosition(currentOrganization.id, targetPosId, userId);
+      
+      // Sync Self if changed
+      if (userId === currentUser?.id) {
+          await refreshProfile();
+      }
+
       setIsProcessing(false);
 
       if (result.success) {
@@ -140,9 +148,17 @@ export const OrganizationManager: React.FC = () => {
 
   const handleRemoveUser = async (posId: string) => {
       if (!currentOrganization) return;
+      const position = positions.find(p => p.id === posId);
+      
       if (window.confirm("Koltuk boşaltılsın mı?")) {
           setIsProcessing(true);
           const success = await removeUserFromPosition(posId, currentOrganization.id);
+          
+          // Sync Self if changed
+          if (position?.occupantId === currentUser?.id) {
+              await refreshProfile();
+          }
+
           setIsProcessing(false);
           if (success) {
               setPositions(prev => prev.map(p => p.id === posId ? { ...p, occupantId: null } : p));
