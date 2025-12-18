@@ -3,27 +3,33 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Users, Network, Settings, Search, Plus, Loader2, 
-    Filter, Download, Trash2, UserPlus, ArrowRight, CornerDownRight 
+    Filter, Download, Trash2, UserPlus, ArrowRight, CornerDownRight,
+    List, Save, X, Briefcase
 } from 'lucide-react';
 import { User, Position, DepartmentType } from '../../types';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { getUsersByDepartment, searchUserByPhone, inviteUserToOrg } from '../../services/db';
+import { getUsersByDepartment, searchUserByPhone, inviteUserToOrg, updateOrganization } from '../../services/db';
 import { getOrgPositions, createPosition, assignUserToPosition, removeUserFromPosition, deletePosition } from '../../services/organizationService';
 import { OrgChartBuilder } from '../organization/OrgChartBuilder';
 import { useNavigate } from 'react-router-dom';
 
 export const OrganizationManager: React.FC = () => {
   const navigate = useNavigate();
-  const { currentOrganization } = useOrganizationStore();
+  const { currentOrganization, switchOrganization } = useOrganizationStore();
   
   // -- GLOBAL STATE --
-  const [activeTab, setActiveTab] = useState<'DIRECTORY' | 'CHART'>('DIRECTORY');
+  const [activeTab, setActiveTab] = useState<'DIRECTORY' | 'CHART' | 'DEFINITIONS'>('DIRECTORY');
   const [loading, setLoading] = useState(true);
   
   // -- DATA --
   const [users, setUsers] = useState<User[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   
+  // -- DEFINITIONS STATE --
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [newDeptName, setNewDeptName] = useState('');
+  const [isSavingDepts, setIsSavingDepts] = useState(false);
+
   // -- UI STATE --
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState<string>('all');
@@ -39,13 +45,22 @@ export const OrganizationManager: React.FC = () => {
   
   // -- FORM DATA --
   const [newPosTitle, setNewPosTitle] = useState('');
-  const [newPosDept, setNewPosDept] = useState<DepartmentType>('front_office');
+  const [newPosDept, setNewPosDept] = useState<string>('');
   const [invitePhone, setInvitePhone] = useState('');
   const [foundUser, setFoundUser] = useState<User | null>(null);
 
   // --- INITIAL LOAD ---
   useEffect(() => {
       loadAllData();
+  }, [currentOrganization]);
+
+  useEffect(() => {
+      if (currentOrganization?.settings?.customDepartments) {
+          setDepartments(currentOrganization.settings.customDepartments);
+          if (currentOrganization.settings.customDepartments.length > 0) {
+              setNewPosDept(currentOrganization.settings.customDepartments[0]);
+          }
+      }
   }, [currentOrganization]);
 
   const loadAllData = async () => {
@@ -68,6 +83,35 @@ export const OrganizationManager: React.FC = () => {
       setPositions(posData);
       setUsers(uniqueUsers);
       setLoading(false);
+  };
+
+  // --- HANDLERS: DEFINITIONS (DEPARTMENTS) ---
+  const handleAddDepartment = () => {
+      if (newDeptName && !departments.includes(newDeptName)) {
+          setDepartments([...departments, newDeptName]);
+          setNewDeptName('');
+      }
+  };
+
+  const handleRemoveDepartment = (dept: string) => {
+      if (window.confirm(`${dept} departmanını silmek istediğinize emin misiniz?`)) {
+          setDepartments(departments.filter(d => d !== dept));
+      }
+  };
+
+  const handleSaveDepartments = async () => {
+      if (!currentOrganization) return;
+      setIsSavingDepts(true);
+      await updateOrganization(currentOrganization.id, {
+          settings: {
+              ...currentOrganization.settings,
+              customDepartments: departments
+          }
+      });
+      // Refresh context
+      await switchOrganization(currentOrganization.id);
+      setIsSavingDepts(false);
+      alert("Departmanlar güncellendi.");
   };
 
   // --- HANDLERS: CHART ---
@@ -176,21 +220,27 @@ export const OrganizationManager: React.FC = () => {
             <div className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">Organizasyon Yönetimi</h1>
-                    <p className="text-sm text-gray-500">Personel listesi ve hiyerarşik yapı tek ekranda.</p>
+                    <p className="text-sm text-gray-500">Personel listesi, hiyerarşi ve tanımlamalar.</p>
                 </div>
                 
-                <div className="flex bg-gray-100 p-1 rounded-xl">
+                <div className="flex bg-gray-100 p-1 rounded-xl overflow-x-auto">
                     <button 
                         onClick={() => setActiveTab('DIRECTORY')}
-                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'DIRECTORY' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'DIRECTORY' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         <Users className="w-4 h-4" /> Liste
                     </button>
                     <button 
                         onClick={() => setActiveTab('CHART')}
-                        className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'CHART' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'CHART' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         <Network className="w-4 h-4" /> Şema
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('DEFINITIONS')}
+                        className={`flex items-center gap-2 px-4 md:px-6 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${activeTab === 'DEFINITIONS' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Settings className="w-4 h-4" /> Tanımlamalar
                     </button>
                 </div>
             </div>
@@ -209,14 +259,14 @@ export const OrganizationManager: React.FC = () => {
                                     className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-primary"
                                 />
                             </div>
-                            <div className="flex bg-gray-50 rounded-xl border border-gray-200 p-1">
-                                <button onClick={() => setDeptFilter('all')} className={`px-3 text-xs font-bold rounded-lg ${deptFilter === 'all' ? 'bg-white shadow-sm' : 'text-gray-500'}`}>Tümü</button>
-                                {['housekeeping', 'kitchen', 'front_office'].map(d => (
-                                    <button key={d} onClick={() => setDeptFilter(d)} className={`px-3 text-xs font-bold rounded-lg ${deptFilter === d ? 'bg-white shadow-sm' : 'text-gray-500'}`}>{d.slice(0,3)}</button>
+                            <div className="flex bg-gray-50 rounded-xl border border-gray-200 p-1 overflow-x-auto max-w-[200px] md:max-w-none no-scrollbar">
+                                <button onClick={() => setDeptFilter('all')} className={`px-3 text-xs font-bold rounded-lg whitespace-nowrap ${deptFilter === 'all' ? 'bg-white shadow-sm' : 'text-gray-500'}`}>Tümü</button>
+                                {departments.map(d => (
+                                    <button key={d} onClick={() => setDeptFilter(d)} className={`px-3 text-xs font-bold rounded-lg whitespace-nowrap ${deptFilter === d ? 'bg-white shadow-sm' : 'text-gray-500'}`}>{d}</button>
                                 ))}
                             </div>
                         </div>
-                        <button onClick={() => setIsInviteModalOpen(true)} className="bg-primary text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-primary-light transition-colors">
+                        <button onClick={() => setIsInviteModalOpen(true)} className="bg-primary text-white px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-primary-light transition-colors whitespace-nowrap">
                             <UserPlus className="w-4 h-4" /> Personel Ekle
                         </button>
                     </>
@@ -229,6 +279,18 @@ export const OrganizationManager: React.FC = () => {
                         </div>
                         <button onClick={() => window.print()} className="text-gray-400 hover:text-gray-600">
                             <Download className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
+                {activeTab === 'DEFINITIONS' && (
+                    <div className="flex items-center gap-2 w-full justify-end">
+                        <button 
+                            onClick={handleSaveDepartments}
+                            disabled={isSavingDepts}
+                            className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                            {isSavingDepts ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            Kaydet
                         </button>
                     </div>
                 )}
@@ -287,6 +349,11 @@ export const OrganizationManager: React.FC = () => {
                                                 </td>
                                             </tr>
                                         ))}
+                                        {filteredUsers.length === 0 && (
+                                            <tr>
+                                                <td colSpan={4} className="px-6 py-10 text-center text-gray-400">Kayıt bulunamadı.</td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
@@ -303,6 +370,56 @@ export const OrganizationManager: React.FC = () => {
                             onDeletePosition={handleDeletePosition}
                         />
                     )}
+
+                    {activeTab === 'DEFINITIONS' && (
+                        <div className="h-full overflow-y-auto p-6 max-w-3xl mx-auto">
+                            <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-8">
+                                <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+                                    <List className="w-5 h-5 text-gray-500" /> Departman Yapılandırması
+                                </h3>
+                                
+                                <div className="flex gap-3 mb-6">
+                                    <input 
+                                        value={newDeptName}
+                                        onChange={e => setNewDeptName(e.target.value)}
+                                        placeholder="Yeni Departman Adı (Örn: Spa & Wellness)" 
+                                        className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-primary"
+                                    />
+                                    <button 
+                                        onClick={handleAddDepartment}
+                                        disabled={!newDeptName}
+                                        className="bg-primary text-white px-6 rounded-xl font-bold hover:bg-primary-light disabled:opacity-50"
+                                    >
+                                        <Plus className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {departments.map((dept) => (
+                                        <div key={dept} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 group hover:border-gray-300 transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-gray-400 font-bold border border-gray-200">
+                                                    {dept[0].toUpperCase()}
+                                                </div>
+                                                <span className="font-bold text-gray-700">{dept}</span>
+                                            </div>
+                                            <button 
+                                                onClick={() => handleRemoveDepartment(dept)}
+                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {departments.length === 0 && (
+                                        <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
+                                            Henüz departman tanımlanmamış.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
         </div>
@@ -318,7 +435,7 @@ export const OrganizationManager: React.FC = () => {
                         <div className="space-y-4">
                             <input value={newPosTitle} onChange={e => setNewPosTitle(e.target.value)} placeholder="Ünvan (Örn: Şef Garson)" className="w-full p-3 border rounded-xl outline-none focus:border-primary" />
                             <select value={newPosDept} onChange={e => setNewPosDept(e.target.value)} className="w-full p-3 border rounded-xl outline-none">
-                                {currentOrganization?.settings.customDepartments.map(d => <option key={d} value={d}>{d}</option>)}
+                                {departments.map(d => <option key={d} value={d}>{d}</option>)}
                             </select>
                             <div className="flex gap-2">
                                 <button onClick={() => setIsAddPosModalOpen(false)} className="flex-1 py-3 text-gray-500 font-bold bg-gray-100 rounded-xl">İptal</button>

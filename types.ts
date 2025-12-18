@@ -15,7 +15,7 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
 
-// --- NEW EDUCATION TYPES ---
+// --- EDUCATION TYPES ---
 export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
 export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN';
 export type CourseLength = 'SHORT' | 'MEDIUM' | 'LONG';
@@ -23,35 +23,37 @@ export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VID
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
-// --- HIERARCHY STRUCTURE ---
+// --- UNIFIED HIERARCHY STRUCTURE ---
+
 export interface OrgPosition {
-  id: string;
-  title: string; // e.g. "Sous Chef"
+  id: string; // Unique ID (e.g., pos_123)
+  title: string; // "Sous Chef"
 }
 
 export interface OrgDepartment {
-  id: string; // e.g. "kitchen"
-  name: string; // e.g. "Mutfak & Gıda"
-  positions: OrgPosition[];
+  id: string; // "kitchen"
+  name: string; // "Mutfak & Gıda"
+  color?: string; // Visual tag color
+  managerId?: string; // Head of Dept (User ID)
+  positions: OrgPosition[]; // Lightweight array for quick lookups
 }
 
 export interface TargetingConfig {
   type: 'ALL' | 'DEPARTMENT' | 'POSITION';
-  targetIds: string[]; // Dept IDs or Position IDs
+  targetIds: string[]; 
 }
 
-// --- HIERARCHY & POSITIONS (Legacy kept for compatibility, new structure in Organization) ---
+// --- CORE POSITION NODE (Firestore Document: 'positions') ---
 export interface Position {
   id: string;
   organizationId: string;
   title: string;
-  departmentId: DepartmentType;
-  parentId: string | null;
-  occupantId: string | null;
-  requirements?: string[];
-  level: number;
+  departmentId: DepartmentType; // Links to OrgDepartment
+  parentId: string | null; // For Tree Structure
+  occupantId: string | null; // The User sitting here (Single Source of Truth for "Who is where")
+  level: number; // Hierarchy depth (0 = GM, 1 = Manager, etc.)
   baseSalary?: number;
-  isOpen?: boolean;
+  isOpen?: boolean; // Is this a vacant slot looking for hiring?
 }
 
 export interface User {
@@ -62,10 +64,10 @@ export interface User {
   phoneNumber: string; 
   avatar: string; 
   currentOrganizationId: string | null; 
-  department: string | null; // Stores Department ID
+  department: string | null; // Denormalized from Position for quick filtering
   role: UserRole;
-  roleTitle?: string;
-  positionId?: string; // Stores Position ID from Org Structure
+  roleTitle?: string; // Denormalized title (e.g. "Sous Chef")
+  positionId?: string; // STRICT LINK to Position Document
   status: UserStatus;
   xp: number;
   creatorLevel: CreatorLevel;
@@ -118,7 +120,7 @@ export interface Course {
   assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
   targetDepartments?: string[];
   
-  // NEW: Precise Targeting
+  // Precise Targeting
   targeting?: TargetingConfig;
 
   studentCount?: number;
@@ -226,7 +228,7 @@ export interface Organization {
   deletionReason?: string; 
   structureType?: 'FLAT' | 'HIERARCHICAL';
   
-  // NEW: Official Hierarchy Structure
+  // Official Hierarchy Meta
   hierarchy?: OrgDepartment[];
 }
 
