@@ -1,18 +1,19 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Plus, User as UserIcon, MoreVertical, Trash2, Edit2, AlertCircle, X, CornerDownRight } from 'lucide-react';
-import { Position, User } from '../../types';
+import { Plus, User as UserIcon, MoreVertical, Trash2, X, Crown, Building2 } from 'lucide-react';
+import { Position, User, OrgDepartmentDefinition } from '../../types';
 
 interface OrgChartBuilderProps {
     positions: Position[];
-    users: User[]; // All org users for lookup
-    onAddChild: (parentId: string) => void;
+    users: User[]; 
+    definitions?: { departments: OrgDepartmentDefinition[] };
+    owner?: User;
+    onAddChild: (parentId: string | null, deptId?: string) => void;
     onAssign: (positionId: string) => void;
     onRemoveUser: (positionId: string) => void;
     onDeletePosition: (positionId: string) => void;
     onEditPosition?: (position: Position) => void;
-    rootId?: string | null;
 }
 
 // --- RECURSIVE NODE ---
@@ -21,25 +22,15 @@ const OrgNode: React.FC<{
     allPositions: Position[];
     users: User[];
     actions: {
-        onAddChild: (id: string) => void;
+        onAddChild: (id: string, deptId: string) => void;
         onAssign: (id: string) => void;
         onRemoveUser: (id: string) => void;
         onDelete: (id: string) => void;
-    }
-}> = ({ position, allPositions, users, actions }) => {
-    // Find children
-    const children = allPositions.filter(p => p.parentId === position.id);
-    // Find occupant
-    const occupant = users.find(u => u.id === position.occupantId);
-
-    // Dynamic styles based on department (optional)
-    const deptColors: Record<string, string> = {
-        'management': 'bg-purple-100 text-purple-700',
-        'front_office': 'bg-blue-100 text-blue-700',
-        'kitchen': 'bg-orange-100 text-orange-700',
-        'housekeeping': 'bg-emerald-100 text-emerald-700',
     };
-    const badgeClass = deptColors[position.departmentId] || 'bg-gray-100 text-gray-600';
+    deptColor: string;
+}> = ({ position, allPositions, users, actions, deptColor }) => {
+    const children = allPositions.filter(p => p.parentId === position.id);
+    const occupant = users.find(u => u.id === position.occupantId);
 
     return (
         <div className="flex flex-col items-center">
@@ -48,29 +39,25 @@ const OrgNode: React.FC<{
             <motion.div 
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`relative w-72 p-3 rounded-2xl border-2 transition-all group hover:shadow-lg hover:border-blue-300 z-10 bg-white ${occupant ? 'border-gray-200' : 'border-dashed border-gray-300 bg-gray-50/50'}`}
+                className={`relative w-64 p-3 rounded-2xl border-2 transition-all group hover:shadow-lg z-10 bg-white mb-8 ${occupant ? 'border-gray-200' : 'border-dashed border-gray-300 bg-gray-50/50'}`}
+                style={{ borderColor: occupant ? undefined : deptColor + '40' }} // Light colored border if empty
             >
-                {/* Connection Line Top */}
-                {position.parentId && (
-                    <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-gray-300 -ml-px" />
-                )}
+                {/* Vertical Line from Top */}
+                <div className="absolute -top-8 left-1/2 w-0.5 h-8 bg-gray-300 -ml-px" />
 
-                {/* Header: Dept & Actions */}
-                <div className="flex justify-between items-start mb-2">
-                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${badgeClass}`}>
-                        {position.departmentId}
-                    </span>
+                {/* Actions Menu */}
+                <div className="absolute top-2 right-2 z-20">
                     <div className="relative group/menu">
                         <button className="p-1 hover:bg-gray-100 rounded text-gray-400"><MoreVertical className="w-4 h-4" /></button>
-                        <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 hidden group-hover/menu:block z-20 overflow-hidden">
+                        <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 hidden group-hover/menu:block overflow-hidden">
                             <button onClick={() => actions.onDelete(position.id)} className="w-full text-left px-4 py-3 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 font-bold"><Trash2 className="w-3 h-3" /> Sil</button>
                         </div>
                     </div>
                 </div>
 
                 {/* Title */}
-                <div className="text-center mb-3">
-                    <h3 className="font-bold text-gray-800 text-sm leading-tight">{position.title}</h3>
+                <div className="text-center mb-3 mt-1 px-4">
+                    <h3 className="font-bold text-gray-800 text-sm leading-tight" style={{ color: deptColor }}>{position.title}</h3>
                 </div>
 
                 {/* Occupant Slot */}
@@ -94,22 +81,22 @@ const OrgNode: React.FC<{
                 ) : (
                     <button 
                         onClick={() => actions.onAssign(position.id)}
-                        className="w-full py-3 border-2 border-dashed border-gray-200 bg-white rounded-xl text-xs font-bold text-gray-400 hover:border-green-400 hover:text-green-600 hover:bg-green-50 transition-all flex items-center justify-center gap-2"
+                        className="w-full py-3 border-2 border-dashed border-gray-200 bg-white rounded-xl text-xs font-bold text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
                     >
-                        <UserIcon className="w-3 h-3" /> Personel Ata
+                        <UserIcon className="w-3 h-3" /> Boş Koltuk
                     </button>
                 )}
 
                 {/* Add Child Trigger */}
                 <button 
-                    onClick={() => actions.onAddChild(position.id)}
+                    onClick={() => actions.onAddChild(position.id, position.departmentId)}
                     className="absolute -bottom-3 left-1/2 -ml-3 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:bg-primary hover:text-white hover:border-primary transition-colors z-20"
                     title="Alt Pozisyon Ekle"
                 >
                     <Plus className="w-3 h-3" />
                 </button>
 
-                {/* Connection Line Bottom */}
+                {/* Line to Children */}
                 {children.length > 0 && (
                     <div className="absolute -bottom-8 left-1/2 w-0.5 h-8 bg-gray-300 -ml-px" />
                 )}
@@ -117,7 +104,7 @@ const OrgNode: React.FC<{
 
             {/* CHILDREN RENDERER */}
             {children.length > 0 && (
-                <div className="flex gap-8 mt-16 relative">
+                <div className="flex gap-4 relative">
                     {/* Horizontal Connector Line */}
                     {children.length > 1 && (
                         <div className="absolute -top-8 left-0 right-0 h-px bg-gray-300 mx-[calc(50%/var(--child-count))]"></div>
@@ -129,6 +116,7 @@ const OrgNode: React.FC<{
                             allPositions={allPositions} 
                             users={users}
                             actions={actions}
+                            deptColor={deptColor}
                         />
                     ))}
                 </div>
@@ -138,45 +126,103 @@ const OrgNode: React.FC<{
 };
 
 export const OrgChartBuilder: React.FC<OrgChartBuilderProps> = ({ 
-    positions, users, onAddChild, onAssign, onDeletePosition, onRemoveUser 
+    positions, users, definitions, owner, onAddChild, onAssign, onDeletePosition, onRemoveUser 
 }) => {
-    // Determine Roots (positions with no parents)
-    const roots = positions.filter(p => !p.parentId);
-
-    if (positions.length === 0) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400 p-10 bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-200">
-                <AlertCircle className="w-12 h-12 mb-4 opacity-20" />
-                <p className="font-medium">Henüz bir organizasyon şeması yok.</p>
-                <button 
-                    onClick={() => onAddChild('')} 
-                    className="mt-4 bg-primary text-white px-6 py-2 rounded-xl font-bold shadow-lg hover:bg-primary-light transition-transform active:scale-95"
-                >
-                    İlk Yöneticiyi Ekle
-                </button>
-            </div>
-        );
-    }
+    const departments = definitions?.departments || [];
 
     return (
-        <div className="flex-1 overflow-auto p-10 custom-scrollbar relative min-h-[600px] flex justify-center bg-gray-50 rounded-b-3xl">
+        <div className="flex-1 overflow-auto p-10 custom-scrollbar relative min-h-[600px] bg-gray-50 rounded-b-3xl">
+            {/* Background Grid */}
             <div className="absolute inset-0 z-0 opacity-5 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#0B1E3B 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
             
-            <div className="flex gap-16 min-w-max z-10">
-                {roots.map(root => (
-                    <OrgNode 
-                        key={root.id}
-                        position={root}
-                        allPositions={positions}
-                        users={users}
-                        actions={{
-                            onAddChild,
-                            onAssign,
-                            onDelete: onDeletePosition,
-                            onRemoveUser
-                        }}
-                    />
-                ))}
+            <div className="relative z-10 flex flex-col items-center">
+                
+                {/* 1. ROOT OWNER NODE */}
+                <div className="mb-16 relative flex flex-col items-center">
+                    <div className="w-80 bg-gradient-to-r from-primary to-primary-light p-1 rounded-2xl shadow-xl">
+                        <div className="bg-white rounded-xl p-4 flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-full border-2 border-yellow-400 p-0.5 relative">
+                                {owner?.avatar.length > 4 ? <img src={owner.avatar} className="w-full h-full object-cover rounded-full" /> : <div className="w-full h-full bg-gray-200 rounded-full flex items-center justify-center font-bold">{owner?.avatar}</div>}
+                                <div className="absolute -top-2 -right-2 bg-yellow-400 text-white p-1 rounded-full shadow-sm"><Crown className="w-3 h-3 fill-white" /></div>
+                            </div>
+                            <div>
+                                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-1">Kurucu & Sahip</div>
+                                <h3 className="font-bold text-gray-900 text-lg">{owner?.name || 'Yükleniyor...'}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    {/* Line to Departments */}
+                    {departments.length > 0 && <div className="h-12 w-0.5 bg-gray-300"></div>}
+                </div>
+
+                {/* 2. DEPARTMENTS ROW */}
+                {departments.length > 0 ? (
+                    <div className="flex gap-12 items-start relative">
+                        {/* Horizontal Line connecting departments */}
+                        <div className="absolute -top-0 left-10 right-10 h-0.5 bg-gray-300" />
+                        
+                        {departments.map(dept => {
+                            // Filter positions for this dept that are "Roots" within the dept (no parent in same dept)
+                            // A clearer approach for this visual: Any position with no parent OR parent is not in this dept (rare)
+                            // Ideally, top positions in a dept should be parentId = null (meaning connected to Owner conceptually)
+                            const deptPositions = positions.filter(p => p.departmentId === dept.id);
+                            const deptRoots = deptPositions.filter(p => !p.parentId);
+
+                            return (
+                                <div key={dept.id} className="flex flex-col items-center">
+                                    {/* Dept Header Node */}
+                                    <div className="relative mb-8">
+                                        <div className="h-8 w-0.5 bg-gray-300 absolute -top-8 left-1/2 -ml-px" />
+                                        <div 
+                                            className="px-6 py-2 rounded-xl text-sm font-bold text-white shadow-md flex items-center gap-2"
+                                            style={{ backgroundColor: dept.color }}
+                                        >
+                                            <Building2 className="w-4 h-4" />
+                                            {dept.name}
+                                        </div>
+                                        {/* Line to first position */}
+                                        <div className="h-8 w-0.5 bg-gray-300 absolute -bottom-8 left-1/2 -ml-px" />
+                                    </div>
+
+                                    {/* Positions Tree */}
+                                    {deptRoots.length > 0 ? (
+                                        <div className="flex gap-4">
+                                            {deptRoots.map(root => (
+                                                <OrgNode 
+                                                    key={root.id}
+                                                    position={root}
+                                                    allPositions={deptPositions}
+                                                    users={users}
+                                                    actions={{
+                                                        onAddChild: (pid) => onAddChild(pid, dept.id),
+                                                        onAssign,
+                                                        onDelete: onDeletePosition,
+                                                        onRemoveUser
+                                                    }}
+                                                    deptColor={dept.color}
+                                                />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <button 
+                                            onClick={() => onAddChild(null, dept.id)}
+                                            className="w-48 py-4 border-2 border-dashed border-gray-300 rounded-2xl text-gray-400 hover:border-primary hover:text-primary hover:bg-white transition-all flex flex-col items-center gap-2"
+                                        >
+                                            <Plus className="w-6 h-6" />
+                                            <span className="text-xs font-bold">İlk Pozisyonu Ekle</span>
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="text-center text-gray-400 p-8 border-2 border-dashed border-gray-200 rounded-3xl bg-white/50">
+                        <p className="mb-4">Henüz departman tanımlanmamış.</p>
+                        <p className="text-sm">Lütfen "Tanımlamalar" sekmesinden departman ekleyin.</p>
+                    </div>
+                )}
+
             </div>
         </div>
     );

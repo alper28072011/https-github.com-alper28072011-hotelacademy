@@ -1,7 +1,7 @@
 
 import { doc, runTransaction, updateDoc, collection, query, where, getDocs, writeBatch, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Position, Organization, Membership, PermissionSet } from '../types';
+import { User, Position, Organization, Membership, PermissionSet, OrgDepartmentDefinition } from '../types';
 
 // --- POSITION READ ---
 
@@ -13,6 +13,27 @@ export const getOrgPositions = async (orgId: string): Promise<Position[]> => {
     } catch (e) {
         console.error("Get Positions Error:", e);
         return [];
+    }
+};
+
+// --- DEFINITIONS MANAGEMENT ---
+
+export const saveOrganizationDefinitions = async (
+    orgId: string, 
+    departments: OrgDepartmentDefinition[], 
+    titles: string[]
+): Promise<boolean> => {
+    try {
+        await updateDoc(doc(db, 'organizations', orgId), {
+            'definitions.departments': departments,
+            'definitions.positionTitles': titles,
+            // Sync legacy settings for backward compatibility if needed
+            'settings.customDepartments': departments.map(d => d.name)
+        });
+        return true;
+    } catch (e) {
+        console.error("Save Definitions Error:", e);
+        return false;
     }
 };
 

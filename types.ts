@@ -9,7 +9,7 @@ export interface Language {
   dir: 'ltr' | 'rtl';
 }
 
-export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management' | 'hr' | 'sales' | 'it' | string;
+export type DepartmentType = string; // Dynamic now
 export type UserRole = 'staff' | 'manager' | 'admin' | 'super_admin';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
@@ -23,19 +23,11 @@ export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VID
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
-// --- UNIFIED HIERARCHY STRUCTURE ---
-
-export interface OrgPosition {
-  id: string; // Unique ID (e.g., pos_123)
-  title: string; // "Sous Chef"
-}
-
-export interface OrgDepartment {
-  id: string; // "kitchen"
-  name: string; // "Mutfak & Gıda"
-  color?: string; // Visual tag color
-  managerId?: string; // Head of Dept (User ID)
-  positions: OrgPosition[]; // Lightweight array for quick lookups
+// --- ORGANIZATIONAL DEFINITIONS ---
+export interface OrgDepartmentDefinition {
+  id: string;
+  name: string;
+  color: string; // Hex code
 }
 
 export interface TargetingConfig {
@@ -45,10 +37,10 @@ export interface TargetingConfig {
 
 // --- PERMISSIONS ---
 export interface PermissionSet {
-  canCreateContent: boolean;      // Eğitim oluşturabilir mi?
-  canInviteStaff: boolean;        // Yeni personel davet edebilir mi?
-  canManageStructure: boolean;    // Alt departman/pozisyon ekleyebilir mi?
-  canViewAnalytics: boolean;      // Raporları görebilir mi?
+  canCreateContent: boolean;
+  canInviteStaff: boolean;
+  canManageStructure: boolean;
+  canViewAnalytics: boolean;
 }
 
 // --- CORE POSITION NODE (Firestore Document: 'positions') ---
@@ -56,13 +48,14 @@ export interface Position {
   id: string;
   organizationId: string;
   title: string;
-  departmentId: DepartmentType; // Links to OrgDepartment
-  parentId: string | null; // For Tree Structure
-  occupantId: string | null; // The User sitting here (Single Source of Truth for "Who is where")
-  level: number; // Hierarchy depth (0 = GM, 1 = Manager, etc.)
+  departmentId: string; // Matches OrgDepartmentDefinition.id
+  parentId: string | null;
+  occupantId: string | null;
+  level: number;
   baseSalary?: number;
-  isOpen?: boolean; // Is this a vacant slot looking for hiring?
-  permissions?: PermissionSet; // Granular control for this specific seat
+  isOpen?: boolean;
+  isManager?: boolean; // Is this a department head?
+  permissions?: PermissionSet;
 }
 
 export interface User {
@@ -73,10 +66,10 @@ export interface User {
   phoneNumber: string; 
   avatar: string; 
   currentOrganizationId: string | null; 
-  department: string | null; // Denormalized from Position for quick filtering
+  department: string | null; 
   role: UserRole;
-  roleTitle?: string; // Denormalized title (e.g. "Sous Chef")
-  positionId?: string; // STRICT LINK to Position Document
+  roleTitle?: string; 
+  positionId?: string; 
   status: UserStatus;
   xp: number;
   creatorLevel: CreatorLevel;
@@ -128,10 +121,7 @@ export interface Course {
   isFeatured?: boolean;
   assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
   targetDepartments?: string[];
-  
-  // Precise Targeting
   targeting?: TargetingConfig;
-
   studentCount?: number;
   isNew?: boolean;
   popularityScore?: number;
@@ -237,8 +227,14 @@ export interface Organization {
   deletionReason?: string; 
   structureType?: 'FLAT' | 'HIERARCHICAL';
   
-  // Official Hierarchy Meta
-  hierarchy?: OrgDepartment[];
+  // NEW: Definitions for Structure Builder
+  definitions?: {
+    departments: OrgDepartmentDefinition[];
+    positionTitles: string[]; // Pool of titles like "Chef", "Receptionist"
+  };
+  
+  // Legacy (Keep for compatibility until full migration)
+  hierarchy?: any[];
 }
 
 export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
