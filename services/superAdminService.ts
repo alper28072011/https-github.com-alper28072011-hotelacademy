@@ -43,7 +43,7 @@ export const setOrganizationStatus = async (orgId: string, status: OrganizationS
  * THE JUDGE'S GAVEL: Full Deletion Protocol
  * 1. Detaches ALL users (sets currentOrg = null, role = staff).
  * 2. Deletes memberships.
- * 3. Deletes Org-specific content (Cascade).
+ * 3. Deletes Org-specific content (Cascade: Posts, Courses, Tasks, Positions, Requests, Issues, Paths).
  * 4. Deletes the Organization document.
  */
 export const executeOrganizationDeathSentence = async (orgId: string): Promise<boolean> => {
@@ -67,30 +67,26 @@ export const executeOrganizationDeathSentence = async (orgId: string): Promise<b
                 role: 'staff',
                 positionId: null,
                 roleTitle: null,
-                department: null // Optional: clear dept or keep it? Clearing ensures clean slate.
+                department: null
             });
         });
 
-        // 2. Cascade Delete Content (Limit to avoid batch overflow, in prod use Cloud Functions)
-        // Deleting Org's Posts
-        const postQ = query(collection(db, 'posts'), where('organizationId', '==', orgId));
-        const postSnap = await getDocs(postQ);
-        postSnap.docs.forEach(doc => batch.delete(doc.ref));
+        // 2. Cascade Delete Content 
+        // Helper to queue deletions
+        const deleteCollectionByOrg = async (colName: string) => {
+            const q = query(collection(db, colName), where('organizationId', '==', orgId));
+            const snap = await getDocs(q);
+            snap.docs.forEach(d => batch.delete(d.ref));
+        };
 
-        // Deleting Org's Courses
-        const courseQ = query(collection(db, 'courses'), where('organizationId', '==', orgId));
-        const courseSnap = await getDocs(courseQ);
-        courseSnap.docs.forEach(doc => batch.delete(doc.ref));
-
-        // Deleting Org's Tasks
-        const taskQ = query(collection(db, 'tasks'), where('organizationId', '==', orgId));
-        const taskSnap = await getDocs(taskQ);
-        taskSnap.docs.forEach(doc => batch.delete(doc.ref));
-
-        // Deleting Org's Positions (Chart)
-        const posQ = query(collection(db, 'positions'), where('organizationId', '==', orgId));
-        const posSnap = await getDocs(posQ);
-        posSnap.docs.forEach(doc => batch.delete(doc.ref));
+        // Execute deletions for all related collections
+        await deleteCollectionByOrg('posts');
+        await deleteCollectionByOrg('courses');
+        await deleteCollectionByOrg('tasks');
+        await deleteCollectionByOrg('positions');   // Org Chart
+        await deleteCollectionByOrg('requests');    // Join Requests (Added)
+        await deleteCollectionByOrg('issues');      // Reports/Issues (Added)
+        await deleteCollectionByOrg('careerPaths'); // Career Paths (Added)
 
         // 3. Delete The Organization
         const orgRef = doc(db, 'organizations', orgId);
