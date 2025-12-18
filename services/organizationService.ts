@@ -1,9 +1,9 @@
 
-import { doc, runTransaction, updateDoc, collection, query, where, getDocs, writeBatch, deleteDoc, setDoc } from 'firebase/firestore';
+import { doc, runTransaction, updateDoc, collection, query, where, getDocs, writeBatch, deleteDoc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Position, Organization, Membership, PermissionSet, OrgDepartmentDefinition } from '../types';
+import { User, Position, Organization, Membership, PermissionSet, OrgDepartmentDefinition, PositionPrototype } from '../types';
 
-// --- POSITION READ ---
+// --- POSITION READ & ENGINE ---
 
 export const getOrgPositions = async (orgId: string): Promise<Position[]> => {
     try {
@@ -16,18 +16,99 @@ export const getOrgPositions = async (orgId: string): Promise<Position[]> => {
     }
 };
 
+/**
+ * THE TREE WALKER
+ * Returns all descendant position IDs from a given root ID.
+ * This is the core of the "Authority Engine".
+ */
+export const getDescendantPositions = (rootId: string, allPositions: Position[]): string[] => {
+    let descendants: string[] = [];
+    const children = allPositions.filter(p => p.parentId === rootId);
+    
+    children.forEach(child => {
+        descendants.push(child.id);
+        descendants = [...descendants, ...getDescendantPositions(child.id, allPositions)];
+    });
+    
+    return descendants;
+};
+
+/**
+ * THE PERMISSION CALCULATOR
+ * Determines exactly who a user can target with content based on their position in the tree.
+ */
+export const getTargetableAudiences = async (user: User, orgId: string): Promise<{
+    scope: 'GLOBAL' | 'LIMITED' | 'NONE';
+    allowedDeptIds: string[];
+    allowedPositionIds: string[];
+}> => {
+    if (!user.positionId) return { scope: 'NONE', allowedDeptIds: [], allowedPositionIds: [] };
+
+    // 1. Fetch User's Position Node
+    const posRef = doc(db, 'positions', user.positionId);
+    const posSnap = await getDoc(posRef);
+    if (!posSnap.exists()) return { scope: 'NONE', allowedDeptIds: [], allowedPositionIds: [] };
+    
+    const myPosition = posSnap.data() as Position;
+    const permissions = myPosition.permissions;
+
+    // Rule 1: If no create permission, return NONE
+    if (!permissions?.canCreateContent) {
+        return { scope: 'NONE', allowedDeptIds: [], allowedPositionIds: [] };
+    }
+
+    // Rule 2: If GLOBAL scope (e.g., GM, HR Director)
+    if (permissions.contentTargetingScope === 'GLOBAL') {
+        // Return explicit GLOBAL flag so UI knows to show "All Departments"
+        // We still fetch departments for detailed selection
+        const orgRef = doc(db, 'organizations', orgId);
+        const orgSnap = await getDoc(orgRef);
+        const org = orgSnap.data() as Organization;
+        const allDeptIds = org.definitions?.departments.map(d => d.id) || [];
+        
+        return { 
+            scope: 'GLOBAL', 
+            allowedDeptIds: allDeptIds, 
+            allowedPositionIds: [] // Empty means "All positions in selected depts"
+        };
+    }
+
+    // Rule 3: If OWN_NODE_AND_BELOW (e.g., Front Office Manager)
+    if (permissions.contentTargetingScope === 'OWN_NODE_AND_BELOW') {
+        const allPositions = await getOrgPositions(orgId);
+        const descendantIds = getDescendantPositions(myPosition.id, allPositions);
+        
+        // Include self? Usually yes for content viewing, but targeting usually means "my team".
+        // Let's include self + descendants.
+        const targetableIds = [myPosition.id, ...descendantIds];
+        
+        // Find which departments these positions belong to
+        const relevantPositions = allPositions.filter(p => targetableIds.includes(p.id));
+        const relevantDeptIds = Array.from(new Set(relevantPositions.map(p => p.departmentId)));
+
+        return {
+            scope: 'LIMITED',
+            allowedDeptIds: relevantDeptIds,
+            allowedPositionIds: targetableIds
+        };
+    }
+
+    return { scope: 'NONE', allowedDeptIds: [], allowedPositionIds: [] };
+};
+
 // --- DEFINITIONS MANAGEMENT ---
 
 export const saveOrganizationDefinitions = async (
     orgId: string, 
     departments: OrgDepartmentDefinition[], 
-    titles: string[]
+    prototypes: PositionPrototype[]
 ): Promise<boolean> => {
     try {
         await updateDoc(doc(db, 'organizations', orgId), {
             'definitions.departments': departments,
-            'definitions.positionTitles': titles,
-            // Sync legacy settings for backward compatibility if needed
+            'definitions.positionPrototypes': prototypes,
+            // Legacy sync
+            'definitions.positionTitles': prototypes.map(p => p.title),
             'settings.customDepartments': departments.map(d => d.name)
         });
         return true;
@@ -37,20 +118,18 @@ export const saveOrganizationDefinitions = async (
     }
 };
 
-// --- CORE ACTIONS (STRICT SYNC WITH TRANSACTIONS) ---
+// --- CORE ACTIONS ---
 
-/**
- * Creates a position node in the chart.
- */
 export const createPosition = async (position: Omit<Position, 'id'>): Promise<string | null> => {
     try {
         const ref = doc(collection(db, 'positions'));
-        // Default permissions
+        // Default permissions if not provided
         const defaultPerms: PermissionSet = {
             canCreateContent: false,
             canInviteStaff: false,
             canManageStructure: false,
-            canViewAnalytics: false
+            canViewAnalytics: false,
+            contentTargetingScope: 'NONE'
         };
         await setDoc(ref, { ...position, permissions: position.permissions || defaultPerms, id: ref.id });
         return ref.id;
@@ -60,9 +139,6 @@ export const createPosition = async (position: Omit<Position, 'id'>): Promise<st
     }
 };
 
-/**
- * Updates permissions for a specific position/seat.
- */
 export const updatePositionPermissions = async (positionId: string, permissions: PermissionSet): Promise<boolean> => {
     try {
         await updateDoc(doc(db, 'positions', positionId), { permissions });
@@ -73,64 +149,38 @@ export const updatePositionPermissions = async (positionId: string, permissions:
     }
 };
 
-/**
- * Creates a placeholder invite for a specific position.
- * Real implementation would send an email/SMS. 
- * Here we simulate it by possibly creating a pre-membership or just returning success.
- */
-export const inviteUserToPosition = async (orgId: string, email: string, positionId: string): Promise<boolean> => {
-    try {
-        // In a real app, write to an 'invitations' collection.
-        // For this demo, we'll assume the email is sent via backend trigger.
-        console.log(`Invited ${email} to position ${positionId} in org ${orgId}`);
-        return true;
-    } catch (e) {
-        return false;
-    }
-};
-
-/**
- * TRANSACTIONAL ASSIGNMENT
- * Ensures User and Position docs are always in sync.
- */
 export const assignUserToPosition = async (orgId: string, positionId: string, userId: string): Promise<{ success: boolean; message?: string }> => {
     try {
         await runTransaction(db, async (transaction) => {
-            // 1. READ: Get Target Position
             const targetPosRef = doc(db, 'positions', positionId);
             const targetPosSnap = await transaction.get(targetPosRef);
             if (!targetPosSnap.exists()) throw new Error("Hedef pozisyon bulunamadı.");
             
             const targetPos = targetPosSnap.data() as Position;
 
-            // 2. CHECK: Is Target Occupied?
             if (targetPos.occupantId && targetPos.occupantId !== userId) {
                 throw new Error("Bu pozisyon zaten dolu! Önce mevcut personeli kaldırın.");
             }
 
-            // 3. READ: Get User
             const userRef = doc(db, 'users', userId);
             const userSnap = await transaction.get(userRef);
             if (!userSnap.exists()) throw new Error("Kullanıcı bulunamadı.");
             const userData = userSnap.data() as User;
 
-            // 4. LOGIC: If User has an OLD position, vacate it (Move logic)
+            // Vacate old position if exists
             if (userData.positionId && userData.positionId !== positionId) {
                 const oldPosRef = doc(db, 'positions', userData.positionId);
                 transaction.update(oldPosRef, { occupantId: null });
             }
 
-            // 5. WRITE: Occupy Target Position
             transaction.update(targetPosRef, { occupantId: userId });
 
-            // 6. WRITE: Update User Profile
             transaction.update(userRef, { 
                 positionId: positionId,
                 roleTitle: targetPos.title,
                 department: targetPos.departmentId
             });
 
-            // 7. WRITE: Update Membership (For quick permission checks)
             const membershipId = `${userId}_${orgId}`;
             const memRef = doc(db, 'memberships', membershipId);
             transaction.update(memRef, {
@@ -147,32 +197,22 @@ export const assignUserToPosition = async (orgId: string, positionId: string, us
     }
 };
 
-/**
- * TRANSACTIONAL REMOVAL
- * Vacates the seat and clears user's title.
- */
 export const removeUserFromPosition = async (positionId: string, orgId: string): Promise<boolean> => {
     try {
         await runTransaction(db, async (transaction) => {
-            // 1. Get Position
             const posRef = doc(db, 'positions', positionId);
             const posSnap = await transaction.get(posRef);
             if (!posSnap.exists()) throw new Error("Position not found");
             const pos = posSnap.data() as Position;
 
-            if (!pos.occupantId) return; // Already empty
+            if (!pos.occupantId) return;
 
             const userId = pos.occupantId;
             const userRef = doc(db, 'users', userId);
             const memRef = doc(db, 'memberships', `${userId}_${orgId}`);
 
-            // 2. Clear Position
             transaction.update(posRef, { occupantId: null });
-
-            // 3. Clear User
             transaction.update(userRef, { positionId: null, roleTitle: null });
-            
-            // 4. Clear Membership
             transaction.update(memRef, { positionId: null, roleTitle: null });
         });
         return true;
@@ -182,58 +222,11 @@ export const removeUserFromPosition = async (positionId: string, orgId: string):
     }
 };
 
-/**
- * Updates a position's parent (Moving nodes in the tree).
- */
-export const movePositionNode = async (positionId: string, newParentId: string | null): Promise<boolean> => {
-    try {
-        await updateDoc(doc(db, 'positions', positionId), { parentId: newParentId });
-        return true;
-    } catch (e) {
-        return false;
-    }
-};
-
 export const deletePosition = async (positionId: string): Promise<boolean> => {
     try {
         await deleteDoc(doc(db, 'positions', positionId));
         return true;
     } catch (e) {
-        return false;
-    }
-};
-
-/**
- * SAFETY NET: Deletes a user from Org and ensures their seat is vacated.
- */
-export const deleteUserFromOrganization = async (userId: string, orgId: string): Promise<boolean> => {
-    try {
-        const batch = writeBatch(db);
-
-        // 1. Delete Membership
-        const memRef = doc(db, 'memberships', `${userId}_${orgId}`);
-        batch.delete(memRef);
-
-        // 2. Update User Profile (Detach)
-        const userRef = doc(db, 'users', userId);
-        batch.update(userRef, { 
-            currentOrganizationId: null,
-            positionId: null,
-            roleTitle: null,
-            department: null
-        });
-
-        // 3. Vacate Position (If any) - Must find the position first
-        const q = query(collection(db, 'positions'), where('occupantId', '==', userId), where('organizationId', '==', orgId));
-        const posSnap = await getDocs(q);
-        posSnap.docs.forEach(d => {
-            batch.update(d.ref, { occupantId: null });
-        });
-
-        await batch.commit();
-        return true;
-    } catch (e) {
-        console.error("Delete User Org Failed:", e);
         return false;
     }
 };
@@ -248,7 +241,6 @@ export const requestOrganizationDeletion = async (orgId: string, reason: string)
         });
         return true;
     } catch (error) {
-        console.error("Deletion Request Failed:", error);
         return false;
     }
 };
@@ -269,7 +261,6 @@ export const transferOwnership = async (orgId: string, newOwnerId: string, curre
         });
         return true;
     } catch (error) {
-        console.error("Transfer Ownership Failed:", error);
         return false;
     }
 };
@@ -308,7 +299,6 @@ export const getBackupAdmins = async (orgId: string, excludeUserId: string): Pro
             .map(d => d.data() as Membership)
             .filter(m => m.userId !== excludeUserId);
     } catch (e) {
-        console.error("Get Backup Admins Error:", e);
         return [];
     }
 };
@@ -324,7 +314,6 @@ export const detachUserFromAllOrgs = async (userId: string): Promise<boolean> =>
         await batch.commit();
         return true;
     } catch (e) {
-        console.error("Detach User Error:", e);
         return false;
     }
 };

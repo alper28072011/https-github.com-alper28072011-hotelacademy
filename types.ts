@@ -30,17 +30,28 @@ export interface OrgDepartmentDefinition {
   color: string; // Hex code
 }
 
+// NEW: Blueprint for a role before it is placed on the chart
+export interface PositionPrototype {
+  title: string;
+  defaultLevel: number; // 1 (GM) to 10 (Entry)
+  isManagerial: boolean;
+  defaultScope: ContentTargetingScope;
+}
+
 export interface TargetingConfig {
-  type: 'ALL' | 'DEPARTMENT' | 'POSITION';
+  type: 'ALL' | 'DEPARTMENT' | 'POSITION' | 'HIERARCHY'; // Added HIERARCHY
   targetIds: string[]; 
 }
 
-// --- PERMISSIONS ---
+// --- PERMISSIONS & SCOPE ---
+export type ContentTargetingScope = 'GLOBAL' | 'OWN_NODE_AND_BELOW' | 'NONE';
+
 export interface PermissionSet {
   canCreateContent: boolean;
   canInviteStaff: boolean;
   canManageStructure: boolean;
   canViewAnalytics: boolean;
+  contentTargetingScope: ContentTargetingScope; // NEW: The Engine Rule
 }
 
 // --- CORE POSITION NODE (Firestore Document: 'positions') ---
@@ -51,11 +62,14 @@ export interface Position {
   departmentId: string; // Matches OrgDepartmentDefinition.id
   parentId: string | null;
   occupantId: string | null;
-  level: number;
-  baseSalary?: number;
-  isOpen?: boolean;
-  isManager?: boolean; // Is this a department head?
+  
+  // Hierarchy Logic
+  level: number; // 1-10 hierarchy depth
+  isManager?: boolean; 
   permissions?: PermissionSet;
+  
+  // Optimization for queries
+  path?: string[]; // Array of ancestor IDs for fast lookup [grandparent_id, parent_id]
 }
 
 export interface User {
@@ -119,8 +133,8 @@ export interface Course {
   priceType: 'FREE' | 'PAID';
   coverQuote?: string;
   isFeatured?: boolean;
-  assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
-  targetDepartments?: string[];
+  assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL'; // Legacy support
+  targetDepartments?: string[]; // Legacy support
   targeting?: TargetingConfig;
   studentCount?: number;
   isNew?: boolean;
@@ -230,7 +244,9 @@ export interface Organization {
   // NEW: Definitions for Structure Builder
   definitions?: {
     departments: OrgDepartmentDefinition[];
-    positionTitles: string[]; // Pool of titles like "Chef", "Receptionist"
+    positionPrototypes: PositionPrototype[]; // Replaces plain string array
+    // Legacy support
+    positionTitles?: string[]; 
   };
   
   // Legacy (Keep for compatibility until full migration)

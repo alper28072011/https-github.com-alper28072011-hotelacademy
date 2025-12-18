@@ -102,7 +102,6 @@ export const OrganizationManager: React.FC = () => {
           parentId: targetParentId,
           occupantId: null,
           level: 0,
-          isOpen: true
       };
       
       const id = await createPosition(newPos);

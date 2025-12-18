@@ -13,6 +13,7 @@ import { generateMagicCourse } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
 import { updateCourse } from '../../services/db';
 import { uploadFile } from '../../services/storage';
+import { getTargetableAudiences } from '../../services/organizationService'; // NEW
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { StoryCard, DifficultyLevel, CourseTone, StoryCardType, Course, TargetingConfig } from '../../types';
@@ -59,6 +60,13 @@ export const ContentStudio: React.FC = () => {
   const [ownerType, setOwnerType] = useState<'USER' | 'ORGANIZATION'>('ORGANIZATION');
   const [isPublishing, setIsPublishing] = useState(false);
 
+  // Targeting Logic State
+  const [availableTargets, setAvailableTargets] = useState<{
+      scope: 'GLOBAL' | 'LIMITED' | 'NONE';
+      allowedDeptIds: string[];
+      allowedPositionIds: string[];
+  }>({ scope: 'NONE', allowedDeptIds: [], allowedPositionIds: [] });
+
   useEffect(() => {
       const incoming = location.state?.courseData as Course;
       if (incoming) {
@@ -76,6 +84,13 @@ export const ContentStudio: React.FC = () => {
           setStep('DIRECTOR');
       }
   }, [location.state]);
+
+  // Load Targeting Permissions
+  useEffect(() => {
+      if (step === 'TARGETING' && currentUser && currentOrganization) {
+          getTargetableAudiences(currentUser, currentOrganization.id).then(setAvailableTargets);
+      }
+  }, [step, currentUser, currentOrganization]);
 
   const handleGenerate = async () => {
       setStep('GENERATING');
@@ -158,7 +173,7 @@ export const ContentStudio: React.FC = () => {
           duration: courseData.cards.length,
           xpReward: 100,
           visibility,
-          targeting, // NEW: Save targeting info
+          targeting, // Saving Targeting Info
           authorType: ownerType,
           organizationId: currentOrganization?.id,
           categoryId: 'cat_genel',
@@ -262,7 +277,7 @@ export const ContentStudio: React.FC = () => {
                 </div>
             )}
 
-            {/* TUNING & GENERATING STEPS (Keep same as before) */}
+            {/* TUNING & GENERATING (Keep same) */}
             {step === 'TUNING' && (
                 <div className="flex-1 flex flex-col items-center justify-center p-12 max-w-2xl mx-auto">
                     <h1 className="text-3xl font-black text-primary mb-8">İnce Ayarlar</h1>
@@ -304,7 +319,6 @@ export const ContentStudio: React.FC = () => {
                 </div>
             )}
 
-            {/* DIRECTOR STEP (Same as before but Next button goes to TARGETING) */}
             {step === 'DIRECTOR' && courseData && (
                 <div className="flex-1 flex overflow-hidden">
                     <div className="w-72 border-r border-gray-100 flex flex-col bg-white shrink-0">
@@ -377,7 +391,7 @@ export const ContentStudio: React.FC = () => {
                 </div>
             )}
 
-            {/* NEW STEP: TARGETING */}
+            {/* TARGETING ENGINE */}
             {step === 'TARGETING' && (
                 <div className="flex-1 flex flex-col p-12 max-w-4xl mx-auto w-full">
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col h-full">
@@ -386,82 +400,75 @@ export const ContentStudio: React.FC = () => {
                                 <Target className="w-8 h-8" />
                             </div>
                             <h2 className="text-3xl font-black text-gray-900">Kime Yayınlansın?</h2>
-                            <p className="text-gray-500 mt-2">Bu içeriği kimlerin görmesi gerektiğini seçin.</p>
+                            <p className="text-gray-500 mt-2">
+                                {availableTargets.scope === 'GLOBAL' ? 'Tüm kurum genelinde eğitim atayabilirsiniz.' : 
+                                 availableTargets.scope === 'LIMITED' ? 'Sadece hiyerarşik olarak size bağlı ekibe atayabilirsiniz.' : 
+                                 'Eğitim atama yetkiniz bulunmuyor.'}
+                            </p>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4 mb-8">
-                            <button 
-                                onClick={() => setTargeting({ type: 'ALL', targetIds: [] })}
-                                className={`p-6 rounded-2xl border-2 text-center transition-all ${targeting.type === 'ALL' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 hover:bg-gray-50'}`}
-                            >
-                                <Globe className="w-8 h-8 mx-auto mb-2" />
-                                <span className="font-bold">Tüm İşletme</span>
-                            </button>
-                            <button 
-                                onClick={() => setTargeting({ type: 'DEPARTMENT', targetIds: [] })}
-                                className={`p-6 rounded-2xl border-2 text-center transition-all ${targeting.type === 'DEPARTMENT' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 hover:bg-gray-50'}`}
-                            >
-                                <Building2 className="w-8 h-8 mx-auto mb-2" />
-                                <span className="font-bold">Departmanlar</span>
-                            </button>
-                            <button 
-                                onClick={() => setTargeting({ type: 'POSITION', targetIds: [] })}
-                                className={`p-6 rounded-2xl border-2 text-center transition-all ${targeting.type === 'POSITION' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 hover:bg-gray-50'}`}
-                            >
-                                <User className="w-8 h-8 mx-auto mb-2" />
-                                <span className="font-bold">Pozisyonlar</span>
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto border border-gray-100 rounded-3xl p-6 bg-gray-50">
-                            {targeting.type === 'ALL' && (
-                                <div className="flex items-center justify-center h-full text-gray-400">
-                                    <p>Bu içerik kurumdaki herkese açık olacak.</p>
-                                </div>
-                            )}
-
-                            {targeting.type === 'DEPARTMENT' && (
-                                <div className="grid grid-cols-2 gap-4">
-                                    {currentOrganization?.hierarchy?.map(dept => (
+                        {/* If No Permission */}
+                        {availableTargets.scope === 'NONE' ? (
+                            <div className="bg-red-50 border-2 border-red-100 rounded-3xl p-8 text-center text-red-600 font-bold">
+                                <AlertCircle className="w-12 h-12 mx-auto mb-4" />
+                                Bu işlem için yetkiniz yok. Yöneticinize başvurun.
+                            </div>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-2 gap-4 mb-8">
+                                    {availableTargets.scope === 'GLOBAL' && (
                                         <button 
-                                            key={dept.id}
-                                            onClick={() => toggleTargetId(dept.id)}
-                                            className={`p-4 rounded-xl border flex items-center justify-between transition-all ${targeting.targetIds.includes(dept.id) ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-200'}`}
+                                            onClick={() => setTargeting({ type: 'ALL', targetIds: [] })}
+                                            className={`p-6 rounded-2xl border-2 text-center transition-all ${targeting.type === 'ALL' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 hover:bg-gray-50'}`}
                                         >
-                                            <span className="font-bold">{dept.name}</span>
-                                            {targeting.targetIds.includes(dept.id) && <CheckCircle2 className="w-5 h-5" />}
+                                            <Globe className="w-8 h-8 mx-auto mb-2" />
+                                            <span className="font-bold">Tüm İşletme</span>
                                         </button>
-                                    ))}
+                                    )}
+                                    <button 
+                                        onClick={() => setTargeting({ type: 'DEPARTMENT', targetIds: [] })}
+                                        className={`p-6 rounded-2xl border-2 text-center transition-all ${targeting.type === 'DEPARTMENT' ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 hover:bg-gray-50'}`}
+                                    >
+                                        <Building2 className="w-8 h-8 mx-auto mb-2" />
+                                        <span className="font-bold">Departman Seçimi</span>
+                                    </button>
                                 </div>
-                            )}
 
-                            {targeting.type === 'POSITION' && (
-                                <div className="space-y-6">
-                                    {currentOrganization?.hierarchy?.map(dept => (
-                                        <div key={dept.id}>
-                                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">{dept.name}</h4>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {dept.positions.map(pos => (
-                                                    <button 
-                                                        key={pos.id}
-                                                        onClick={() => toggleTargetId(pos.id)}
-                                                        className={`p-3 rounded-xl border text-sm font-bold text-left flex items-center justify-between transition-all ${targeting.targetIds.includes(pos.id) ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-700'}`}
-                                                    >
-                                                        {pos.title}
-                                                        {targeting.targetIds.includes(pos.id) && <CheckCircle2 className="w-4 h-4" />}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                <div className="flex-1 overflow-y-auto border border-gray-100 rounded-3xl p-6 bg-gray-50">
+                                    {targeting.type === 'ALL' && (
+                                        <div className="flex items-center justify-center h-full text-gray-400">
+                                            <p>Bu içerik kurumdaki herkese açık olacak.</p>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                    )}
 
-                        <div className="flex justify-between mt-8">
-                            <button onClick={() => setStep('DIRECTOR')} className="px-8 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl">Geri</button>
-                            <button onClick={() => setStep('PUBLISH')} className="px-8 py-3 bg-primary text-white rounded-xl font-bold shadow-lg">Sonraki: Yayınla</button>
-                        </div>
+                                    {targeting.type === 'DEPARTMENT' && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {currentOrganization?.definitions?.departments
+                                                .filter(dept => availableTargets.scope === 'GLOBAL' || availableTargets.allowedDeptIds.includes(dept.id))
+                                                .map(dept => (
+                                                    <button 
+                                                        key={dept.id}
+                                                        onClick={() => toggleTargetId(dept.id)}
+                                                        className={`p-4 rounded-xl border flex items-center justify-between transition-all ${targeting.targetIds.includes(dept.id) ? 'bg-blue-500 text-white border-blue-600' : 'bg-white border-gray-200'}`}
+                                                    >
+                                                        <span className="font-bold">{dept.name}</span>
+                                                        {targeting.targetIds.includes(dept.id) && <CheckCircle2 className="w-5 h-5" />}
+                                                    </button>
+                                                ))
+                                            }
+                                            {availableTargets.allowedDeptIds.length === 0 && availableTargets.scope !== 'GLOBAL' && (
+                                                <div className="col-span-2 text-center text-gray-400 py-10">Size bağlı departman bulunamadı.</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-between mt-8">
+                                    <button onClick={() => setStep('DIRECTOR')} className="px-8 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl">Geri</button>
+                                    <button onClick={() => setStep('PUBLISH')} className="px-8 py-3 bg-primary text-white rounded-xl font-bold shadow-lg">Sonraki: Yayınla</button>
+                                </div>
+                            </>
+                        )}
                     </motion.div>
                 </div>
             )}
