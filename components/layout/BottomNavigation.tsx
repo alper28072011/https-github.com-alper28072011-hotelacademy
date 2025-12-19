@@ -17,7 +17,7 @@ export const BottomNavigation: React.FC = () => {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-gray-200/50 px-6 pt-2 pb-6 z-50 shadow-lg shadow-black/5">
+    <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-gray-200/50 px-6 py-3 z-50 shadow-lg shadow-black/5">
       <div className="flex justify-around items-center">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.id;
@@ -25,12 +25,12 @@ export const BottomNavigation: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => navigate(tab.id)}
-              className="relative flex flex-col items-center justify-center w-16 h-14"
+              className="relative flex flex-col items-center justify-center w-16 h-12"
             >
               {isActive && (
                 <motion.div
                   layoutId="activeTabIndicator"
-                  className="absolute -top-2.5 w-10 h-1 bg-accent rounded-full shadow-sm shadow-accent/50"
+                  className="absolute -top-1.5 w-8 h-1 bg-accent rounded-full shadow-sm shadow-accent/50"
                   transition={{ type: "spring", stiffness: 500, damping: 30 }}
                 />
               )}
