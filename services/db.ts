@@ -32,6 +32,12 @@ const coursesRef = collection(db, 'courses');
 const postsRef = collection(db, 'posts');
 const categoriesRef = collection(db, 'categories');
 
+// Helper to remove undefined fields
+const sanitizeData = (data: any): any => {
+    if (data === undefined) return null;
+    return JSON.parse(JSON.stringify(data));
+};
+
 // --- CONTENT MANAGEMENT (CRUD) ---
 
 export const getAdminCourses = async (userId: string, orgId?: string | null): Promise<Course[]> => {
@@ -174,7 +180,14 @@ export const getOrganizationDetails = async (orgId: string): Promise<Organizatio
 };
 
 export const updateCourse = async (courseId: string, data: Partial<Course>): Promise<boolean> => {
-    try { await updateDoc(doc(db, 'courses', courseId), data); return true; } catch (e) { return false; }
+    try { 
+        // Sanitize data before update to avoid "undefined" error
+        await updateDoc(doc(db, 'courses', courseId), sanitizeData(data)); 
+        return true; 
+    } catch (e) { 
+        console.error("Update Course Error:", e);
+        return false; 
+    }
 };
 
 export const deleteCourse = async (courseId: string): Promise<boolean> => {

@@ -26,6 +26,11 @@ import {
 import { getOrganizationDetails } from './db';
 import { deleteFileByUrl } from './storage';
 
+// Helper to remove undefined values which Firestore rejects
+const sanitizeData = (data: any): any => {
+    return JSON.parse(JSON.stringify(data));
+};
+
 /**
  * Creates a new course with logic based on User Level.
  */
@@ -78,7 +83,10 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
             authorAvatarUrl
         };
 
-        await addDoc(collection(db, 'courses'), finalData);
+        // Sanitize data to remove undefined fields before sending to Firestore
+        const cleanData = sanitizeData(finalData);
+
+        await addDoc(collection(db, 'courses'), cleanData);
         
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
