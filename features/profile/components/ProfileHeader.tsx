@@ -1,12 +1,16 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     ExternalLink, ShieldCheck, Building2, 
-    ChevronRight, LayoutDashboard, Crown, Eye, Settings, ShieldAlert
+    ChevronRight, Crown, Eye, ShieldAlert,
+    Camera, Trash2, Loader2, Upload
 } from 'lucide-react';
 import { User, Organization } from '../../../types';
 import { getOrganizationDetails } from '../../../services/db';
+import { updateProfilePhoto, removeProfilePhoto } from '../../../services/userService';
+import { useAuthStore } from '../../../stores/useAuthStore';
+import { Avatar } from '../../../components/ui/Avatar';
 
 interface ProfileHeaderProps {
   user: User;
@@ -26,8 +30,12 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
     postCount = 0
 }) => {
   const navigate = useNavigate();
+  const { refreshProfile } = useAuthStore();
   const [org, setOrg] = useState<Organization | null>(null);
   const [loadingOrg, setLoadingOrg] = useState(false);
+  const [isPhotoUploading, setIsPhotoUploading] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
       const fetchOrg = async () => {
@@ -40,6 +48,25 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       };
       fetchOrg();
   }, [user.currentOrganizationId]);
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0] && isOwnProfile) {
+          setIsPhotoUploading(true);
+          const file = e.target.files[0];
+          await updateProfilePhoto(user.id, file, user.avatar);
+          await refreshProfile();
+          setIsPhotoUploading(false);
+      }
+  };
+
+  const handleRemovePhoto = async () => {
+      if (isOwnProfile && confirm("Profil fotoğrafını kaldırmak istiyor musun?")) {
+          setIsPhotoUploading(true);
+          await removeProfilePhoto(user.id, user.avatar);
+          await refreshProfile();
+          setIsPhotoUploading(false);
+      }
+  };
 
   const handleManagementClick = () => {
       if (!user.currentOrganizationId) {
@@ -73,7 +100,6 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   const renderActionSection = () => {
       const roleLabel = getRoleLabel(user.role);
       const orgName = loadingOrg ? "Yükleniyor..." : (org?.name || "Bilinmeyen Kurum");
-      const isManagement = ['admin', 'manager', 'super_admin'].includes(user.role);
       const isSuper = user.role === 'super_admin';
 
       // --- SCENARIO 1: OWN PROFILE ---
@@ -169,18 +195,45 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   return (
     <div className="px-4 pb-2">
         <div className="flex items-center gap-6 mb-4">
-            <div className="relative shrink-0">
+            <div className="relative shrink-0 group">
                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-pink-600 shadow-md">
-                    <div className="w-full h-full rounded-full border-2 border-white overflow-hidden bg-gray-100">
-                        {user.avatar.length > 5 ? (
-                            <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gray-800 text-white font-bold text-2xl">{user.avatar}</div>
-                        )}
-                    </div>
+                    <Avatar 
+                        src={user.avatar} 
+                        alt={user.name} 
+                        size="xl" 
+                        className="w-full h-full border-2 border-white"
+                    />
                 </div>
+                
+                {/* PHOTO ACTIONS (OWN PROFILE) */}
+                {isOwnProfile && (
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-full z-10">
+                        {isPhotoUploading ? (
+                            <Loader2 className="w-6 h-6 text-white animate-spin" />
+                        ) : (
+                            <div className="flex gap-2">
+                                <button onClick={() => fileInputRef.current?.click()} className="p-1.5 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-md transition-colors" title="Değiştir">
+                                    <Camera className="w-4 h-4" />
+                                </button>
+                                {user.avatar && !user.avatar.startsWith('http') === false && (
+                                    <button onClick={handleRemovePhoto} className="p-1.5 bg-red-500/50 hover:bg-red-500/80 rounded-full text-white backdrop-blur-md transition-colors" title="Kaldır">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            className="hidden" 
+                            accept="image/*" 
+                            onChange={handlePhotoChange} 
+                        />
+                    </div>
+                )}
+
                 {user.role === 'super_admin' && (
-                    <div className="absolute bottom-0 right-0 bg-blue-500 text-white p-1 rounded-full border-2 border-white shadow-sm">
+                    <div className="absolute bottom-0 right-0 bg-blue-500 text-white p-1 rounded-full border-2 border-white shadow-sm z-20">
                         <ShieldCheck className="w-3 h-3" />
                     </div>
                 )}

@@ -5,8 +5,50 @@ import { db, auth } from './firebase';
 import { User } from '../types';
 import { detachUserFromAllOrgs, getBackupAdmins, transferOwnership } from './organizationService';
 import { checkUserOwnership } from './superAdminService';
-import { deleteFileByUrl } from './storage';
+import { deleteFileByUrl, uploadFile } from './storage';
 import { deleteCourseFully } from './courseService';
+
+/**
+ * Updates the user's profile photo.
+ * 1. Deletes old photo if exists.
+ * 2. Uploads new optimized photo.
+ * 3. Updates DB.
+ */
+export const updateProfilePhoto = async (userId: string, file: File, oldUrl?: string): Promise<string | null> => {
+    try {
+        // 1. Delete old
+        if (oldUrl) await deleteFileByUrl(oldUrl);
+
+        // 2. Upload new (Auto compressed by uploadFile)
+        const downloadUrl = await uploadFile(file, `users/${userId}/avatar`, undefined, 'AVATAR');
+
+        // 3. Update DB
+        await updateDoc(doc(db, 'users', userId), { avatar: downloadUrl });
+        
+        return downloadUrl;
+    } catch (e) {
+        console.error("Profile Photo Update Failed:", e);
+        return null;
+    }
+};
+
+/**
+ * Removes the user's profile photo.
+ */
+export const removeProfilePhoto = async (userId: string, photoUrl: string): Promise<boolean> => {
+    try {
+        await deleteFileByUrl(photoUrl);
+        
+        // Generate Initials for fallback in DB (optional, but UI handles it dynamically now)
+        // Better to set to empty string or null to trigger UI fallback
+        await updateDoc(doc(db, 'users', userId), { avatar: '' }); 
+        
+        return true;
+    } catch (e) {
+        console.error("Profile Photo Removal Failed:", e);
+        return false;
+    }
+};
 
 /**
  * Suspends a user account (Temporary Freeze).

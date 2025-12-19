@@ -3,6 +3,21 @@ import { doc, runTransaction, updateDoc, collection, query, where, getDocs, writ
 import { db } from './firebase';
 import { User, Position, Organization, Membership, RolePermissions, OrgDepartmentDefinition, PositionPrototype } from '../types';
 import { DEFAULT_PERMISSIONS } from '../hooks/usePermission';
+import { deleteFileByUrl, uploadFile } from './storage';
+
+// --- MEDIA MANAGEMENT ---
+
+export const updateOrganizationLogo = async (orgId: string, file: File, oldUrl?: string): Promise<string | null> => {
+    try {
+        if (oldUrl) await deleteFileByUrl(oldUrl);
+        const downloadUrl = await uploadFile(file, `organizations/${orgId}/logo`, undefined, 'AVATAR'); // Use AVATAR optimization for Logo
+        await updateDoc(doc(db, 'organizations', orgId), { logoUrl: downloadUrl });
+        return downloadUrl;
+    } catch (e) {
+        console.error("Logo Update Error:", e);
+        return null;
+    }
+};
 
 // --- POSITION READ & ENGINE ---
 
