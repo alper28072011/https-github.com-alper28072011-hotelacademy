@@ -65,8 +65,8 @@ export const DashboardPage: React.FC = () => {
     <div className="flex flex-col bg-gray-50 min-h-full">
       
       {/* 1. STORIES AREA (Top Horizontal Scroll) */}
-      {/* Changed sticky top-[60px] to top-0 because parent container (Main) is now the scrollable area and starts at 0 */}
-      <div className="bg-white py-4 border-b border-gray-100 overflow-x-auto no-scrollbar sticky top-0 z-20 shadow-sm">
+      {/* Removed 'sticky top-0 z-20 shadow-sm' to make it scrollable with page */}
+      <div className="bg-white py-4 border-b border-gray-100 overflow-x-auto no-scrollbar">
          <div className="flex gap-4 px-4 min-w-max">
             
             {/* My Journey (Fixed Item) */}
