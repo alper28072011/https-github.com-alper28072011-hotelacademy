@@ -9,7 +9,10 @@ export interface Language {
   dir: 'ltr' | 'rtl';
 }
 
-export type DepartmentType = string; // Dynamic now
+// --- CORE LOCALIZATION TYPE ---
+export type LocalizedString = Record<string, string>; // e.g. { tr: "Merhaba", en: "Hello" }
+
+export type DepartmentType = string; 
 export type UserRole = 'staff' | 'manager' | 'admin' | 'super_admin';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
@@ -23,40 +26,32 @@ export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VID
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
-// --- ORGANIZATIONAL DEFINITIONS ---
 export interface OrgDepartmentDefinition {
   id: string;
   name: string;
-  color: string; // Hex code
+  color: string; 
 }
 
-// --- NEW PERMISSION MATRIX ---
 export type ContentTargetingScope = 'NONE' | 'OWN_DEPT' | 'BELOW_HIERARCHY' | 'ENTIRE_ORG' | 'PUBLIC';
 
 export interface RolePermissions {
-  // 1. Management
-  adminAccess: boolean;           // Can access /admin dashboard
-  manageStructure: boolean;       // Can edit Org Chart (Add/Remove Positions)
-  manageStaff: boolean;           // Can invite, assign, or fire staff
-  viewAnalytics: boolean;         // Can see Talent Radar & Reports
-
-  // 2. Content & Education
-  canCreateContent: boolean;      // Access to Content Studio
-  contentTargeting: ContentTargetingScope; // Who they can assign content to
-
-  // 3. Social & Operations
-  canPostFeed: boolean;           // Can post to main feed
-  canApproveRequests: boolean;    // Can approve join requests
+  adminAccess: boolean;           
+  manageStructure: boolean;       
+  manageStaff: boolean;           
+  viewAnalytics: boolean;         
+  canCreateContent: boolean;      
+  contentTargeting: ContentTargetingScope; 
+  canPostFeed: boolean;           
+  canApproveRequests: boolean;    
 }
 
-// Blueprint for a role
 export interface PositionPrototype {
   id: string;
   title: string;
   departmentId: string;
-  defaultLevel: number; // 1 (GM) to 10 (Entry)
-  isManagerial: boolean; // Visual tag only now
-  permissions: RolePermissions; // detailed matrix
+  defaultLevel: number; 
+  isManagerial: boolean; 
+  permissions: RolePermissions; 
 }
 
 export interface TargetingConfig {
@@ -64,7 +59,6 @@ export interface TargetingConfig {
   targetIds: string[]; 
 }
 
-// --- CORE POSITION NODE (Firestore Document: 'positions') ---
 export interface Position {
   id: string;
   organizationId: string;
@@ -72,11 +66,9 @@ export interface Position {
   departmentId: string;
   parentId: string | null;
   occupantId: string | null;
-  
   level: number; 
   isManager?: boolean; 
-  permissions: RolePermissions; // Instance specific permissions (copied from prototype)
-  
+  permissions: RolePermissions; 
   path?: string[]; 
 }
 
@@ -91,7 +83,7 @@ export interface User {
   department: string | null; 
   role: UserRole;
   roleTitle?: string; 
-  positionId?: string | null; // Explicitly allow null for Pool users
+  positionId?: string | null; 
   status: UserStatus;
   xp: number;
   creatorLevel: CreatorLevel;
@@ -127,8 +119,12 @@ export interface Course {
   authorAvatarUrl: string;
   visibility: 'PRIVATE' | 'PUBLIC';
   categoryId: string;
-  title: string;
-  description: string;
+  
+  // Localized Fields
+  title: LocalizedString; 
+  description: LocalizedString;
+  coverQuote?: LocalizedString;
+
   thumbnailUrl: string;
   duration: number;
   xpReward: number;
@@ -139,10 +135,9 @@ export interface Course {
   config?: CourseConfig;
   price: number;
   priceType: 'FREE' | 'PAID';
-  coverQuote?: string;
   isFeatured?: boolean;
-  assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL'; // Legacy support
-  targetDepartments?: string[]; // Legacy support
+  assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL'; 
+  targetDepartments?: string[]; 
   targeting?: TargetingConfig;
   studentCount?: number;
   isNew?: boolean;
@@ -161,7 +156,7 @@ export interface Course {
 export interface CourseConfig {
   level: DifficultyLevel;
   tone: CourseTone;
-  language: string;
+  language: string; // Source language
   autoPlay: boolean;
   slideDuration: number;
 }
@@ -169,17 +164,20 @@ export interface CourseConfig {
 export interface StoryCard {
   id: string;
   type: StoryCardType;
-  title: string;
-  content: string;
+  
+  // Localized Fields
+  title: LocalizedString;
+  content: LocalizedString;
+  
   mediaUrl: string;
   mediaPrompt?: string; 
   duration: number; 
   interaction?: {
-    question: string;
-    options: string[];
-    correctAnswer: string;
+    question: LocalizedString;
+    options: LocalizedString[]; // Array of localized strings
+    correctAnswer: string; // usually ID or Index, kept simple
     correctOptionIndex?: number;
-    explanation?: string;
+    explanation?: LocalizedString;
   };
 }
 
@@ -221,8 +219,8 @@ export interface JoinRequest {
   userId: string;
   organizationId: string;
   targetDepartment: string;
-  requestedRoleTitle: string; // Display name of the role
-  positionId?: string | null; // Specific seat ID if available
+  requestedRoleTitle: string; 
+  positionId?: string | null; 
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
 }

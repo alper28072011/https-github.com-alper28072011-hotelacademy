@@ -1,9 +1,9 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { StoryCard, StoryCardType, DifficultyLevel, CourseTone } from "../types";
+import { StoryCard, StoryCardType, DifficultyLevel, CourseTone, LocalizedString } from "../types";
 
 interface GeneratedCourse {
-  title: string;
+  title: string; // Temporarily string for generation, then manually mapped
   description: string;
   cards: StoryCard[];
   tags: string[];
@@ -11,6 +11,56 @@ interface GeneratedCourse {
 
 const cleanJsonResponse = (text: string): string => {
   return text.replace(/```json/g, "").replace(/```/g, "").trim();
+};
+
+/**
+ * TRANSLATION ENGINE
+ * Translates a flat map of strings or a complex object into target languages.
+ */
+export const translateContent = async (
+    content: Record<string, any>, 
+    sourceLang: string, 
+    targetLangs: string[]
+): Promise<Record<string, any> | null> => {
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        const prompt = `
+            ROLE: Professional Translator & Localization Expert for Luxury Hospitality.
+            TASK: Translate the provided JSON content from [${sourceLang}] into [${targetLangs.join(', ')}].
+            
+            RULES:
+            1. Return a JSON object where each key from the input has a corresponding key in the output.
+            2. The value of each key in the output must be an OBJECT containing the translations.
+               Example Input: { "title": "Merhaba" }
+               Example Output: { "title": { "en": "Hello", "ru": "Privet" } }
+            3. Preserve HTML/Markdown tags.
+            4. Keep the tone professional, welcoming, and high-end.
+            5. Do NOT translate technical IDs, URLs, or numbers unless part of a sentence.
+            
+            INPUT CONTENT:
+            ${JSON.stringify(content, null, 2)}
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                temperature: 0.3,
+            }
+        });
+
+        const rawText = response.text;
+        if (rawText) {
+            return JSON.parse(cleanJsonResponse(rawText));
+        }
+        return null;
+
+    } catch (error) {
+        console.error("Gemini Translation Error:", error);
+        return null;
+    }
 };
 
 /**
@@ -106,7 +156,9 @@ export const generateMagicCourse = async (
       data.cards = data.cards.map((card, i) => ({
           ...card,
           id: `card-${Date.now()}-${i}`,
-          mediaUrl: `https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800&auto=format&fit=crop`
+          mediaUrl: `https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800&auto=format&fit=crop`,
+          // Temporary type patching for generation flow
+          // The UI will hydrate these string values into LocalizedString objects
       }));
       
       return data;
