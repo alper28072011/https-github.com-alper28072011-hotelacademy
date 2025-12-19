@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, Save, GripVertical, Trash2, Milestone, Loader2, ArrowRight } from 'lucide-react';
 import { Course, DepartmentType, CareerPath } from '../../types';
 import { getCourses, createCareerPath, getCareerPaths } from '../../services/db';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
+import { getLocalizedContent } from '../../i18n/config';
 
 export const CareerBuilder: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -187,7 +189,7 @@ export const CareerBuilder: React.FC = () => {
                                            {idx + 1}
                                        </div>
                                        <div className="flex-1">
-                                           <div className="text-sm font-bold text-gray-800 line-clamp-1">{course.title}</div>
+                                           <div className="text-sm font-bold text-gray-800 line-clamp-1">{getLocalizedContent(course.title)}</div>
                                            <div className="text-xs text-gray-500">{course.duration} dk • {course.xpReward} XP</div>
                                        </div>
                                        <button onClick={() => handleRemoveCourse(idx)} className="text-gray-400 hover:text-red-500">
@@ -213,7 +215,7 @@ export const CareerBuilder: React.FC = () => {
                         >
                            <option value="">Bir ders seçin...</option>
                            {courses.map(c => (
-                               <option key={c.id} value={c.id}>{c.title}</option>
+                               <option key={c.id} value={c.id}>{getLocalizedContent(c.title)}</option>
                            ))}
                        </select>
                    </div>

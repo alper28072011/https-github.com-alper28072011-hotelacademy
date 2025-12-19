@@ -4,6 +4,7 @@ import { Course } from '../../../types';
 import { TrendingUp, Play } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { getLocalizedContent } from '../../../i18n/config';
 
 interface TopicSectionProps {
   title: string;
@@ -35,7 +36,7 @@ export const TopicSection: React.FC<TopicSectionProps> = ({ title, courses }) =>
                   <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-gray-800 shadow-md border border-white/5">
                       <img 
                         src={course.thumbnailUrl} 
-                        alt={course.title} 
+                        alt={getLocalizedContent(course.title)} 
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 opacity-80 group-hover:opacity-100"
                       />
                       {course.isNew && (
@@ -50,7 +51,7 @@ export const TopicSection: React.FC<TopicSectionProps> = ({ title, courses }) =>
                       </div>
                   </div>
                   <h4 className="text-white text-sm font-bold mt-2 leading-tight line-clamp-2 group-hover:text-accent transition-colors">
-                      {course.title}
+                      {getLocalizedContent(course.title)}
                   </h4>
                   <p className="text-gray-500 text-[10px] mt-0.5">{course.duration} dk • {course.xpReward} XP</p>
               </motion.div>

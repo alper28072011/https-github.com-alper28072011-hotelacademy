@@ -6,12 +6,13 @@ import { Search, Loader2, Sparkles, Building2, MapPin, ArrowRight, Laptop, Heart
 import { useContentStore } from '../../stores/useContentStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { getAllPublicOrganizations } from '../../services/db';
-import { getSmartFeed } from '../../services/courseService'; // NEW
+import { getSmartFeed } from '../../services/courseService'; 
 import { Organization, OrganizationSector, Course } from '../../types';
 import { FilterPills } from './components/FilterPills';
 import { HeroCourseCard } from './components/HeroCourseCard';
 import { TopicSection } from './components/TopicSection';
 import { MasonryGrid } from './components/MasonryGrid';
+import { getLocalizedContent } from '../../i18n/config';
 
 export const ExplorePage: React.FC = () => {
   const { t } = useTranslation();
@@ -22,7 +23,7 @@ export const ExplorePage: React.FC = () => {
     isLoading, 
     searchQuery, 
     setSearchQuery,
-    courses: allCourses // Still needed for fallback or initial cache
+    courses: allCourses 
   } = useContentStore();
 
   const [activeTab, setActiveTab] = useState<'LEARNING' | 'ORGS'>('LEARNING');
@@ -30,7 +31,7 @@ export const ExplorePage: React.FC = () => {
   const [selectedSector, setSelectedSector] = useState<OrganizationSector | null>(null);
   const [orgs, setOrgs] = useState<Organization[]>([]);
   
-  // NEW: Smart Feed State
+  // Smart Feed State
   const [smartFeed, setSmartFeed] = useState<Course[]>([]);
   const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
   const [feedLoading, setFeedLoading] = useState(true);
@@ -58,7 +59,8 @@ export const ExplorePage: React.FC = () => {
           if (activeTab === 'LEARNING') {
               return {
                   mode: 'search',
-                  items: allCourses.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                  // Use getLocalizedContent here
+                  items: allCourses.filter(c => getLocalizedContent(c.title).toLowerCase().includes(searchQuery.toLowerCase()))
               };
           } else {
               return {

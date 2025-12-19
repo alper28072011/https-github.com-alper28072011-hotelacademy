@@ -14,6 +14,7 @@ import { EditProfileModal } from './components/EditProfileModal';
 import { ProfileHeader } from './components/ProfileHeader';
 import { Course, KudosType, FeedPost } from '../../types';
 import { getInstructorCourses, getUserPosts } from '../../services/db';
+import { getLocalizedContent } from '../../i18n/config';
 
 export const ProfilePage: React.FC = () => {
   const { t } = useTranslation();
@@ -175,7 +176,7 @@ export const ProfilePage: React.FC = () => {
                                 <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <h4 className="font-bold text-gray-900 text-sm truncate">{course.title}</h4>
+                                <h4 className="font-bold text-gray-900 text-sm truncate">{getLocalizedContent(course.title)}</h4>
                                 <p className="text-xs text-gray-500">Tamamlandı</p>
                             </div>
                             <button className="p-2 text-gray-400 hover:text-primary"><Download className="w-5 h-5" /></button>
@@ -193,7 +194,7 @@ export const ProfilePage: React.FC = () => {
                                 <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
                             </div>
                             <div className="p-3">
-                                <h4 className="font-bold text-gray-800 text-sm line-clamp-1">{course.title}</h4>
+                                <h4 className="font-bold text-gray-800 text-sm line-clamp-1">{getLocalizedContent(course.title)}</h4>
                                 <div className="flex justify-between items-center mt-2">
                                     <span className="text-[10px] text-gray-500">{course.studentCount || 0} Öğrenci</span>
                                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${course.visibility === 'PUBLIC' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>

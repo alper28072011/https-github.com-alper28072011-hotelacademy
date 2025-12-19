@@ -1,9 +1,11 @@
+
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Search, Play, Clock, Zap, Loader2, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useContentStore } from '../../stores/useContentStore';
+import { getLocalizedContent } from '../../i18n/config';
 
 export const LibraryPage: React.FC = () => {
   const { t } = useTranslation();
@@ -25,9 +27,9 @@ export const LibraryPage: React.FC = () => {
 
   const featuredCourse = getFeaturedCourse() || courses[0];
 
-  // Filter for Search
+  // Filter for Search using Localization Helper
   const displayedCourses = searchQuery.length > 0 
-    ? courses.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? courses.filter(c => getLocalizedContent(c.title).toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
 
   if (isLoading && courses.length === 0) {
@@ -66,7 +68,7 @@ export const LibraryPage: React.FC = () => {
                     className="cursor-pointer group"
                   >
                       <div className="aspect-[2/3] rounded-xl overflow-hidden mb-2 relative shadow-lg">
-                           <img src={course.thumbnailUrl} alt={course.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                           <img src={course.thumbnailUrl} alt={getLocalizedContent(course.title)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                            <div className="absolute bottom-2 left-2 right-2">
                               <span className="text-[10px] font-bold bg-accent text-primary px-1.5 py-0.5 rounded flex items-center w-max gap-1">
@@ -74,7 +76,7 @@ export const LibraryPage: React.FC = () => {
                               </span>
                            </div>
                       </div>
-                      <h3 className="font-bold text-gray-200 text-sm leading-tight line-clamp-2">{course.title}</h3>
+                      <h3 className="font-bold text-gray-200 text-sm leading-tight line-clamp-2">{getLocalizedContent(course.title)}</h3>
                   </motion.div>
               ))}
               {displayedCourses.length === 0 && (
@@ -104,10 +106,10 @@ export const LibraryPage: React.FC = () => {
                              Haftanın Önerisi
                          </div>
                          <h1 className="text-4xl md:text-5xl font-bold text-white mb-2 leading-none max-w-[80%] drop-shadow-xl">
-                             {featuredCourse.title}
+                             {getLocalizedContent(featuredCourse.title)}
                          </h1>
                          <p className="text-gray-300 line-clamp-2 mb-6 text-sm font-medium opacity-90 max-w-[90%] drop-shadow-md">
-                             {featuredCourse.description}
+                             {getLocalizedContent(featuredCourse.description)}
                          </p>
                          
                          <div className="flex gap-3 w-full md:w-auto">
@@ -147,7 +149,7 @@ export const LibraryPage: React.FC = () => {
                                         <div className="relative aspect-[2/3] rounded-xl overflow-hidden shadow-lg bg-gray-800 border border-white/5">
                                             <img 
                                                 src={course.thumbnailUrl} 
-                                                alt={course.title} 
+                                                alt={getLocalizedContent(course.title)} 
                                                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100"
                                             />
                                             
@@ -174,7 +176,7 @@ export const LibraryPage: React.FC = () => {
                                         </div>
 
                                         <h4 className="font-bold text-gray-300 text-xs md:text-sm leading-tight line-clamp-2 group-hover:text-white transition-colors pl-1">
-                                            {course.title}
+                                            {getLocalizedContent(course.title)}
                                         </h4>
                                     </motion.div>
                                 ))}

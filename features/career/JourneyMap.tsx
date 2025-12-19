@@ -6,6 +6,7 @@ import { CareerPath, Course } from '../../types';
 import { getCareerPath, getCourse, getCareerPathByDepartment } from '../../services/db';
 import { CheckCircle2, Lock, Play, Star, MapPin, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getLocalizedContent } from '../../i18n/config';
 
 export const JourneyMap: React.FC = () => {
   const { currentUser } = useAuthStore();
@@ -129,7 +130,7 @@ export const JourneyMap: React.FC = () => {
                                   <span className="text-[10px] font-bold text-white/40 uppercase">ADIM {index + 1}</span>
                                   {isActive && <span className="bg-accent text-primary text-[9px] font-bold px-1.5 py-0.5 rounded animate-pulse">AKTİF GÖREV</span>}
                               </div>
-                              <h3 className={`font-bold text-lg mb-1 ${isActive ? 'text-white' : 'text-gray-400'}`}>{course.title}</h3>
+                              <h3 className={`font-bold text-lg mb-1 ${isActive ? 'text-white' : 'text-gray-400'}`}>{getLocalizedContent(course.title)}</h3>
                               <div className="flex items-center gap-2 text-xs font-mono text-white/50">
                                   <span>{course.duration} dk</span>
                                   <span>•</span>

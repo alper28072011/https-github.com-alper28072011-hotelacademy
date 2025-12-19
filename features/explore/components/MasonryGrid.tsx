@@ -4,6 +4,7 @@ import { Course } from '../../../types';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Globe, Lock, DollarSign } from 'lucide-react';
+import { getLocalizedContent } from '../../../i18n/config';
 
 interface MasonryGridProps {
   courses: Course[];
@@ -27,7 +28,7 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({ courses }) => {
             >
             <img 
                 src={course.thumbnailUrl} 
-                alt={course.title} 
+                alt={getLocalizedContent(course.title)} 
                 className="w-full object-cover transition-opacity duration-300 opacity-90 group-hover:opacity-100"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80" />
@@ -54,7 +55,7 @@ export const MasonryGrid: React.FC<MasonryGridProps> = ({ courses }) => {
             
             <div className="absolute bottom-0 left-0 right-0 p-3">
                 <h4 className="text-white text-xs font-bold leading-tight line-clamp-2">
-                    {course.title}
+                    {getLocalizedContent(course.title)}
                 </h4>
                 <div className="flex gap-1 mt-1 flex-wrap">
                     {course.tags?.slice(0,2).map(tag => (

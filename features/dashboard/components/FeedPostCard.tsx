@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { FeedPost, KudosType, Course } from '../../../types';
 import { togglePostLike, toggleSaveCourse } from '../../../services/db';
 import { useAuthStore } from '../../../stores/useAuthStore';
+import { getLocalizedContent } from '../../../i18n/config';
 
 interface FeedPostCardProps {
   post: FeedPost | (Course & { type: 'course' });
@@ -173,7 +174,7 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
 
               {/* Media */}
               <div className="relative aspect-[4/5] md:aspect-video w-full bg-gray-100 overflow-hidden">
-                  <img src={c.thumbnailUrl} alt={c.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                  <img src={c.thumbnailUrl} alt={getLocalizedContent(c.title)} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
                   
                   {/* Overlay Info */}
@@ -186,8 +187,8 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
                               <Clock className="w-3 h-3" /> {c.duration} dk
                           </span>
                       </div>
-                      <h2 className="text-xl font-bold leading-tight mb-1">{c.title}</h2>
-                      <p className="text-sm text-gray-300 line-clamp-1 opacity-90">{c.description}</p>
+                      <h2 className="text-xl font-bold leading-tight mb-1">{getLocalizedContent(c.title)}</h2>
+                      <p className="text-sm text-gray-300 line-clamp-1 opacity-90">{getLocalizedContent(c.description)}</p>
                   </div>
 
                   {/* Play Button CTA */}

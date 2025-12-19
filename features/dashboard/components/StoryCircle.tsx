@@ -1,8 +1,10 @@
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Play, AlertCircle, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Course } from '../../../types';
+import { getLocalizedContent } from '../../../i18n/config';
 
 export type StoryStatus = 'urgent' | 'mandatory' | 'progress' | 'viewed' | 'optional' | 'fiery';
 
@@ -21,7 +23,10 @@ export const StoryCircle: React.FC<StoryCircleProps> = ({ course, image, label, 
   // If a course is passed, derive data from it
   const isCourse = !!course;
   const displayImage = course ? course.thumbnailUrl : image;
-  const displayLabel = course ? course.title.substring(0, 10) + (course.title.length > 10 ? '...' : '') : label;
+  
+  // Safe localization of title
+  const title = course ? getLocalizedContent(course.title) : label;
+  const displayLabel = title ? (title.length > 10 ? title.substring(0, 10) + '...' : title) : '';
   
   // Logic for Course Status
   let derivedStatus: StoryStatus = status as StoryStatus;

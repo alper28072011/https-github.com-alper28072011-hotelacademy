@@ -6,6 +6,7 @@ import { X, Play, Clock, Zap, Award, Sparkles, Hash } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { getCourse, startCourse } from '../../services/db';
 import { Course } from '../../types';
+import { getLocalizedContent } from '../../i18n/config';
 
 export const CourseIntroPage: React.FC = () => {
   const navigate = useNavigate();
@@ -42,7 +43,7 @@ export const CourseIntroPage: React.FC = () => {
       <div className="absolute inset-0 z-0">
         <img 
           src={course.thumbnailUrl} 
-          alt={course.title} 
+          alt={getLocalizedContent(course.title)} 
           className="w-full h-full object-cover opacity-80"
         />
         {/* Cinematic Gradient Overlay */}
@@ -80,14 +81,14 @@ export const CourseIntroPage: React.FC = () => {
 
             {/* Title */}
             <h1 className="text-4xl md:text-6xl font-bold leading-[1.1] mb-4 text-white drop-shadow-lg">
-                {course.title}
+                {getLocalizedContent(course.title)}
             </h1>
 
             {/* Quote */}
             {course.coverQuote && (
                 <div className="mb-6 pl-4 border-l-4 border-accent">
                     <p className="text-lg md:text-xl italic text-gray-200 font-light leading-relaxed">
-                        {course.coverQuote}
+                        {getLocalizedContent(course.coverQuote)}
                     </p>
                 </div>
             )}
@@ -110,7 +111,7 @@ export const CourseIntroPage: React.FC = () => {
 
             {/* Description */}
             <p className="text-gray-400 leading-relaxed mb-10 max-w-lg line-clamp-3">
-                {course.description}
+                {getLocalizedContent(course.description)}
             </p>
         </motion.div>
       </div>

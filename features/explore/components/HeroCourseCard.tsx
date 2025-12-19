@@ -4,6 +4,7 @@ import { Course } from '../../../types';
 import { Play, Clock, Zap, Star, Globe, Lock, DollarSign, Building2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { getLocalizedContent } from '../../../i18n/config';
 
 interface HeroCourseCardProps {
   course: Course;
@@ -32,7 +33,7 @@ export const HeroCourseCard: React.FC<HeroCourseCardProps> = ({ course }) => {
       {/* Background Image */}
       <img 
         src={course.thumbnailUrl} 
-        alt={course.title} 
+        alt={getLocalizedContent(course.title)} 
         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
       />
       
@@ -78,10 +79,10 @@ export const HeroCourseCard: React.FC<HeroCourseCardProps> = ({ course }) => {
       {/* Bottom Content */}
       <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
           <h2 className="text-3xl font-bold text-white mb-2 leading-none drop-shadow-lg">
-              {course.title}
+              {getLocalizedContent(course.title)}
           </h2>
           <p className="text-gray-300 text-sm line-clamp-2 mb-6 font-medium opacity-90">
-              {course.description}
+              {getLocalizedContent(course.description)}
           </p>
 
           <div className="flex items-center gap-4">

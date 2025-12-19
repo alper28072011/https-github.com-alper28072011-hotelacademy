@@ -10,6 +10,7 @@ import { Course } from '../../types';
 import { getAdminCourses, deleteCourse, updateCourse } from '../../services/db';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { getLocalizedContent } from '../../i18n/config';
 
 export const CourseManager: React.FC = () => {
   const navigate = useNavigate();
@@ -44,9 +45,9 @@ export const CourseManager: React.FC = () => {
       }
   };
 
-  // CRASH FIX: Safe filtering. If title is missing, fallback to empty string so toLowerCase() doesn't crash.
+  // Safe filtering using localization helper
   const filteredCourses = courses.filter(c => 
-      (c.title || '').toLowerCase().includes(searchTerm.toLowerCase())
+      getLocalizedContent(c.title).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleDelete = async () => {
@@ -121,7 +122,7 @@ export const CourseManager: React.FC = () => {
                             <img 
                                 src={course.thumbnailUrl || 'https://via.placeholder.com/400'} 
                                 className="w-full h-full object-cover" 
-                                alt={course.title || 'Course'}
+                                alt={getLocalizedContent(course.title)}
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                             <div className="absolute top-3 right-3">
@@ -145,7 +146,7 @@ export const CourseManager: React.FC = () => {
                         {/* Content */}
                         <div className="p-5">
                             <h3 className="font-bold text-gray-800 text-lg leading-tight mb-2 line-clamp-1">
-                                {course.title || "Adsız İçerik"}
+                                {getLocalizedContent(course.title) || "Adsız İçerik"}
                             </h3>
                             <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
                                 <span className="bg-gray-100 px-2 py-0.5 rounded capitalize">
@@ -222,7 +223,7 @@ export const CourseManager: React.FC = () => {
                             </div>
                             <h2 className="text-xl font-bold text-gray-800">Emin misin?</h2>
                             <p className="text-gray-500 text-sm mt-2">
-                                <b>{deleteTarget.title}</b> içeriği kalıcı olarak silinecek. Bu işlem geri alınamaz.
+                                <b>{getLocalizedContent(deleteTarget.title)}</b> içeriği kalıcı olarak silinecek. Bu işlem geri alınamaz.
                             </p>
                         </div>
                         <div className="flex gap-3">
