@@ -4,12 +4,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, 
-    Users, Utensils, BedDouble, ConciergeBell, Settings, ShieldCheck, 
-    BarChart3, Edit, Megaphone, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff, ArrowRight, Clock
+    ShieldCheck, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff, ArrowRight, Clock, Hash, Check
 } from 'lucide-react';
 import { getOrganizationDetails, sendJoinRequest, getMyMemberships, switchUserActiveOrganization, getUserPendingRequests } from '../../services/db';
-import { getOrgPositions } from '../../services/organizationService'; // Import position fetcher
-import { Organization, DepartmentType, OrganizationSector, FollowStatus, Position } from '../../types';
+import { updateUserSubscriptions } from '../../services/organizationService';
+import { Organization, OrganizationSector, FollowStatus } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore'; 
 import { checkFollowStatus, followOrganizationSmart, unfollowUserSmart } from '../../services/socialService';
@@ -18,7 +17,7 @@ import confetti from 'canvas-confetti';
 export const OrganizationProfile: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
-  const { currentUser, loginSuccess } = useAuthStore();
+  const { currentUser } = useAuthStore();
   const { switchOrganization } = useOrganizationStore(); 
   
   const [org, setOrg] = useState<Organization | null>(null);
@@ -28,13 +27,10 @@ export const OrganizationProfile: React.FC = () => {
   const [followStatus, setFollowStatus] = useState<FollowStatus>('NONE');
   const [isFollowLoading, setIsFollowLoading] = useState(false);
   
-  // Wizard State
-  const [showWizard, setShowWizard] = useState(false);
-  const [step, setStep] = useState(1);
-  const [selectedDeptId, setSelectedDeptId] = useState<string>('');
-  const [selectedPosId, setSelectedPosId] = useState<string>('');
-  const [availablePositions, setAvailablePositions] = useState<Position[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Channel Tuner State
+  const [showTuner, setShowTuner] = useState(false);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  const [isSavingChannels, setIsSavingChannels] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -55,54 +51,28 @@ export const OrganizationProfile: React.FC = () => {
             // Check follow status
             const status = await checkFollowStatus(currentUser.id, orgId);
             setFollowStatus(status);
+            
+            // Pre-select user's current channels
+            if (currentUser.subscribedChannelIds) {
+                setSelectedChannels(currentUser.subscribedChannelIds);
+            }
         }
         setLoading(false);
     };
     init();
   }, [orgId, currentUser]);
 
-  // Fetch actual positions when wizard opens
-  useEffect(() => {
-      if (showWizard && orgId) {
-          getOrgPositions(orgId).then(setAvailablePositions);
-      }
-  }, [showWizard, orgId]);
-
   const handleJoin = async () => {
-      if (!currentUser || !org || !selectedDeptId) return;
-      setIsSubmitting(true);
+      if (!currentUser || !org) return;
       
-      let roleTitle = 'Genel Başvuru';
-      let finalPositionId: string | null = null;
-
-      // Logic: If user selected a specific seat, use its title and ID.
-      // If user selected "General" (empty string or special ID), send null.
-      
-      if (selectedPosId && selectedPosId !== 'GENERAL') {
-          const pos = availablePositions.find(p => p.id === selectedPosId);
-          if (pos) {
-              roleTitle = pos.title;
-              finalPositionId = pos.id;
-          }
-      } else {
-          // If general application, find dept name
-          const dept = org.definitions?.departments.find(d => d.id === selectedDeptId);
-          roleTitle = `${dept?.name || 'Departman'} Personeli`;
-      }
-
-      const result = await sendJoinRequest(currentUser.id, org.id, selectedDeptId, roleTitle, finalPositionId);
-      
-      setIsSubmitting(false);
+      const result = await sendJoinRequest(currentUser.id, org.id);
       
       if (result.success) {
-          setShowWizard(false);
-          setHasPendingRequest(true); // Optimistic Update
+          setHasPendingRequest(true); 
           confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-          alert("Başvuru gönderildi! Yönetici onayı bekleniyor.");
-          navigate('/lobby');
+          alert("Katılım isteği gönderildi! Yönetici onayı bekleniyor.");
       } else {
           alert(result.message || "Başvuru yapılamadı.");
-          setShowWizard(false);
       }
   };
 
@@ -140,13 +110,27 @@ export const OrganizationProfile: React.FC = () => {
       }
   };
 
-  const canManage = currentUser && (currentUser.role === 'admin' || currentUser.role === 'manager') && currentUser.currentOrganizationId === orgId;
+  const toggleChannel = (id: string) => {
+      if (selectedChannels.includes(id)) {
+          setSelectedChannels(selectedChannels.filter(c => c !== id));
+      } else {
+          setSelectedChannels([...selectedChannels, id]);
+      }
+  };
 
-  // Filter positions for the wizard
-  // Must be in selected dept AND have no occupant
-  const emptyPositionsInDept = availablePositions.filter(p => 
-      p.departmentId === selectedDeptId && !p.occupantId
-  );
+  const saveChannels = async () => {
+      if (!currentUser) return;
+      setIsSavingChannels(true);
+      const success = await updateUserSubscriptions(currentUser.id, selectedChannels);
+      setIsSavingChannels(false);
+      if (success) {
+          setShowTuner(false);
+          alert("Kanal tercihlerin güncellendi!");
+          handleGoToPanel(); // Auto enter
+      }
+  };
+
+  const canManage = currentUser && currentUser.pageRoles?.[orgId] === 'ADMIN';
 
   const getSectorIcon = (sector: OrganizationSector) => {
       switch(sector) {
@@ -155,24 +139,12 @@ export const OrganizationProfile: React.FC = () => {
           case 'education': return <GraduationCap className="w-4 h-4" />;
           case 'retail': return <ShoppingBag className="w-4 h-4" />;
           case 'finance': return <Landmark className="w-4 h-4" />;
-          case 'tourism': return <ConciergeBell className="w-4 h-4" />;
           default: return <Briefcase className="w-4 h-4" />;
       }
   };
 
-  const getSectorLabel = (sector: OrganizationSector) => {
-      const map: Record<string, string> = {
-          'tourism': 'Turizm', 'technology': 'Teknoloji', 'health': 'Sağlık', 
-          'education': 'Eğitim', 'retail': 'Perakende', 'finance': 'Finans', 'other': 'Genel'
-      };
-      return map[sector] || 'Genel';
-  };
-
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
   if (!org) return <div>Organization not found</div>;
-
-  const availableDepartments = org.definitions?.departments || [];
-  const activeDept = availableDepartments.find(d => d.id === selectedDeptId);
 
   return (
     <div className="min-h-screen bg-white pb-24 relative">
@@ -201,30 +173,14 @@ export const OrganizationProfile: React.FC = () => {
                         <div>
                             <div className="flex items-center gap-2 mb-1">
                                 <ShieldCheck className="w-4 h-4 text-accent" />
-                                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-300">Kurum Yönetimi</h3>
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-300">Yönetim Paneli</h3>
                             </div>
-                            <p className="text-xs text-gray-400">Son 30 günde 1.2k ziyaret</p>
                         </div>
                         <button 
                             onClick={() => navigate('/admin')}
                             className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
                         >
-                            Panele Git
-                        </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-2">
-                        <button onClick={() => navigate('/admin/content')} className="bg-gray-800 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-gray-700 transition-colors">
-                            <Megaphone className="w-5 h-5 text-blue-400" />
-                            <span className="text-[10px] font-bold">İçerik</span>
-                        </button>
-                        <button onClick={() => navigate('/admin/settings')} className="bg-gray-800 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-gray-700 transition-colors">
-                            <Edit className="w-5 h-5 text-green-400" />
-                            <span className="text-[10px] font-bold">Düzenle</span>
-                        </button>
-                        <button onClick={() => navigate('/admin/reports')} className="bg-gray-800 p-3 rounded-xl flex flex-col items-center gap-2 hover:bg-gray-700 transition-colors">
-                            <BarChart3 className="w-5 h-5 text-purple-400" />
-                            <span className="text-[10px] font-bold">Analiz</span>
+                            Yönet
                         </button>
                     </div>
                 </div>
@@ -244,7 +200,7 @@ export const OrganizationProfile: React.FC = () => {
                 
                 <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-xs font-bold mb-3 uppercase tracking-wide">
                     {getSectorIcon(org.sector)}
-                    {getSectorLabel(org.sector)}
+                    {org.sector}
                 </div>
 
                 <div className="flex flex-wrap gap-4 text-sm text-gray-600 font-medium">
@@ -258,7 +214,7 @@ export const OrganizationProfile: React.FC = () => {
                     </div>
                     <div className="text-center">
                         <div className="font-bold text-lg text-gray-900">{org.memberCount || 0}</div>
-                        <div className="text-xs text-gray-500">Personel</div>
+                        <div className="text-xs text-gray-500">Üye</div>
                     </div>
                 </div>
             </div>
@@ -266,7 +222,7 @@ export const OrganizationProfile: React.FC = () => {
             <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 mb-8">
                 <h3 className="font-bold text-gray-900 mb-2">Hakkımızda</h3>
                 <p className="text-gray-600 leading-relaxed text-sm">
-                    {org.description || "Dünyanın en iyi deneyimini sunmak için çalışan tutkulu bir ekibiz."}
+                    {org.description || "Topluluğumuza hoş geldiniz."}
                 </p>
             </div>
         </div>
@@ -274,17 +230,25 @@ export const OrganizationProfile: React.FC = () => {
         {/* STICKY ACTIONS */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 z-30 shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)]">
             {isMember ? (
-                <button 
-                    onClick={handleGoToPanel}
-                    className="w-full bg-green-600 text-white font-bold text-lg py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"
-                >
-                    <CheckCircle2 className="w-6 h-6" />
-                    Panele Git
-                </button>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setShowTuner(true)}
+                        className="flex-1 bg-gray-100 text-gray-800 font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-colors"
+                    >
+                        <Hash className="w-5 h-5" /> Kanalları Seç
+                    </button>
+                    <button 
+                        onClick={handleGoToPanel}
+                        className="flex-[2] bg-green-600 text-white font-bold text-lg py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                    >
+                        <CheckCircle2 className="w-6 h-6" />
+                        Giriş Yap
+                    </button>
+                </div>
             ) : hasPendingRequest ? (
                 <div className="w-full bg-orange-100 text-orange-600 font-bold text-lg py-4 rounded-2xl shadow-none border border-orange-200 flex items-center justify-center gap-2 cursor-default">
                     <Clock className="w-6 h-6" />
-                    Başvuru Değerlendiriliyor
+                    İstek Gönderildi
                 </div>
             ) : (
                 <div className="flex gap-3">
@@ -298,25 +262,25 @@ export const OrganizationProfile: React.FC = () => {
                          <><Bell className="w-5 h-5" /> Takip Et</>}
                     </button>
                     <button 
-                        onClick={() => setShowWizard(true)}
+                        onClick={handleJoin}
                         className="flex-1 bg-primary text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2"
                     >
                         <UserPlus className="w-5 h-5" />
-                        İşe Başvur
+                        Katıl
                     </button>
                 </div>
             )}
         </div>
 
-        {/* WIZARD MODAL (Structured) */}
+        {/* CHANNEL TUNER MODAL */}
         <AnimatePresence>
-            {showWizard && (
+            {showTuner && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
                     <motion.div 
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        onClick={() => setShowWizard(false)}
+                        onClick={() => setShowTuner(false)}
                         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
                     />
                     <motion.div 
@@ -326,80 +290,40 @@ export const OrganizationProfile: React.FC = () => {
                         className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden relative z-10 shadow-2xl flex flex-col max-h-[85vh]"
                     >
                         <div className="p-8">
-                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Başvuru Sihirbazı</h2>
-                            <p className="text-gray-500 mb-8 text-sm">Doğru pozisyonu seçmek, eğitimlerini belirler.</p>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Akışını Özelleştir</h2>
+                            <p className="text-gray-500 mb-6 text-sm">Hangi konularla ilgileniyorsun?</p>
 
-                            {/* STEP 1: Department Selection */}
-                            {step === 1 && (
-                                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col gap-4">
-                                    <label className="text-xs font-bold text-gray-400 uppercase">Departman Seçiniz</label>
-                                    <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">
-                                        {availableDepartments.length > 0 ? (
-                                            availableDepartments.map((dept) => (
-                                                <button 
-                                                    key={dept.id}
-                                                    onClick={() => { setSelectedDeptId(dept.id); setStep(2); }}
-                                                    className="p-4 rounded-xl border border-gray-100 hover:border-primary hover:bg-primary/5 flex items-center justify-between transition-all group text-left"
-                                                >
-                                                    <span className="font-bold text-gray-700">{dept.name}</span>
-                                                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-primary" />
-                                                </button>
-                                            ))
-                                        ) : (
-                                            <div className="text-center py-8 text-gray-400 border-2 border-dashed rounded-xl">
-                                                Bu kurum henüz yapılandırma yapmamış.
+                            <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto pr-2">
+                                {org.channels?.map(channel => (
+                                    <button 
+                                        key={channel.id}
+                                        onClick={() => toggleChannel(channel.id)}
+                                        className={`p-4 rounded-xl border flex items-center justify-between transition-all text-left ${selectedChannels.includes(channel.id) ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 hover:bg-gray-50'}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${selectedChannels.includes(channel.id) ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                                <Hash className="w-4 h-4" />
                                             </div>
-                                        )}
-                                    </div>
-                                </motion.div>
-                            )}
+                                            <div>
+                                                <span className="font-bold text-gray-800 block">{channel.name}</span>
+                                                <span className="text-xs text-gray-500">{channel.description || 'Genel Kanal'}</span>
+                                            </div>
+                                        </div>
+                                        {selectedChannels.includes(channel.id) && <Check className="w-5 h-5 text-primary" />}
+                                    </button>
+                                ))}
+                            </div>
 
-                            {/* STEP 2: Position Selection (Live Seats) */}
-                            {step === 2 && activeDept && (
-                                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col gap-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded">{activeDept.name}</span>
-                                    </div>
-                                    
-                                    <label className="text-xs font-bold text-gray-400 uppercase">Açık Pozisyonlar</label>
-                                    <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">
-                                        {/* OPTION 1: General Application */}
-                                        <button 
-                                            onClick={() => setSelectedPosId('GENERAL')}
-                                            className={`p-4 rounded-xl border flex items-center justify-between transition-all text-left ${selectedPosId === 'GENERAL' ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 hover:bg-gray-50'}`}
-                                        >
-                                            <span className="font-bold text-gray-800">Genel Başvuru (Havuz)</span>
-                                            {selectedPosId === 'GENERAL' && <CheckCircle2 className="w-5 h-5 text-primary" />}
-                                        </button>
-
-                                        {/* OPTION 2: Specific Seats */}
-                                        {emptyPositionsInDept.map((pos) => (
-                                            <button 
-                                                key={pos.id}
-                                                onClick={() => setSelectedPosId(pos.id)}
-                                                className={`p-4 rounded-xl border flex items-center justify-between transition-all text-left ${selectedPosId === pos.id ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 hover:bg-gray-50'}`}
-                                            >
-                                                <div>
-                                                    <span className="font-bold text-gray-800 block">{pos.title}</span>
-                                                    {pos.level && <span className="text-xs text-gray-400">Seviye {pos.level}</span>}
-                                                </div>
-                                                {selectedPosId === pos.id && <CheckCircle2 className="w-5 h-5 text-primary" />}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    <div className="flex gap-3 mt-4">
-                                        <button onClick={() => setStep(1)} className="flex-1 py-4 text-gray-400 font-bold hover:text-gray-600">Geri</button>
-                                        <button 
-                                            onClick={handleJoin}
-                                            disabled={isSubmitting || !selectedPosId}
-                                            className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
-                                        >
-                                            {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Başvuruyu Tamamla'}
-                                        </button>
-                                    </div>
-                                </motion.div>
-                            )}
+                            <div className="flex gap-3 mt-6">
+                                <button onClick={() => setShowTuner(false)} className="flex-1 py-4 text-gray-400 font-bold hover:text-gray-600">İptal</button>
+                                <button 
+                                    onClick={saveChannels}
+                                    disabled={isSavingChannels}
+                                    className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                                >
+                                    {isSavingChannels ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Kaydet'}
+                                </button>
+                            </div>
                         </div>
                     </motion.div>
                 </div>

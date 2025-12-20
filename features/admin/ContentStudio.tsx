@@ -1,24 +1,18 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
-    Wand2, FileText, Link, Type, Loader2, Play, 
-    CheckCircle2, Save, Smartphone, ImageIcon,
-    Settings, Globe, Lock, ChevronRight, Upload, Edit, 
-    FileType, User, Building2, Search, Trash2, Plus, 
-    MousePointer2, Sparkles, MessageSquare, Award, AlertCircle,
-    RefreshCw, Image as LucideImage, Copy, Target, ArrowDown, Languages
+    Wand2, FileText, ImageIcon, ChevronRight, Upload, 
+    CheckCircle2, Save, Loader2, Hash, Target
 } from 'lucide-react';
 import { generateMagicCourse, translateContent } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
 import { updateCourse } from '../../services/db';
 import { uploadFile } from '../../services/storage';
-import { getTargetableAudiences } from '../../services/organizationService';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { StoryCard, DifficultyLevel, CourseTone, StoryCardType, Course, TargetingConfig, LocalizedString } from '../../types';
+import { StoryCard, DifficultyLevel, CourseTone, StoryCardType, Course, LocalizedString } from '../../types';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getLocalizedContent } from '../../i18n/config';
 
 type StudioStep = 'SOURCE' | 'TUNING' | 'GENERATING' | 'DIRECTOR' | 'TARGETING' | 'PUBLISH';
 
@@ -35,9 +29,7 @@ export const ContentStudio: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const cardMediaRef = useRef<HTMLInputElement>(null);
-  const textInputAreaRef = useRef<HTMLDivElement>(null); 
 
   // Studio Flow State
   const [step, setStep] = useState<StudioStep>('SOURCE');
@@ -50,7 +42,6 @@ export const ContentStudio: React.FC = () => {
   const [isTranslating, setIsTranslating] = useState(false);
   
   // 1. Source State
-  const [sourceType, setSourceType] = useState<'TEXT' | 'PDF' | 'URL'>('TEXT');
   const [sourceData, setSourceData] = useState('');
   
   // 2. Tuning State
@@ -69,18 +60,10 @@ export const ContentStudio: React.FC = () => {
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 
-  // 4. Targeting & Settings
-  const [targeting, setTargeting] = useState<TargetingConfig>({ type: 'ALL', targetIds: [] });
+  // 4. Channel Selection (Replaces Targeting)
+  const [selectedChannelId, setSelectedChannelId] = useState<string>('');
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PRIVATE');
-  const [ownerType, setOwnerType] = useState<'USER' | 'ORGANIZATION'>('ORGANIZATION');
   const [isPublishing, setIsPublishing] = useState(false);
-
-  // Targeting Logic State
-  const [availableTargets, setAvailableTargets] = useState<{
-      scope: 'GLOBAL' | 'LIMITED' | 'NONE';
-      allowedDeptIds: string[];
-      allowedPositionIds: string[];
-  }>({ scope: 'NONE', allowedDeptIds: [], allowedPositionIds: [] });
 
   useEffect(() => {
       const incoming = location.state?.courseData as Course;
@@ -94,18 +77,10 @@ export const ContentStudio: React.FC = () => {
               tags: incoming.tags || []
           });
           setVisibility(incoming.visibility);
-          setOwnerType(incoming.authorType);
-          setTargeting(incoming.targeting || { type: 'ALL', targetIds: [] });
+          setSelectedChannelId(incoming.channelId || '');
           setStep('DIRECTOR');
       }
   }, [location.state]);
-
-  // Load Targeting Permissions
-  useEffect(() => {
-      if (step === 'TARGETING' && currentUser && currentOrganization) {
-          getTargetableAudiences(currentUser, currentOrganization.id).then(setAvailableTargets);
-      }
-  }, [step, currentUser, currentOrganization]);
 
   // AI Translation Handler
   const handleMagicTranslate = async () => {
@@ -114,7 +89,6 @@ export const ContentStudio: React.FC = () => {
       
       const targetLangs = SUPPORTED_LANGS.filter(l => l.code !== activeLang).map(l => l.code);
       
-      // Prepare content package to minimize API tokens
       const contentToTranslate = {
           courseTitle: courseData.title[activeLang],
           courseDesc: courseData.description[activeLang],
@@ -131,7 +105,6 @@ export const ContentStudio: React.FC = () => {
       const result = await translateContent(contentToTranslate, activeLang, targetLangs);
 
       if (result) {
-          // Merge translations back into state
           const newTitle = { ...courseData.title, ...result.courseTitle };
           const newDesc = { ...courseData.description, ...result.courseDesc };
           
@@ -150,30 +123,19 @@ export const ContentStudio: React.FC = () => {
                       explanation: { ...c.interaction.explanation, ...translatedCard.explanation },
                       options: c.interaction.options.map((opt, idx) => ({
                           ...opt,
-                          ...translatedCard.options?.[idx] // Array of localized strings handling
+                          ...translatedCard.options?.[idx] 
                       }))
                   };
               }
 
-              return {
-                  ...c,
-                  title: mergedTitle,
-                  content: mergedContent,
-                  interaction: mergedInteraction
-              };
+              return { ...c, title: mergedTitle, content: mergedContent, interaction: mergedInteraction };
           });
 
-          setCourseData({
-              ...courseData,
-              title: newTitle,
-              description: newDesc,
-              cards: newCards
-          });
+          setCourseData({ ...courseData, title: newTitle, description: newDesc, cards: newCards });
           alert("Çeviri tamamlandı! Diğer diller dolduruldu.");
       } else {
           alert("Çeviri servisine ulaşılamadı.");
       }
-      
       setIsTranslating(false);
   };
 
@@ -183,14 +145,11 @@ export const ContentStudio: React.FC = () => {
       
       try {
           const result = await generateMagicCourse(sourceData, {
-              level: difficulty,
-              tone: tone,
-              length: length,
+              level: difficulty, tone: tone, length: length,
               language: SUPPORTED_LANGS.find(l => l.code === activeLang)?.label || 'Turkish'
           });
 
-          if (result && result.cards && result.cards.length > 0) {
-              // Convert generated string fields to LocalizedString format
+          if (result && result.cards) {
               const localizedTitle = { [activeLang]: result.title };
               const localizedDesc = { [activeLang]: result.description };
               
@@ -206,28 +165,13 @@ export const ContentStudio: React.FC = () => {
                   } : undefined
               }));
 
-              setCourseData({
-                  title: localizedTitle,
-                  description: localizedDesc,
-                  cards: localizedCards as StoryCard[],
-                  tags: result.tags
-              });
+              setCourseData({ title: localizedTitle, description: localizedDesc, cards: localizedCards as StoryCard[], tags: result.tags });
               setStep('DIRECTOR');
-          } else {
-              throw new Error("Boş yanıt alındı.");
           }
-      } catch (err: any) {
+      } catch (err) {
           setError("Yapay zeka içeriği kurgulayamadı. Lütfen metni değiştirip deneyin.");
           setStep('TUNING');
       }
-  };
-
-  const updateLocalizedField = (field: 'title' | 'description', value: string) => {
-      if (!courseData) return;
-      setCourseData({
-          ...courseData,
-          [field]: { ...courseData[field], [activeLang]: value }
-      });
   };
 
   const updateActiveCardLocalized = (field: 'title' | 'content', value: string) => {
@@ -241,7 +185,6 @@ export const ContentStudio: React.FC = () => {
       setCourseData({ ...courseData, cards: newCards });
   };
 
-  // ... (Other handlers like handleMediaUpload, etc. remain similar but use new state structure) ...
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file || !courseData) return;
@@ -254,16 +197,8 @@ export const ContentStudio: React.FC = () => {
       } catch (err) { alert("Hata"); } finally { setIsUploadingMedia(false); }
   };
 
-  const renderCardIcon = (type: StoryCardType) => {
-      switch(type) {
-          case 'COVER': return <ImageIcon className="w-4 h-4" />;
-          case 'QUIZ': return <MessageSquare className="w-4 h-4 text-orange-500" />;
-          default: return <FileType className="w-4 h-4 text-blue-500" />;
-      }
-  };
-
   const handlePublish = async () => {
-      if (!courseData || !currentUser) return;
+      if (!courseData || !currentUser || !selectedChannelId) return;
       setIsPublishing(true);
       
       const payload: any = {
@@ -272,8 +207,8 @@ export const ContentStudio: React.FC = () => {
           duration: courseData.cards.length,
           xpReward: 100,
           visibility,
-          targeting,
-          authorType: ownerType,
+          channelId: selectedChannelId, // NEW
+          authorType: 'ORGANIZATION',
           organizationId: currentOrganization?.id,
           categoryId: 'cat_genel',
           price: 0,
@@ -282,13 +217,12 @@ export const ContentStudio: React.FC = () => {
       };
 
       try {
-          let success = false;
           if (isEditingExisting && existingCourseId) {
-              success = await updateCourse(existingCourseId, payload);
+              await updateCourse(existingCourseId, payload);
           } else {
-              success = await publishContent(payload, currentUser);
+              await publishContent(payload, currentUser);
           }
-          if (success) navigate('/admin/courses');
+          navigate('/admin/courses');
       } catch (e) {
           alert("Hata oluştu.");
       } finally {
@@ -305,7 +239,7 @@ export const ContentStudio: React.FC = () => {
                 <span className="text-xs font-black text-primary uppercase hidden md:inline">{isEditingExisting ? 'Düzenleme' : 'Stüdyo'}</span>
             </div>
             
-            {/* LANGUAGE SELECTOR IN EDITOR */}
+            {/* LANGUAGE SELECTOR */}
             {step === 'DIRECTOR' && (
                 <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
                     {SUPPORTED_LANGS.map(lang => (
@@ -333,7 +267,6 @@ export const ContentStudio: React.FC = () => {
 
         <div className="flex-1 flex flex-col md:flex-row md:overflow-hidden">
             {step === 'SOURCE' && (
-                // ... Source Selection UI (Same as before) ...
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
                     <h1 className="text-3xl font-black text-primary mb-8">İçerik Kaynağı</h1>
                     <div className="w-full max-w-2xl">
@@ -349,7 +282,6 @@ export const ContentStudio: React.FC = () => {
             )}
 
             {step === 'TUNING' && (
-                // ... Tuning UI (Same as before) ...
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
                     <h2 className="text-2xl font-bold mb-4">Ayarlar</h2>
                     <button onClick={handleGenerate} className="bg-primary text-white px-8 py-3 rounded-xl font-bold">Oluştur</button>
@@ -390,7 +322,6 @@ export const ContentStudio: React.FC = () => {
                     <div className="flex-1 bg-gray-50 flex items-center justify-center p-8 relative">
                         <div className="w-[320px] h-[580px] bg-black rounded-[3rem] border-8 border-gray-900 shadow-2xl relative overflow-hidden">
                             <img src={courseData.cards[activeCardIndex].mediaUrl} className="absolute inset-0 w-full h-full object-cover opacity-70" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
                             <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
                                 <h2 className="text-2xl font-bold mb-2">{courseData.cards[activeCardIndex].title[activeLang]}</h2>
                                 <p className="text-sm opacity-90">{courseData.cards[activeCardIndex].content[activeLang]}</p>
@@ -441,14 +372,35 @@ export const ContentStudio: React.FC = () => {
                 </div>
             )}
 
-            {/* TARGETING & PUBLISH Steps remain mostly same logic, just rendering */}
+            {/* CHANNEL SELECTION */}
             {step === 'TARGETING' && (
                 <div className="flex-1 flex flex-col items-center justify-center p-6">
-                    <h2 className="text-2xl font-bold mb-6">Hedef Kitle</h2>
-                    {/* Simplified Targeting UI for brevity */}
-                    <div className="flex gap-4">
+                    <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><Target className="w-6 h-6 text-primary" /> Hangi Kanalda Yayınlansın?</h2>
+                    
+                    <div className="w-full max-w-md space-y-3">
+                        {currentOrganization?.channels?.map(channel => (
+                            <button
+                                key={channel.id}
+                                onClick={() => setSelectedChannelId(channel.id)}
+                                className={`w-full p-4 rounded-xl border-2 flex items-center justify-between transition-all ${selectedChannelId === channel.id ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600">
+                                        <Hash className="w-5 h-5" />
+                                    </div>
+                                    <div className="text-left">
+                                        <div className="font-bold text-gray-900">{channel.name}</div>
+                                        <div className="text-xs text-gray-500">{channel.description || 'Genel Kanal'}</div>
+                                    </div>
+                                </div>
+                                {selectedChannelId === channel.id && <CheckCircle2 className="w-6 h-6 text-primary" />}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex gap-4 mt-8">
                         <button onClick={() => setStep('DIRECTOR')} className="px-6 py-3 border rounded-xl font-bold">Geri</button>
-                        <button onClick={() => setStep('PUBLISH')} className="px-6 py-3 bg-primary text-white rounded-xl font-bold">Önizle & Yayınla</button>
+                        <button onClick={() => setStep('PUBLISH')} disabled={!selectedChannelId} className="px-6 py-3 bg-primary text-white rounded-xl font-bold disabled:opacity-50">Sonraki</button>
                     </div>
                 </div>
             )}

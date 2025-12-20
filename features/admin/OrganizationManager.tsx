@@ -2,74 +2,41 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-    Users, Network, Loader2, Plus, CornerDownRight, Settings
+    Users, Hash, Loader2, Plus, Settings, Trash2, Edit2, Shield
 } from 'lucide-react';
-import { User, Position, PositionPrototype } from '../../types';
+import { User, Channel, PageRole } from '../../types';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { getOrganizationUsers, getUserById } from '../../services/db';
-import { getOrgPositions, createPosition, assignUserToPosition, removeUserFromPosition, deletePosition } from '../../services/organizationService';
-import { OrgChartBuilder } from '../organization/OrgChartBuilder';
-import { StaffList } from '../organization/StaffList';
-import { OrgDefinitions } from './OrgDefinitions';
+import { getOrganizationUsers } from '../../services/db';
+import { createChannel, deleteChannel, updateUserPageRole } from '../../services/organizationService';
 import confetti from 'canvas-confetti';
 
 export const OrganizationManager: React.FC = () => {
   const { currentOrganization } = useOrganizationStore();
-  const { currentUser, refreshProfile } = useAuthStore();
   
   // -- GLOBAL STATE --
-  const [activeTab, setActiveTab] = useState<'DEFINITIONS' | 'CHART' | 'LIST'>('CHART');
+  const [activeTab, setActiveTab] = useState<'CHANNELS' | 'MEMBERS'>('CHANNELS');
   const [loading, setLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
   
   // -- DATA --
   const [users, setUsers] = useState<User[]>([]);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [owner, setOwner] = useState<User | undefined>(undefined);
   
-  // -- MODAL STATES --
-  const [isAddPosModalOpen, setIsAddPosModalOpen] = useState(false);
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  
-  // -- SELECTED ITEMS --
-  const [targetParentId, setTargetParentId] = useState<string | null>(null);
-  const [targetPosId, setTargetPosId] = useState<string | null>(null);
-  
-  // -- FORM DATA --
-  const [selectedPrototypeId, setSelectedPrototypeId] = useState('');
-  const [newPosDeptId, setNewPosDeptId] = useState<string>('');
+  // -- FORMS --
+  const [newChannelName, setNewChannelName] = useState('');
+  const [newChannelDesc, setNewChannelDesc] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // --- INITIAL LOAD ---
   useEffect(() => {
       loadAllData();
   }, [currentOrganization]);
 
-  // Check definitions and auto-switch
-  useEffect(() => {
-      if (currentOrganization && !loading) {
-          const hasDepts = currentOrganization.definitions?.departments?.length && currentOrganization.definitions.departments.length > 0;
-          if (!hasDepts && activeTab !== 'DEFINITIONS') {
-              setActiveTab('DEFINITIONS');
-          }
-      }
-  }, [currentOrganization, loading]);
-
   const loadAllData = async () => {
       if (!currentOrganization) return;
       setLoading(true);
-      
       try {
-          const posData = await getOrgPositions(currentOrganization.id);
-          
-          // Fetch Owner
-          const ownerData = await getUserById(currentOrganization.ownerId);
-          if (ownerData) setOwner(ownerData);
-
-          // Fetch ALL Staff efficiently
           const allUsers = await getOrganizationUsers(currentOrganization.id);
-          
-          setPositions(posData);
           setUsers(allUsers);
       } catch (error) {
           console.error("Failed to load org data", error);
@@ -78,244 +45,172 @@ export const OrganizationManager: React.FC = () => {
       }
   };
 
-  // --- ACTIONS ---
-
-  const handleAddChild = (parentId: string | null, deptId?: string) => {
-      setTargetParentId(parentId);
-      if (deptId) setNewPosDeptId(deptId);
-      setSelectedPrototypeId('');
-      setIsAddPosModalOpen(true);
-  };
-
-  const handleCreatePosition = async () => {
-      if (!currentOrganization || !selectedPrototypeId || !newPosDeptId) return;
-      
-      const proto = currentOrganization.definitions?.positionPrototypes.find(p => p.id === selectedPrototypeId);
-      if (!proto) return;
-
-      const newPos: Omit<Position, 'id'> = {
-          organizationId: currentOrganization.id,
-          title: proto.title,
-          departmentId: newPosDeptId,
-          parentId: targetParentId,
-          occupantId: null,
-          level: proto.defaultLevel,
-          isManager: proto.isManagerial,
-          permissions: proto.permissions
-      };
-      
-      const id = await createPosition(newPos);
-      if (id) {
-          setPositions([...positions, { ...newPos, id }]);
-          setIsAddPosModalOpen(false);
-          setSelectedPrototypeId('');
-      }
-  };
-
-  const handleDeletePosition = async (posId: string) => {
-      if (window.confirm("Pozisyonu silmek istediğinize emin misiniz?")) {
-          await deletePosition(posId);
-          setPositions(prev => prev.filter(p => p.id !== posId));
-      }
-  };
-
-  const handleOpenAssign = (posId: string) => {
-      setTargetPosId(posId);
-      setIsAssignModalOpen(true);
-  };
-
-  const handleAssignUser = async (userId: string) => {
-      if (!currentOrganization || !targetPosId) return;
+  const handleCreateChannel = async () => {
+      if (!currentOrganization || !newChannelName) return;
       setIsProcessing(true);
-      const result = await assignUserToPosition(currentOrganization.id, targetPosId, userId);
-      
-      // Sync Self if changed
-      if (userId === currentUser?.id) {
-          await refreshProfile();
+      const success = await createChannel(currentOrganization.id, newChannelName, newChannelDesc, isPrivate);
+      if (success) {
+          setNewChannelName('');
+          setNewChannelDesc('');
+          alert("Kanal oluşturuldu!");
+          // Reloading whole org context ideally happens via listener, but manual reload for now
+          window.location.reload(); 
       }
-
       setIsProcessing(false);
-
-      if (result.success) {
-          setIsAssignModalOpen(false);
-          loadAllData();
-          confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
-      } else {
-          alert(result.message || "Atama başarısız oldu.");
-      }
   };
 
-  const handleRemoveUser = async (posId: string) => {
+  const handleDeleteChannel = async (id: string) => {
       if (!currentOrganization) return;
-      const position = positions.find(p => p.id === posId);
-      
-      if (window.confirm("Koltuk boşaltılsın mı?")) {
-          setIsProcessing(true);
-          const success = await removeUserFromPosition(posId, currentOrganization.id);
-          
-          // Sync Self if changed
-          if (position?.occupantId === currentUser?.id) {
-              await refreshProfile();
-          }
-
-          setIsProcessing(false);
-          if (success) {
-              setPositions(prev => prev.map(p => p.id === posId ? { ...p, occupantId: null } : p));
-              loadAllData();
-          }
+      if (window.confirm("Kanalı silmek istediğinize emin misiniz?")) {
+          await deleteChannel(currentOrganization.id, id);
+          window.location.reload();
       }
   };
 
-  // Filter: Users who have NO position assigned (either null or empty string)
-  const unassignedUsers = users.filter(u => !u.positionId);
-  
-  const definitions = currentOrganization?.definitions || { departments: [], positionPrototypes: [] };
-  const availablePrototypes = definitions.positionPrototypes?.filter(p => p.departmentId === newPosDeptId) || [];
+  const handleChangeRole = async (userId: string, newRole: PageRole) => {
+      if (!currentOrganization) return;
+      if (window.confirm(`Kullanıcının rolünü ${newRole} olarak değiştirmek istiyor musunuz?`)) {
+          const success = await updateUserPageRole(currentOrganization.id, userId, newRole);
+          if (success) {
+              setUsers(prev => prev.map(u => u.id === userId ? { ...u, pageRoles: { ...u.pageRoles, [currentOrganization.id]: newRole } } : u));
+          }
+      }
+  };
 
   return (
     <div className="flex flex-col h-full bg-white rounded-t-3xl shadow-sm border border-gray-200 overflow-hidden relative">
         
-        {isProcessing && (
-            <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-sm flex items-center justify-center">
-                <Loader2 className="w-12 h-12 animate-spin text-primary" />
-            </div>
-        )}
-
         {/* HEADER */}
         <div className="bg-white border-b border-gray-200 p-6 flex justify-between items-center">
             <div>
-                <h1 className="text-2xl font-bold text-gray-800">Organizasyon Yönetimi</h1>
-                <p className="text-sm text-gray-500">Yapıyı tanımla, kurgula ve yönet.</p>
+                <h1 className="text-2xl font-bold text-gray-800">Sayfa Yönetimi</h1>
+                <p className="text-sm text-gray-500">Kanalları ve üyeleri yönet.</p>
             </div>
             
             <div className="flex bg-gray-100 p-1 rounded-xl">
                 <button 
-                    onClick={() => setActiveTab('DEFINITIONS')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'DEFINITIONS' ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}
+                    onClick={() => setActiveTab('CHANNELS')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'CHANNELS' ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}
                 >
-                    <Settings className="w-4 h-4" /> Tanımlar
+                    <Hash className="w-4 h-4" /> Kanallar
                 </button>
                 <button 
-                    onClick={() => setActiveTab('CHART')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'CHART' ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}
+                    onClick={() => setActiveTab('MEMBERS')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'MEMBERS' ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}
                 >
-                    <Network className="w-4 h-4" /> Şema
-                </button>
-                <button 
-                    onClick={() => setActiveTab('LIST')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'LIST' ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}
-                >
-                    <Users className="w-4 h-4" /> Liste
+                    <Users className="w-4 h-4" /> Üyeler
                 </button>
             </div>
         </div>
 
         {/* CONTENT */}
-        <div className="flex-1 bg-gray-50 overflow-hidden relative">
+        <div className="flex-1 bg-gray-50 overflow-hidden relative p-6 overflow-y-auto">
             {loading ? (
                 <div className="absolute inset-0 flex items-center justify-center">
                     <Loader2 className="w-10 h-10 animate-spin text-primary" />
                 </div>
             ) : (
                 <>
-                    {activeTab === 'DEFINITIONS' && currentOrganization && (
-                        <OrgDefinitions organization={currentOrganization} />
+                    {activeTab === 'CHANNELS' && (
+                        <div className="max-w-3xl mx-auto space-y-8">
+                            {/* Create Box */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                    <Plus className="w-5 h-5 text-green-500" /> Yeni Kanal Oluştur
+                                </h3>
+                                <div className="flex gap-4 items-start">
+                                    <div className="flex-1 space-y-3">
+                                        <input 
+                                            value={newChannelName}
+                                            onChange={e => setNewChannelName(e.target.value)}
+                                            placeholder="Kanal Adı (Örn: Ön Büro)"
+                                            className="w-full p-3 border rounded-xl"
+                                        />
+                                        <input 
+                                            value={newChannelDesc}
+                                            onChange={e => setNewChannelDesc(e.target.value)}
+                                            placeholder="Açıklama (Opsiyonel)"
+                                            className="w-full p-3 border rounded-xl text-sm"
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={handleCreateChannel}
+                                        disabled={isProcessing || !newChannelName}
+                                        className="bg-primary text-white px-6 py-8 rounded-xl font-bold hover:bg-primary-light disabled:opacity-50"
+                                    >
+                                        {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ekle'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* List */}
+                            <div className="space-y-3">
+                                {currentOrganization?.channels?.map(channel => (
+                                    <div key={channel.id} className="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center group">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
+                                                <Hash className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-gray-900">{channel.name}</div>
+                                                <div className="text-xs text-gray-500">{channel.description}</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button className="p-2 hover:bg-gray-100 rounded-lg text-gray-400"><Edit2 className="w-4 h-4" /></button>
+                                            <button onClick={() => handleDeleteChannel(channel.id)} className="p-2 hover:bg-red-50 rounded-lg text-red-400"><Trash2 className="w-4 h-4" /></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     )}
 
-                    {activeTab === 'CHART' && (
-                        <OrgChartBuilder 
-                            positions={positions}
-                            users={users}
-                            owner={owner}
-                            definitions={definitions as any}
-                            onAddChild={handleAddChild}
-                            onAssign={handleOpenAssign}
-                            onRemoveUser={handleRemoveUser}
-                            onDeletePosition={handleDeletePosition}
-                        />
-                    )}
-
-                    {activeTab === 'LIST' && (
-                        <div className="p-4 h-full overflow-y-auto">
-                            <StaffList 
-                                users={users} 
-                                positions={positions}
-                                onAssignClick={(user) => { 
-                                    setTargetPosId(null); // No specific position yet
-                                    alert("Lütfen önce Şema ekranından boş bir pozisyon seçerek atama yapınız."); 
-                                }}
-                            />
+                    {activeTab === 'MEMBERS' && (
+                        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-50 border-b border-gray-100">
+                                    <tr>
+                                        <th className="p-4 text-xs font-bold text-gray-500 uppercase">Kullanıcı</th>
+                                        <th className="p-4 text-xs font-bold text-gray-500 uppercase">Rol</th>
+                                        <th className="p-4 text-xs font-bold text-gray-500 uppercase text-right">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {users.map(user => {
+                                        const role = user.pageRoles?.[currentOrganization?.id || ''] || 'MEMBER';
+                                        return (
+                                            <tr key={user.id} className="hover:bg-gray-50">
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-xs">
+                                                            {user.avatar}
+                                                        </div>
+                                                        <div className="font-bold text-sm text-gray-800">{user.name}</div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-1 rounded text-xs font-bold ${role === 'ADMIN' ? 'bg-red-100 text-red-600' : role === 'MODERATOR' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                                                        {role}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <div className="flex justify-end gap-1">
+                                                        {role !== 'ADMIN' && <button onClick={() => handleChangeRole(user.id, 'ADMIN')} className="text-xs font-bold text-red-500 hover:bg-red-50 px-2 py-1 rounded">Admin Yap</button>}
+                                                        {role !== 'MODERATOR' && <button onClick={() => handleChangeRole(user.id, 'MODERATOR')} className="text-xs font-bold text-blue-500 hover:bg-blue-50 px-2 py-1 rounded">Moderatör Yap</button>}
+                                                        {role !== 'MEMBER' && <button onClick={() => handleChangeRole(user.id, 'MEMBER')} className="text-xs font-bold text-gray-500 hover:bg-gray-100 px-2 py-1 rounded">Üye Yap</button>}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </>
             )}
         </div>
-
-        {/* --- ADD POSITION MODAL --- */}
-        <AnimatePresence>
-            {isAddPosModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-sm">
-                        <h2 className="text-lg font-bold mb-4">Pozisyon Ekle</h2>
-                        
-                        <div className="space-y-4">
-                            {/* Department Readonly (Context) */}
-                            <div>
-                                <label className="text-xs font-bold text-gray-400 uppercase">Departman</label>
-                                <div className="p-3 bg-gray-100 rounded-xl font-bold text-gray-700">
-                                    {definitions.departments.find(d => d.id === newPosDeptId)?.name || 'Seçili Departman'}
-                                </div>
-                            </div>
-
-                            {/* Title Selector from Prototypes */}
-                            <div>
-                                <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Ünvan Seç</label>
-                                <select 
-                                    value={selectedPrototypeId} 
-                                    onChange={e => setSelectedPrototypeId(e.target.value)} 
-                                    className="w-full p-3 border rounded-xl outline-none focus:border-primary font-bold"
-                                >
-                                    <option value="">Seçiniz...</option>
-                                    {availablePrototypes.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-                                </select>
-                                {availablePrototypes.length === 0 && <p className="text-xs text-red-500 mt-1">Bu departman için tanımlı pozisyon yok. Önce "Tanımlar" sekmesinden ekleyin.</p>}
-                            </div>
-
-                            <div className="flex gap-2 mt-4">
-                                <button onClick={() => setIsAddPosModalOpen(false)} className="flex-1 py-3 text-gray-500 font-bold bg-gray-100 rounded-xl">İptal</button>
-                                <button onClick={handleCreatePosition} disabled={!selectedPrototypeId} className="flex-1 py-3 bg-primary text-white rounded-xl font-bold disabled:opacity-50">Oluştur</button>
-                            </div>
-                        </div>
-                    </motion.div>
-                </div>
-            )}
-        </AnimatePresence>
-
-        {/* ASSIGN MODAL (Existing logic) */}
-        <AnimatePresence>
-            {isAssignModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md flex flex-col h-[500px]">
-                        <h2 className="text-lg font-bold mb-4 text-gray-800">Personel Seç</h2>
-                        <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                            {/* Pool List */}
-                            {unassignedUsers.map(user => (
-                                <button key={user.id} onClick={() => handleAssignUser(user.id)} className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-primary hover:bg-primary/5 transition-all text-left group">
-                                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold">{user.avatar}</div>
-                                    <div className="flex-1">
-                                        <div className="font-bold text-gray-800">{user.name}</div>
-                                        <div className="text-xs text-orange-500">Havuzda (Atanmamış)</div>
-                                    </div>
-                                    <CornerDownRight className="w-4 h-4 text-gray-300 group-hover:text-primary" />
-                                </button>
-                            ))}
-                            {unassignedUsers.length === 0 && <div className="text-center py-10 text-gray-400">Boşta (havuzda) personel yok. Herkes bir pozisyonda.</div>}
-                        </div>
-                        <button onClick={() => setIsAssignModalOpen(false)} className="mt-4 w-full py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">Kapat</button>
-                    </motion.div>
-                </div>
-            )}
-        </AnimatePresence>
     </div>
   );
 };
