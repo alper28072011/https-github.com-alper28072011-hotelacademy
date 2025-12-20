@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
     Grid, FileText, Bookmark, Download, 
-    Star, Users, Heart, Zap, Award, Youtube
+    Star, Users, Heart, Zap, Award, Youtube, Play, CheckCircle2
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useProfileStore } from '../../stores/useProfileStore';
@@ -25,6 +25,7 @@ export const ProfilePage: React.FC = () => {
 
   // UI State
   const [activeTab, setActiveTab] = useState<'collection' | 'posts' | 'certificates' | 'saved' | 'channel'>('collection');
+  const [learningTab, setLearningTab] = useState<'ONGOING' | 'COMPLETED'>('ONGOING');
   const [isEditing, setIsEditing] = useState(false);
   
   // Data State
@@ -56,9 +57,19 @@ export const ProfilePage: React.FC = () => {
   if (!activeUser) return null;
 
   // --- DATA PREPARATION ---
-  const myCertificates = activeUser.completedCourses
-      .map(id => courses.find(c => c.id === id))
-      .filter((c): c is Course => !!c);
+  
+  // 1. Certificates (Completed)
+  const myCertificates = courses.filter(c => {
+      // Check legacy array or new progress map status
+      const p = activeUser.progressMap?.[c.id];
+      return activeUser.completedCourses.includes(c.id) || p?.status === 'COMPLETED';
+  });
+
+  // 2. Ongoing (In Progress)
+  const myOngoing = courses.filter(c => {
+      const p = activeUser.progressMap?.[c.id];
+      return p?.status === 'IN_PROGRESS' && !activeUser.completedCourses.includes(c.id);
+  });
 
   const mySaved = (activeUser.savedCourses || [])
       .map(id => courses.find(c => c.id === id))
@@ -93,16 +104,16 @@ export const ProfilePage: React.FC = () => {
                 <Award className="w-6 h-6" />
             </button>
             <button 
-                onClick={() => setActiveTab('posts')}
-                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'posts' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
-            >
-                <Grid className="w-6 h-6" />
-            </button>
-            <button 
                 onClick={() => setActiveTab('certificates')}
                 className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'certificates' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
             >
                 <FileText className="w-6 h-6" />
+            </button>
+            <button 
+                onClick={() => setActiveTab('posts')}
+                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'posts' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
+            >
+                <Grid className="w-6 h-6" />
             </button>
             <button 
                 onClick={() => setActiveTab('channel')}
@@ -143,6 +154,71 @@ export const ProfilePage: React.FC = () => {
                 </div>
             )}
 
+            {/* CERTIFICATES / LEARNING HUB */}
+            {activeTab === 'certificates' && (
+                <div className="flex flex-col">
+                    <div className="flex p-2 bg-gray-50 m-4 rounded-xl">
+                        <button 
+                            onClick={() => setLearningTab('ONGOING')} 
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${learningTab === 'ONGOING' ? 'bg-white shadow text-primary' : 'text-gray-500'}`}
+                        >
+                            Devam Eden ({myOngoing.length})
+                        </button>
+                        <button 
+                            onClick={() => setLearningTab('COMPLETED')} 
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${learningTab === 'COMPLETED' ? 'bg-white shadow text-primary' : 'text-gray-500'}`}
+                        >
+                            Tamamlanan ({myCertificates.length})
+                        </button>
+                    </div>
+
+                    {learningTab === 'ONGOING' && (
+                        <div className="flex flex-col gap-4 px-4 pb-4">
+                            {myOngoing.map(course => {
+                                const p = activeUser.progressMap?.[course.id];
+                                const percent = p ? Math.round((p.currentCardIndex / p.totalCards) * 100) : 0;
+                                return (
+                                    <div key={course.id} className="flex gap-4 p-4 border border-gray-100 rounded-2xl shadow-sm bg-white" onClick={() => navigate(`/course/${course.id}/play`)}>
+                                        <div className="w-20 h-20 bg-gray-100 rounded-xl overflow-hidden shrink-0 relative">
+                                            <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                                <Play className="w-8 h-8 text-white fill-white" />
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 flex flex-col justify-center">
+                                            <h4 className="font-bold text-gray-900 text-sm line-clamp-1">{getLocalizedContent(course.title)}</h4>
+                                            <div className="w-full h-2 bg-gray-100 rounded-full mt-3 overflow-hidden">
+                                                <div className="h-full bg-accent" style={{ width: `${percent}%` }} />
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-1">%{percent} Tamamlandı</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {myOngoing.length === 0 && <div className="text-center py-10 text-gray-400">Devam eden eğitiminiz yok.</div>}
+                        </div>
+                    )}
+
+                    {learningTab === 'COMPLETED' && (
+                        <div className="flex flex-col">
+                            {myCertificates.map(course => (
+                                <div key={course.id} className="flex items-center gap-4 p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/course/${course.id}/play`)}>
+                                    <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center shrink-0 text-green-600">
+                                        <CheckCircle2 className="w-6 h-6" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-bold text-gray-900 text-sm truncate">{getLocalizedContent(course.title)}</h4>
+                                        <p className="text-xs text-green-600 font-medium">Sertifika Hazır</p>
+                                    </div>
+                                    <button className="p-2 text-gray-400 hover:text-primary"><Download className="w-5 h-5" /></button>
+                                </div>
+                            ))}
+                            {myCertificates.length === 0 && <div className="text-center py-10 text-gray-400">Henüz tamamlanan kurs yok.</div>}
+                        </div>
+                    )}
+                </div>
+            )}
+
             {activeTab === 'posts' && (
                 <div className="grid grid-cols-3 gap-0.5 mt-0.5">
                     {myPosts.map(post => (
@@ -165,24 +241,6 @@ export const ProfilePage: React.FC = () => {
                             Henüz gönderi yok.
                         </div>
                     )}
-                </div>
-            )}
-            
-            {activeTab === 'certificates' && (
-                <div className="flex flex-col">
-                    {myCertificates.map(course => (
-                        <div key={course.id} className="flex items-center gap-4 p-4 border-b border-gray-50 hover:bg-gray-50">
-                            <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                                <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <h4 className="font-bold text-gray-900 text-sm truncate">{getLocalizedContent(course.title)}</h4>
-                                <p className="text-xs text-gray-500">Tamamlandı</p>
-                            </div>
-                            <button className="p-2 text-gray-400 hover:text-primary"><Download className="w-5 h-5" /></button>
-                        </div>
-                    ))}
-                    {myCertificates.length === 0 && <div className="text-center py-10 text-gray-400">Henüz tamamlanan kurs yok.</div>}
                 </div>
             )}
 

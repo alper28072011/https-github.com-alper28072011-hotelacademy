@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronDown, BookOpen, AlertTriangle, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { getCourse, updateUserProgress } from '../../services/db';
+import { getCourse, completeCourse, saveCourseProgress } from '../../services/db';
 import { Course, StoryCard } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { logEvent, createEventPayload } from '../../services/analyticsService';
@@ -13,7 +13,7 @@ import { getLocalizedContent } from '../../i18n/config';
 export const CoursePlayerPage: React.FC = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
-  const { currentUser } = useAuthStore();
+  const { currentUser, refreshProfile } = useAuthStore();
   
   const [course, setCourse] = useState<Course | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -34,6 +34,14 @@ export const CoursePlayerPage: React.FC = () => {
             setCourse(c);
             setLoading(false);
             
+            // --- RESUME LOGIC ---
+            if (currentUser.progressMap && currentUser.progressMap[courseId]) {
+                const progress = currentUser.progressMap[courseId];
+                if (progress.status === 'IN_PROGRESS' && progress.currentCardIndex > 0) {
+                    setCurrentIndex(progress.currentCardIndex);
+                }
+            }
+            
             // ANALYTICS: Log View Start
             if (c) {
                 logEvent(createEventPayload(currentUser, {
@@ -47,6 +55,20 @@ export const CoursePlayerPage: React.FC = () => {
     };
     fetch();
   }, [courseId, currentUser]);
+
+  // SAVE PROGRESS ON INDEX CHANGE
+  useEffect(() => {
+      if (course && currentUser && courseId) {
+          const save = async () => {
+              // Don't save on the very last card immediately, wait for 'finish' action
+              if (currentIndex < course.steps.length - 1) {
+                  await saveCourseProgress(currentUser.id, courseId, currentIndex, course.steps.length);
+              }
+          };
+          const timeout = setTimeout(save, 500); // Debounce
+          return () => clearTimeout(timeout);
+      }
+  }, [currentIndex, course, currentUser]);
 
   if (loading || !course) return <div className="bg-black h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
 
@@ -113,8 +135,8 @@ export const CoursePlayerPage: React.FC = () => {
 
   const finishCourse = async () => {
       if (currentUser && courseId && course) {
-          // 1. Update Progress
-          await updateUserProgress(currentUser.id, courseId, course.xpReward);
+          // 1. Update Progress & Mark Complete
+          await completeCourse(currentUser.id, courseId, course.xpReward, course.steps.length);
           
           // 2. Analytics: Complete
           const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
@@ -123,6 +145,9 @@ export const CoursePlayerPage: React.FC = () => {
               channelId: course.channelId,
               contentId: course.id
           }, 'COMPLETE', { timeSpentSeconds: timeSpent }));
+
+          // 3. Refresh Profile (Critical for StoryRail to update)
+          await refreshProfile();
       }
       navigate('/');
   };
@@ -173,7 +198,6 @@ export const CoursePlayerPage: React.FC = () => {
                         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
                             <div className="inline-block px-2 py-0.5 rounded bg-accent text-primary text-[10px] font-black mb-3 uppercase tracking-widest">{currentCard.type}</div>
                             
-                            {/* FIX: Use getLocalizedContent to extract string from object */}
                             <h1 className="text-3xl font-black text-white mb-4 leading-tight drop-shadow-2xl">
                                 {getLocalizedContent(currentCard.title)}
                             </h1>

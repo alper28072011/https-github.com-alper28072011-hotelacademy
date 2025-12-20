@@ -11,8 +11,6 @@ export interface LanguageDefinition {
 }
 
 // --- CORE LOCALIZATION TYPE ---
-// "English-First" Architecture: 'en' key is theoretically mandatory for new content.
-// Structure: { en: "Hello", tr: "Merhaba" }
 export type LocalizedString = Record<string, string>;
 
 // --- NEW ARCHITECTURE: ROLES ---
@@ -46,12 +44,13 @@ export interface Channel {
   createdAt: number;
 }
 
-export type ChannelStoryStatus = 'HAS_NEW' | 'ALL_CAUGHT_UP' | 'EMPTY';
+export type ChannelStoryStatus = 'HAS_NEW' | 'IN_PROGRESS' | 'ALL_CAUGHT_UP' | 'EMPTY';
 
 export interface ChannelStoryData {
     channel: Channel;
     status: ChannelStoryStatus;
     nextCourseId?: string;
+    progressPercent?: number;
 }
 
 export interface AnalyticsEvent {
@@ -71,6 +70,19 @@ export interface AnalyticsEvent {
 export interface UserPreferences {
     appLanguage: LanguageCode;           // UI Language (Single Source)
     contentLanguages: LanguageCode[];    // PRIORITY LIST (e.g. ['tr', 'ru', 'en'])
+}
+
+// --- NEW: PROGRESS TRACKING ---
+export interface CourseProgress {
+  courseId: string;
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+  completedAt?: number;
+  lastAccessedAt: number;
+  currentCardIndex: number; // Resume point
+  maxCardIndexReached: number;
+  totalCards: number;
+  score?: number; // Quiz score
+  isReviewMode?: boolean;
 }
 
 export interface User {
@@ -94,10 +106,16 @@ export interface User {
   bio?: string; 
   joinDate?: number; 
   organizationHistory: string[];
+  
+  // Legacy Arrays (Keep for simple queries)
   completedCourses: string[];
   startedCourses?: string[]; 
   savedCourses?: string[]; 
   completedTasks?: string[]; 
+  
+  // NEW: Precise Progress Map
+  progressMap?: Record<string, CourseProgress>;
+
   followersCount?: number;
   followingCount?: number;
   isPrivate?: boolean;
@@ -107,7 +125,6 @@ export interface User {
   following?: string[];
   isSuperAdmin?: boolean;
   
-  // --- NEW: PREFERENCES ---
   preferences?: UserPreferences;
 
   privacySettings?: {

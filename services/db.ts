@@ -20,7 +20,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Course, Task, Issue, Category, CareerPath, FeedPost, Organization, Membership, JoinRequest, OrganizationSector, PageRole, PermissionType, ChannelStoryData } from '../types';
+import { User, Course, Task, Issue, Category, CareerPath, FeedPost, Organization, Membership, JoinRequest, OrganizationSector, PageRole, PermissionType, ChannelStoryData, CourseProgress } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -57,20 +57,21 @@ export const getAdminCourses = async (userId: string, orgId?: string | null): Pr
     }
 };
 
-// --- STORY RAIL ENGINE (NEW) ---
+// --- STORY RAIL ENGINE (IMPROVED) ---
 // Returns formatted data for the Story Rail (Channel Rings)
+// FILTER LOGIC: Completed courses are HIDDEN.
+// SORT LOGIC: In-Progress courses come first.
 export const getChannelStories = async (user: User): Promise<ChannelStoryData[]> => {
     if (!user.currentOrganizationId || !user.subscribedChannelIds || user.subscribedChannelIds.length === 0) {
         return [];
     }
 
     try {
-        // 1. Get Organization (to get Channel details like name/icon)
+        // 1. Get Organization
         const org = await getOrganizationDetails(user.currentOrganizationId);
         if (!org) return [];
 
-        // 2. Get All Courses for this Org (Optimized: Get all and filter in memory for now)
-        // In large scale, we would query by channelId batching.
+        // 2. Get All Courses for this Org (Optimized: Get all and filter in memory)
         const coursesQ = query(
             coursesRef, 
             where('organizationId', '==', user.currentOrganizationId),
@@ -81,42 +82,68 @@ export const getChannelStories = async (user: User): Promise<ChannelStoryData[]>
 
         // 3. Map Data
         const storyData: ChannelStoryData[] = [];
-
-        // Filter only subscribed channels
         const subscribedChannels = org.channels.filter(c => user.subscribedChannelIds.includes(c.id));
 
         for (const channel of subscribedChannels) {
             const channelCourses = allOrgCourses.filter(c => c.channelId === channel.id);
             
-            // Determine Status
-            let status: 'HAS_NEW' | 'ALL_CAUGHT_UP' | 'EMPTY' = 'EMPTY';
+            // Logic: Find first course that is NOT completed.
+            // If "In Progress", prioritize it.
+            // If "Not Started", allow it.
+            
+            let status: 'HAS_NEW' | 'IN_PROGRESS' | 'ALL_CAUGHT_UP' | 'EMPTY' = 'EMPTY';
             let nextCourseId = undefined;
+            let progressPercent = 0;
 
             if (channelCourses.length > 0) {
-                // Check if any course is NOT completed
-                const uncompleted = channelCourses.find(c => !user.completedCourses.includes(c.id));
-                
-                if (uncompleted) {
-                    status = 'HAS_NEW';
-                    nextCourseId = uncompleted.id;
+                // Find pending courses
+                const pendingCourses = channelCourses.filter(c => {
+                    const progress = user.progressMap?.[c.id];
+                    // If marked completed in legacy array OR status is COMPLETED -> Filter out
+                    if (user.completedCourses.includes(c.id)) return false;
+                    if (progress?.status === 'COMPLETED') return false;
+                    return true;
+                });
+
+                if (pendingCourses.length > 0) {
+                    // Check if any is IN_PROGRESS
+                    const inProgress = pendingCourses.find(c => {
+                        const p = user.progressMap?.[c.id];
+                        return p?.status === 'IN_PROGRESS';
+                    });
+
+                    if (inProgress) {
+                        status = 'IN_PROGRESS';
+                        nextCourseId = inProgress.id;
+                        const p = user.progressMap?.[inProgress.id];
+                        progressPercent = p ? (p.currentCardIndex / p.totalCards) * 100 : 0;
+                    } else {
+                        // Else take the first new one (sorted by date ideally, but creation order works)
+                        status = 'HAS_NEW';
+                        nextCourseId = pendingCourses[0].id; // First unread
+                    }
                 } else {
                     status = 'ALL_CAUGHT_UP';
-                    // If all done, next course is the last one (for re-watching) or first
-                    nextCourseId = channelCourses[channelCourses.length - 1].id;
                 }
             }
 
-            storyData.push({
-                channel,
-                status,
-                nextCourseId
-            });
+            // Only add if not caught up (or if we want to show empty/checked state)
+            // To make them "Disappear" when done, we filter out ALL_CAUGHT_UP in UI or here.
+            // Requirement: "Story Temizliği" -> vanish when done.
+            if (status !== 'ALL_CAUGHT_UP' && status !== 'EMPTY') {
+                storyData.push({
+                    channel,
+                    status,
+                    nextCourseId,
+                    progressPercent
+                });
+            }
         }
 
-        // Sort: HAS_NEW first
+        // Sort: IN_PROGRESS first, then HAS_NEW
         return storyData.sort((a, b) => {
-            if (a.status === 'HAS_NEW' && b.status !== 'HAS_NEW') return -1;
-            if (a.status !== 'HAS_NEW' && b.status === 'HAS_NEW') return 1;
+            if (a.status === 'IN_PROGRESS' && b.status !== 'IN_PROGRESS') return -1;
+            if (a.status !== 'IN_PROGRESS' && b.status === 'IN_PROGRESS') return 1;
             return 0;
         });
 
@@ -182,26 +209,6 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
 
     } catch (error) {
         console.error("Hybrid Feed Engine Critical Error:", error);
-        return []; 
-    }
-};
-
-export const getDashboardStories = async (user: User): Promise<Course[]> => {
-    // DEPRECATED: Use getChannelStories instead for the new UI
-    if (!user.currentOrganizationId) return [];
-    
-    try {
-        const q = query(
-            coursesRef, 
-            where('organizationId', '==', user.currentOrganizationId),
-            where('priority', '==', 'HIGH')
-        );
-        
-        const snap = await getDocs(q);
-        return snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
-
-    } catch (error) { 
-        console.error("Story Engine Error:", error);
         return []; 
     }
 };
@@ -332,11 +339,60 @@ export const startCourse = async (userId: string, courseId: string) => {
     try { await updateDoc(doc(db, 'users', userId), { startedCourses: arrayUnion(courseId) }); } catch (e) { }
 };
 
-export const updateUserProgress = async (userId: string, courseId: string, earnedXp: number) => {
+/**
+ * Saves granular progress. 
+ * If finished (cardIndex >= total - 1), user should call completeCourse instead for rewards.
+ */
+export const saveCourseProgress = async (
+    userId: string, 
+    courseId: string, 
+    cardIndex: number, 
+    totalCards: number
+) => {
+    try {
+        const userRef = doc(db, 'users', userId);
+        const progressKey = `progressMap.${courseId}`;
+        
+        await updateDoc(userRef, {
+            [`${progressKey}.courseId`]: courseId,
+            [`${progressKey}.status`]: 'IN_PROGRESS',
+            [`${progressKey}.currentCardIndex`]: cardIndex,
+            [`${progressKey}.totalCards`]: totalCards,
+            [`${progressKey}.lastAccessedAt`]: Date.now(),
+            startedCourses: arrayUnion(courseId) // Ensure in legacy array
+        });
+    } catch (e) {
+        console.error("Save Progress Failed", e);
+    }
+};
+
+/**
+ * MARKS COURSE AS COMPLETE
+ * - Updates progressMap status
+ * - Adds to completedCourses array (Legacy)
+ * - Awards XP
+ */
+export const completeCourse = async (userId: string, courseId: string, earnedXp: number, totalCards: number) => {
     try {
       const userRef = doc(db, 'users', userId);
-      await updateDoc(userRef, { xp: increment(earnedXp), completedCourses: arrayUnion(courseId) });
-    } catch (error) { }
+      const progressKey = `progressMap.${courseId}`;
+
+      await updateDoc(userRef, { 
+          xp: increment(earnedXp), 
+          completedCourses: arrayUnion(courseId),
+          [`${progressKey}.status`]: 'COMPLETED',
+          [`${progressKey}.completedAt`]: Date.now(),
+          [`${progressKey}.currentCardIndex`]: 0, // Reset for review
+          [`${progressKey}.totalCards`]: totalCards
+      });
+    } catch (error) { 
+        console.error("Complete Course Failed", error);
+    }
+};
+
+// Legacy shim
+export const updateUserProgress = async (userId: string, courseId: string, earnedXp: number) => {
+    return completeCourse(userId, courseId, earnedXp, 10);
 };
 
 export const getCourses = async (orgId?: string): Promise<Course[]> => {
