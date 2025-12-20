@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { StoryCard, DifficultyLevel, CourseTone, PedagogyMode, LocalizedString } from "../types";
+import { StoryCard, DifficultyLevel, CourseTone, PedagogyMode, LocalizedString, StoryCardType } from "../types";
 
 interface GeneratedCourse {
   title: LocalizedString;
@@ -11,6 +11,108 @@ interface GeneratedCourse {
 
 const cleanJsonResponse = (text: string): string => {
   return text.replace(/```json/g, "").replace(/```/g, "").trim();
+};
+
+/**
+ * GENERATE CARDS FROM RAW TEXT (For PDF/URL Injection)
+ */
+export const generateCardsFromText = async (
+    text: string, 
+    count: number = 3
+): Promise<StoryCard[]> => {
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        const cardSchema: Schema = {
+            type: Type.OBJECT,
+            properties: {
+                id: { type: Type.STRING },
+                type: { type: Type.STRING, enum: ['INFO', 'QUIZ', 'POLL'] },
+                title: { type: Type.OBJECT, properties: { en: { type: Type.STRING } }, required: ['en'] },
+                content: { type: Type.OBJECT, properties: { en: { type: Type.STRING } }, required: ['en'] },
+                mediaPrompt: { type: Type.STRING },
+                duration: { type: Type.NUMBER },
+                interaction: {
+                    type: Type.OBJECT,
+                    properties: {
+                        question: { type: Type.OBJECT, properties: { en: { type: Type.STRING } } },
+                        options: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { en: { type: Type.STRING } } } },
+                        correctOptionIndex: { type: Type.NUMBER }
+                    }
+                }
+            },
+            required: ["title", "content", "type"]
+        };
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: `
+                Create ${count} micro-learning cards based on this text.
+                Language: English (Master Copy).
+                Format: JSON Array.
+                Text: "${text.substring(0, 5000)}"
+            `,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: { type: Type.ARRAY, items: cardSchema }
+            }
+        });
+
+        if (response.text) {
+            const rawCards = JSON.parse(cleanJsonResponse(response.text));
+            return rawCards.map((c: any, i: number) => ({
+                ...c,
+                id: `ai-card-${Date.now()}-${i}`,
+                mediaUrl: `https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800`
+            }));
+        }
+        return [];
+    } catch (e) {
+        console.error("Card Gen Error:", e);
+        return [];
+    }
+};
+
+/**
+ * SMART TRANSLATION SYNC
+ * Translates specific fields from EN (Base) to Target Langs.
+ */
+export const translateContent = async (
+    content: LocalizedString, 
+    targetLangs: string[]
+): Promise<LocalizedString> => {
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const baseText = content['en'];
+        
+        if (!baseText) return content;
+
+        const schema: Schema = {
+            type: Type.OBJECT,
+            properties: {},
+            required: []
+        };
+        targetLangs.forEach(l => {
+            if(schema.properties) schema.properties[l] = { type: Type.STRING };
+        });
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: `Translate this text to ${targetLangs.join(', ')}. Keep tone professional/casual as implied. Text: "${baseText}"`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema
+            }
+        });
+
+        if (response.text) {
+            const translations = JSON.parse(cleanJsonResponse(response.text));
+            return { ...content, ...translations };
+        }
+        return content;
+    } catch (e) {
+        return content;
+    }
 };
 
 /**

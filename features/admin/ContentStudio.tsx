@@ -3,17 +3,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Wand2, ChevronRight, Upload, CheckCircle2, Save, Loader2, 
-    Hash, Target, Globe, BookOpen, Layers, MonitorPlay, RefreshCw, Languages
+    Hash, Target, Globe, BookOpen, Layers, MonitorPlay, RefreshCw, Languages,
+    FileText, Plus, AlertTriangle, GripVertical, Trash2
 } from 'lucide-react';
-import { generateMagicCourse } from '../../services/geminiService';
+import { generateMagicCourse, generateCardsFromText, translateContent } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
 import { updateCourse } from '../../services/db';
 import { uploadFile } from '../../services/storage';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { StoryCard, DifficultyLevel, CourseTone, PedagogyMode, Course, LocalizedString } from '../../types';
+import { StoryCard, DifficultyLevel, CourseTone, PedagogyMode, Course, LocalizedString, StoryCardType, TranslationStatus } from '../../types';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SUPPORTED_LANGUAGES } from '../../i18n/config';
+import { SortableList } from '../../components/ui/SortableList';
+import { extractTextFromPDF } from '../../utils/fileHelpers';
 
 type StudioStep = 'SETUP' | 'DESIGN' | 'GENERATING' | 'DIRECTOR' | 'PUBLISH';
 
@@ -23,6 +26,7 @@ export const ContentStudio: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const cardMediaRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   // --- STATE ---
   const [step, setStep] = useState<StudioStep>('SETUP');
@@ -31,8 +35,8 @@ export const ContentStudio: React.FC = () => {
   
   // Setup State
   const [sourceText, setSourceText] = useState('');
-  const [sourceLang, setSourceLang] = useState<string>('tr'); // Default Input Lang
-  const [targetLangs, setTargetLangs] = useState<string[]>(['tr']); // Additional Targets (EN is implicit)
+  const [sourceLang, setSourceLang] = useState<string>('tr'); 
+  const [targetLangs, setTargetLangs] = useState<string[]>(['tr']); // EN is implicit base
   const [selectedChannelId, setSelectedChannelId] = useState<string>('');
   
   // Design State
@@ -46,11 +50,13 @@ export const ContentStudio: React.FC = () => {
       description: LocalizedString;
       cards: StoryCard[];
       tags: string[];
+      translationStatus?: Record<string, TranslationStatus>;
   } | null>(null);
-  const [activeCardIndex, setActiveCardIndex] = useState(0);
-  const [activeEditorLang, setActiveEditorLang] = useState<string>('en'); // Defaults to Base
+  const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [activeEditorLang, setActiveEditorLang] = useState<string>('en'); 
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isProcessingAI, setIsProcessingAI] = useState(false);
 
   // --- INIT ---
   useEffect(() => {
@@ -58,9 +64,7 @@ export const ContentStudio: React.FC = () => {
       if (incoming) {
           setIsEditingExisting(true);
           setExistingCourseId(incoming.id);
-          // Auto-detect available languages from the title object
           const availableKeys = Object.keys(incoming.title);
-          // Remove 'en' from target list as it's implicit base
           setTargetLangs(availableKeys.filter(k => k !== 'en'));
           setActiveEditorLang('en');
           
@@ -68,17 +72,18 @@ export const ContentStudio: React.FC = () => {
               title: incoming.title,
               description: incoming.description,
               cards: incoming.steps || [],
-              tags: incoming.tags || []
+              tags: incoming.tags || [],
+              translationStatus: incoming.translationStatus || {}
           });
+          if(incoming.steps.length > 0) setActiveCardId(incoming.steps[0].id);
           setSelectedChannelId(incoming.channelId || '');
           setStep('DIRECTOR');
       }
   }, [location.state]);
 
-  // --- ACTIONS ---
-
+  // --- SETUP ACTIONS ---
   const toggleTargetLang = (code: string) => {
-      if (code === 'en') return; // Cannot toggle base
+      if (code === 'en') return; 
       if (targetLangs.includes(code)) {
           setTargetLangs(prev => prev.filter(l => l !== code));
       } else {
@@ -94,16 +99,20 @@ export const ContentStudio: React.FC = () => {
               level: difficulty,
               tone: tone,
               length: 'SHORT',
-              targetLanguages: targetLangs, // Pass selected targets
+              targetLanguages: targetLangs, 
               pedagogyMode: pedagogy
           });
 
           if (result) {
-              setCourseData(result);
-              setActiveEditorLang('en'); // Start editing in English Base
+              setCourseData({
+                  ...result,
+                  translationStatus: targetLangs.reduce((acc, lang) => ({...acc, [lang]: 'SYNCED'}), {})
+              });
+              if(result.cards.length > 0) setActiveCardId(result.cards[0].id);
+              setActiveEditorLang('en'); 
               setStep('DIRECTOR');
           } else {
-              alert("İçerik oluşturulamadı. Lütfen tekrar deneyin.");
+              alert("İçerik oluşturulamadı.");
               setStep('DESIGN');
           }
       } catch (e) {
@@ -112,42 +121,126 @@ export const ContentStudio: React.FC = () => {
       }
   };
 
-  const updateCardField = (field: 'title' | 'content', value: string) => {
+  // --- DIRECTOR ACTIONS ---
+
+  // 1. Drag & Drop Reordering
+  const handleOrderChange = (newCards: StoryCard[]) => {
       if (!courseData) return;
-      const newCards = [...courseData.cards];
-      const card = newCards[activeCardIndex];
-      
-      newCards[activeCardIndex] = {
-          ...card,
-          [field]: { ...card[field], [activeEditorLang]: value }
-      };
       setCourseData({ ...courseData, cards: newCards });
   };
 
-  const updateQuizOption = (optIndex: number, value: string) => {
+  // 2. Add New Card (Manual or AI)
+  const addNewCard = (type: StoryCardType = 'INFO') => {
       if (!courseData) return;
-      const newCards = [...courseData.cards];
-      const card = newCards[activeCardIndex];
-      if (card.interaction && card.interaction.options) {
-          const newOptions = [...card.interaction.options];
-          newOptions[optIndex] = { ...newOptions[optIndex], [activeEditorLang]: value };
-          card.interaction.options = newOptions;
-          setCourseData({ ...courseData, cards: newCards });
+      const newCard: StoryCard = {
+          id: `card-new-${Date.now()}`,
+          type,
+          title: { en: 'New Slide' },
+          content: { en: 'Content goes here...' },
+          mediaUrl: 'https://via.placeholder.com/400',
+          duration: 5,
+          source: { type: 'MANUAL' }
+      };
+      setCourseData({ ...courseData, cards: [...courseData.cards, newCard] });
+      setActiveCardId(newCard.id);
+  };
+
+  // 3. Inject from PDF
+  const handlePdfInject = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !courseData) return;
+      
+      setIsProcessingAI(true);
+      try {
+          // A. Client-Side Extraction
+          const text = await extractTextFromPDF(file);
+          
+          // B. AI Generation
+          const newCards = await generateCardsFromText(text, 3);
+          
+          // C. Merge
+          setCourseData({ 
+              ...courseData, 
+              cards: [...courseData.cards, ...newCards] 
+          });
+          
+          alert(`${newCards.length} yeni slayt eklendi!`);
+      } catch (err) {
+          console.error(err);
+          alert("PDF işlenemedi.");
+      } finally {
+          setIsProcessingAI(false);
+          if(pdfInputRef.current) pdfInputRef.current.value = '';
       }
   };
 
+  // 4. Update Field (Triggers Stale Status)
+  const updateCardField = (field: 'title' | 'content', value: string) => {
+      if (!courseData || !activeCardId) return;
+      
+      const newCards = courseData.cards.map(card => {
+          if (card.id === activeCardId) {
+              return {
+                  ...card,
+                  [field]: { ...card[field], [activeEditorLang]: value }
+              };
+          }
+          return card;
+      });
+
+      // If editing Base Language (EN), mark others as STALE
+      let newStatus = { ...courseData.translationStatus };
+      if (activeEditorLang === 'en') {
+          targetLangs.forEach(l => newStatus[l] = 'STALE');
+      }
+
+      setCourseData({ ...courseData, cards: newCards, translationStatus: newStatus });
+  };
+
+  // 5. Smart Sync (Translate Stale Fields)
+  const handleSmartSync = async () => {
+      if (!courseData || !activeCardId) return;
+      setIsProcessingAI(true);
+      
+      const activeCard = courseData.cards.find(c => c.id === activeCardId);
+      if (!activeCard) return;
+
+      const staleLangs = targetLangs.filter(l => courseData.translationStatus?.[l] === 'STALE');
+      
+      if (staleLangs.length === 0) {
+          alert("Tüm çeviriler güncel.");
+          setIsProcessingAI(false);
+          return;
+      }
+
+      // Translate Title & Content
+      const newTitle = await translateContent(activeCard.title, staleLangs);
+      const newContent = await translateContent(activeCard.content, staleLangs);
+
+      const newCards = courseData.cards.map(c => 
+          c.id === activeCardId ? { ...c, title: newTitle, content: newContent } : c
+      );
+
+      const newStatus = { ...courseData.translationStatus };
+      staleLangs.forEach(l => newStatus[l] = 'SYNCED');
+
+      setCourseData({ ...courseData, cards: newCards, translationStatus: newStatus });
+      setIsProcessingAI(false);
+  };
+
+  // 6. Media Upload
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (!file || !courseData) return;
+      if (!file || !courseData || !activeCardId) return;
       setIsUploadingMedia(true);
       try {
           const url = await uploadFile(file, 'course_media');
-          const newCards = [...courseData.cards];
-          newCards[activeCardIndex] = { ...newCards[activeCardIndex], mediaUrl: url };
+          const newCards = courseData.cards.map(c => c.id === activeCardId ? { ...c, mediaUrl: url } : c);
           setCourseData({ ...courseData, cards: newCards });
       } catch (err) { alert("Hata"); } finally { setIsUploadingMedia(false); }
   };
 
+  // 7. Publish
   const handlePublish = async () => {
       if (!courseData || !currentUser || !selectedChannelId) return;
       setIsPublishing(true);
@@ -165,10 +258,9 @@ export const ContentStudio: React.FC = () => {
           price: 0,
           priceType: 'FREE',
           steps: courseData.cards,
-          // New Config Fields
           config: {
               pedagogyMode: pedagogy,
-              targetLanguages: ['en', ...targetLangs], // All supported langs
+              targetLanguages: ['en', ...targetLangs],
               sourceType: 'TEXT',
               level: difficulty,
               tone: tone
@@ -189,8 +281,8 @@ export const ContentStudio: React.FC = () => {
       }
   };
 
-  const currentCard = courseData?.cards[activeCardIndex];
-  // Calculate editor tabs: Always EN + selected targets
+  // --- RENDER HELPERS ---
+  const currentCard = courseData?.cards.find(c => c.id === activeCardId);
   const editorTabs = ['en', ...targetLangs];
 
   return (
@@ -202,17 +294,17 @@ export const ContentStudio: React.FC = () => {
                 <div className="w-8 h-8 bg-gradient-to-tr from-purple-600 to-blue-600 rounded-lg flex items-center justify-center text-white">
                     <Wand2 className="w-4 h-4" />
                 </div>
-                <span className="font-bold text-gray-800">AI Studio</span>
+                <span className="font-bold text-gray-800">AI Studio Pro</span>
             </div>
             
             <div className="flex items-center gap-2">
-                {['SETUP', 'DESIGN', 'DIRECTOR', 'PUBLISH'].map((s, idx) => (
+                {['SETUP', 'DESIGN', 'DIRECTOR'].map((s, idx) => (
                     <div key={s} className={`flex items-center gap-2 ${step === s ? 'opacity-100' : 'opacity-40'}`}>
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${step === s ? 'bg-primary text-white' : 'bg-gray-200 text-gray-600'}`}>
                             {idx + 1}
                         </div>
                         <span className="text-xs font-bold hidden md:block">{s}</span>
-                        {idx < 3 && <div className="w-4 h-px bg-gray-300 mx-2" />}
+                        {idx < 2 && <div className="w-4 h-px bg-gray-300 mx-2" />}
                     </div>
                 ))}
             </div>
@@ -371,175 +463,173 @@ export const ContentStudio: React.FC = () => {
                 </div>
             )}
 
-            {/* STEP 3: DIRECTOR (EDITOR) */}
+            {/* STEP 3: DIRECTOR (3-COLUMN LAYOUT) */}
             {step === 'DIRECTOR' && courseData && (
-                <div className="h-full flex flex-col md:flex-row">
-                    {/* TIMELINE (Left) - Same as before */}
-                    <div className="w-full md:w-64 bg-white border-r border-gray-200 flex flex-col overflow-y-auto shrink-0">
-                        <div className="p-4 bg-gray-50 border-b border-gray-200 font-bold text-xs text-gray-500 uppercase tracking-wider">
-                            Akış ({courseData.cards.length})
+                <div className="h-full flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* COL 1: STORYBOARD (Drag & Drop) */}
+                    <div className="w-full md:w-64 bg-gray-50 border-r border-gray-200 flex flex-col shrink-0">
+                        <div className="p-4 border-b border-gray-200 font-bold text-xs text-gray-500 uppercase tracking-wider flex justify-between items-center">
+                            <span>Akış ({courseData.cards.length})</span>
+                            <div className="flex gap-1">
+                                <button onClick={() => addNewCard()} className="p-1 hover:bg-gray-200 rounded text-primary"><Plus className="w-4 h-4" /></button>
+                                <button onClick={() => pdfInputRef.current?.click()} className="p-1 hover:bg-gray-200 rounded text-red-500"><FileText className="w-4 h-4" /></button>
+                                <input type="file" ref={pdfInputRef} accept="application/pdf" className="hidden" onChange={handlePdfInject} />
+                            </div>
                         </div>
-                        <div className="flex-1 p-2 space-y-2">
-                            {courseData.cards.map((card, idx) => (
-                                <div 
-                                    key={card.id}
-                                    onClick={() => setActiveCardIndex(idx)}
-                                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex gap-3 items-center ${activeCardIndex === idx ? 'border-blue-500 bg-blue-50' : 'border-transparent hover:bg-gray-100'}`}
-                                >
-                                    <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600">
-                                        {idx + 1}
+                        
+                        <div className="flex-1 overflow-y-auto p-2">
+                            <SortableList 
+                                items={courseData.cards}
+                                onOrderChange={handleOrderChange}
+                                className="space-y-2"
+                                itemClassName=""
+                                renderItem={(card, idx) => (
+                                    <div 
+                                        className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex gap-3 items-center group relative ${activeCardId === card.id ? 'border-blue-500 bg-blue-50' : 'border-white bg-white hover:border-gray-300'}`}
+                                        onClick={() => setActiveCardId(card.id)}
+                                    >
+                                        <div className="text-gray-400 cursor-grab active:cursor-grabbing"><GripVertical className="w-4 h-4" /></div>
+                                        <div className="w-8 h-8 rounded-lg bg-gray-200 shrink-0 overflow-hidden">
+                                            {card.mediaUrl && <img src={card.mediaUrl} className="w-full h-full object-cover" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-xs font-bold text-gray-800 truncate">{card.title['en']}</div>
+                                            <div className="text-[9px] text-gray-500 uppercase">{card.type}</div>
+                                        </div>
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); setCourseData({...courseData, cards: courseData.cards.filter(c => c.id !== card.id)}); }}
+                                            className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-bold text-gray-800 truncate">{card.title[activeEditorLang] || card.title['en']}</div>
-                                        <div className="text-[10px] text-gray-500 uppercase">{card.type}</div>
-                                    </div>
-                                </div>
-                            ))}
+                                )}
+                            />
                         </div>
                     </div>
 
-                    {/* CENTER: PREVIEW & EDITOR */}
-                    <div className="flex-1 bg-gray-100 flex flex-col overflow-hidden relative">
-                        
-                        {/* EDITOR TOOLBAR (LANG TABS) */}
+                    {/* COL 2: THE STAGE (Editor) */}
+                    <div className="flex-1 bg-gray-100 flex flex-col relative overflow-hidden">
+                        {/* Editor Toolbar */}
                         <div className="bg-white border-b border-gray-200 px-6 py-2 flex items-center justify-between shrink-0">
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 overflow-x-auto no-scrollbar">
                                 {editorTabs.map(lang => (
                                     <button
                                         key={lang}
                                         onClick={() => setActiveEditorLang(lang)}
-                                        className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeEditorLang === lang ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                                        className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all border ${activeEditorLang === lang ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-transparent text-gray-500 hover:bg-gray-50'}`}
                                     >
                                         {SUPPORTED_LANGUAGES.find(l => l.code === lang)?.flag} {lang.toUpperCase()}
-                                        {lang === 'en' && <span className="bg-blue-200 text-blue-800 text-[9px] px-1 rounded">BASE</span>}
+                                        {courseData.translationStatus?.[lang] === 'STALE' && <span className="w-2 h-2 rounded-full bg-orange-500" />}
                                     </button>
                                 ))}
                             </div>
-                            <div className="text-xs text-gray-400 font-bold uppercase tracking-wider">
-                                {pedagogy} MODU
+                            <div className="flex items-center gap-2">
+                                {courseData.translationStatus?.[activeEditorLang] === 'STALE' && (
+                                    <button 
+                                        onClick={handleSmartSync}
+                                        disabled={isProcessingAI}
+                                        className="flex items-center gap-1 text-[10px] font-bold bg-orange-100 text-orange-700 px-2 py-1 rounded-lg hover:bg-orange-200 transition-colors"
+                                    >
+                                        {isProcessingAI ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                        Çeviriyi Güncelle
+                                    </button>
+                                )}
                             </div>
                         </div>
 
-                        {/* WORKSPACE */}
-                        <div className="flex-1 overflow-y-auto p-8">
-                            <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                                
-                                {/* PREVIEW PHONE */}
-                                <div className="flex justify-center sticky top-0">
-                                    <div className="w-[320px] h-[640px] bg-black rounded-[3rem] border-8 border-gray-900 shadow-2xl relative overflow-hidden shrink-0">
-                                        <img src={currentCard?.mediaUrl} className="absolute inset-0 w-full h-full object-cover opacity-80" />
-                                        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90" />
-                                        
-                                        <div className="absolute bottom-0 left-0 right-0 p-6 text-white pb-12">
-                                            <div className="inline-block bg-white/20 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold mb-2 uppercase">{currentCard?.type}</div>
-                                            <h2 className="text-2xl font-bold mb-2 leading-tight drop-shadow-md">
-                                                {currentCard?.title[activeEditorLang] || currentCard?.title['en']}
-                                            </h2>
-                                            <p className="text-sm opacity-90 leading-relaxed drop-shadow-md">
-                                                {currentCard?.content[activeEditorLang] || currentCard?.content['en']}
-                                            </p>
-                                            
-                                            {/* Quiz Preview */}
-                                            {currentCard?.type === 'QUIZ' && currentCard.interaction && (
-                                                <div className="mt-4 space-y-2">
-                                                    <p className="text-xs font-bold text-yellow-400 uppercase">{currentCard.interaction.question[activeEditorLang] || currentCard.interaction.question['en']}</p>
-                                                    {currentCard.interaction.options.map((opt, i) => (
-                                                        <div key={i} className="bg-white/10 p-2 rounded-lg text-xs font-bold border border-white/10">
-                                                            {opt[activeEditorLang] || opt['en']}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* EDIT FORM */}
-                                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                                    <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                        <MonitorPlay className="w-5 h-5 text-blue-500" /> 
-                                        Kart Düzenle ({activeEditorLang.toUpperCase()})
-                                    </h3>
-
-                                    {/* MEDIA */}
-                                    <div className="mb-6">
-                                        <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Görsel</label>
-                                        <div 
-                                            className="aspect-video bg-gray-100 rounded-xl overflow-hidden relative group cursor-pointer border-2 border-dashed border-gray-300 hover:border-blue-500 transition-colors"
-                                            onClick={() => cardMediaRef.current?.click()}
-                                        >
-                                            <img src={currentCard?.mediaUrl} className="w-full h-full object-cover" />
-                                            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white">
-                                                <Upload className="w-8 h-8 mb-2" />
-                                                <span className="text-xs font-bold">Görseli Değiştir</span>
+                        {/* Editor Canvas */}
+                        <div className="flex-1 overflow-y-auto p-8 flex justify-center">
+                            {currentCard ? (
+                                <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                    {/* Preview */}
+                                    <div className="flex justify-center">
+                                        <div className="w-[300px] h-[600px] bg-black rounded-[2.5rem] border-8 border-gray-900 shadow-2xl relative overflow-hidden shrink-0">
+                                            <img src={currentCard.mediaUrl} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                                            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90" />
+                                            <div className="absolute bottom-0 left-0 right-0 p-6 text-white pb-12">
+                                                <div className="inline-block bg-white/20 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold mb-2 uppercase">{currentCard.type}</div>
+                                                <h2 className="text-xl font-bold mb-2 leading-tight">{currentCard.title[activeEditorLang] || currentCard.title['en']}</h2>
+                                                <p className="text-xs opacity-90 leading-relaxed">{currentCard.content[activeEditorLang] || currentCard.content['en']}</p>
                                             </div>
-                                            <input type="file" ref={cardMediaRef} className="hidden" accept="image/*" onChange={handleMediaUpload} />
                                         </div>
                                     </div>
 
-                                    {/* TEXT FIELDS */}
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Başlık</label>
-                                            <input 
-                                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 focus:border-blue-500 outline-none"
-                                                value={currentCard?.title[activeEditorLang] || ''}
-                                                onChange={e => updateCardField('title', e.target.value)}
-                                            />
-                                        </div>
-                                        
-                                        <div>
-                                            <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">İçerik Metni</label>
-                                            <textarea 
-                                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-medium text-gray-700 focus:border-blue-500 outline-none h-32 resize-none"
-                                                value={currentCard?.content[activeEditorLang] || ''}
-                                                onChange={e => updateCardField('content', e.target.value)}
-                                            />
+                                    {/* Form */}
+                                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 h-fit">
+                                        <div className="mb-4">
+                                            <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Görsel</label>
+                                            <div 
+                                                className="aspect-video bg-gray-100 rounded-xl overflow-hidden relative group cursor-pointer border-2 border-dashed border-gray-300 hover:border-blue-500 transition-colors"
+                                                onClick={() => cardMediaRef.current?.click()}
+                                            >
+                                                <img src={currentCard.mediaUrl} className="w-full h-full object-cover" />
+                                                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white">
+                                                    <Upload className="w-8 h-8 mb-2" />
+                                                    <span className="text-xs font-bold">Değiştir</span>
+                                                </div>
+                                                <input type="file" ref={cardMediaRef} className="hidden" accept="image/*" onChange={handleMediaUpload} />
+                                            </div>
                                         </div>
 
-                                        {/* QUIZ EDITOR */}
-                                        {currentCard?.type === 'QUIZ' && currentCard.interaction && (
-                                            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 mt-4">
-                                                <label className="text-xs font-bold text-yellow-700 uppercase mb-2 block">Soru</label>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Başlık ({activeEditorLang})</label>
                                                 <input 
-                                                    className="w-full p-2 bg-white border border-yellow-300 rounded-lg text-sm mb-3"
-                                                    value={currentCard.interaction.question[activeEditorLang] || ''}
-                                                    onChange={e => {
-                                                        // Simplified update logic for nested object would go here
-                                                    }}
+                                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-800 focus:border-blue-500 outline-none"
+                                                    value={currentCard.title[activeEditorLang] || ''}
+                                                    onChange={e => updateCardField('title', e.target.value)}
                                                 />
-                                                <label className="text-xs font-bold text-yellow-700 uppercase mb-2 block">Seçenekler</label>
-                                                <div className="space-y-2">
-                                                    {currentCard.interaction.options.map((opt, i) => (
-                                                        <div key={i} className="flex gap-2 items-center">
-                                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === currentCard.interaction?.correctOptionIndex ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
-                                                                {['A','B','C','D'][i]}
-                                                            </div>
-                                                            <input 
-                                                                className="flex-1 p-2 bg-white border border-yellow-300 rounded-lg text-sm"
-                                                                value={opt[activeEditorLang] || ''}
-                                                                onChange={e => updateQuizOption(i, e.target.value)}
-                                                            />
-                                                        </div>
-                                                    ))}
-                                                </div>
                                             </div>
-                                        )}
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">İçerik ({activeEditorLang})</label>
+                                                <textarea 
+                                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl font-medium text-gray-700 focus:border-blue-500 outline-none h-32 resize-none text-sm"
+                                                    value={currentCard.content[activeEditorLang] || ''}
+                                                    onChange={e => updateCardField('content', e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center text-gray-400">
+                                    <p>Düzenlemek için soldan bir slayt seçin.</p>
+                                </div>
+                            )}
                         </div>
+                    </div>
 
-                        {/* BOTTOM ACTION BAR */}
-                        <div className="p-4 bg-white border-t border-gray-200 flex justify-end gap-4 shrink-0">
-                            <button onClick={() => handlePublish()} disabled={isPublishing} className="bg-primary text-white px-8 py-3 rounded-xl font-bold shadow-lg flex items-center gap-2 hover:bg-primary-light transition-colors">
-                                {isPublishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                                Yayınla
+                    {/* COL 3: ASSISTANT / ACTIONS */}
+                    <div className="w-full md:w-64 bg-white border-l border-gray-200 p-4 flex flex-col shrink-0">
+                        <h3 className="font-bold text-gray-800 text-sm mb-4 uppercase tracking-wider">Prodüksiyon</h3>
+                        
+                        <div className="space-y-4 flex-1">
+                            <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-xs text-blue-800">
+                                <strong className="block mb-1 flex items-center gap-1"><MonitorPlay className="w-3 h-3"/> Durum</strong>
+                                {targetLangs.map(l => (
+                                    <div key={l} className="flex justify-between items-center mt-1">
+                                        <span className="uppercase font-bold">{l}</span>
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${courseData.translationStatus?.[l] === 'STALE' ? 'bg-orange-200 text-orange-800' : 'bg-green-200 text-green-800'}`}>
+                                            {courseData.translationStatus?.[l] || 'SYNCED'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button onClick={handleSmartSync} disabled={isProcessingAI} className="w-full py-3 bg-gray-100 text-gray-700 font-bold rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors">
+                                {isProcessingAI ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                Tüm Dilleri Eşitle
                             </button>
                         </div>
 
+                        <button onClick={handlePublish} disabled={isPublishing} className="w-full py-4 bg-primary text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-primary-light transition-colors mt-auto">
+                            {isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            Yayınla
+                        </button>
                     </div>
+
                 </div>
             )}
         </div>

@@ -134,6 +134,17 @@ export interface User {
   };
 }
 
+export interface ContentSource {
+    type: 'MANUAL' | 'AI_TEXT' | 'AI_PDF' | 'AI_URL';
+    metadata?: { 
+        originalUrl?: string; 
+        originalFileName?: string;
+        extractedTextSnippet?: string;
+    };
+}
+
+export type TranslationStatus = 'SYNCED' | 'STALE' | 'MISSING';
+
 export interface Course {
   id: string;
   organizationId?: string; 
@@ -175,6 +186,9 @@ export interface Course {
     url: string;
     type: string;
   };
+  
+  // NEW: Translation Management
+  translationStatus?: Record<string, TranslationStatus>;
 }
 
 export interface CourseConfig {
@@ -204,6 +218,8 @@ export interface StoryCard {
     correctOptionIndex?: number;
     explanation?: LocalizedString;
   };
+  
+  source?: ContentSource;
 }
 
 // --- NEW: LEARNING JOURNEY (SERIES) ---
