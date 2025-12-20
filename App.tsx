@@ -36,7 +36,8 @@ const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="min-h-screen bg-surface flex flex-col relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-64 bg-primary rounded-b-[3rem] shadow-xl z-0" />
-      <header className="relative z-10 flex justify-between items-center p-6 md:p-8">
+      {/* Increased z-index to 20 to ensure dropdowns appear above main content */}
+      <header className="relative z-20 flex justify-between items-center p-6 md:p-8">
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center shadow-lg">
