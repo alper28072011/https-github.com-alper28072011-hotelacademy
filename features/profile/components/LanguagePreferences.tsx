@@ -6,49 +6,57 @@ import { useAuthStore } from '../../../stores/useAuthStore';
 import { updateUserPreferences } from '../../../services/userService';
 import { 
     ArrowUp, ArrowDown, Trash2, Plus, HelpCircle, 
-    Globe, Layout, Save, X, Check, Loader2, ChevronDown, ChevronUp, Languages
+    Globe, Layout, Save, X, Check, Loader2, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { LanguageCode } from '../../../types';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const LanguagePreferences: React.FC = () => {
     const { currentLanguage, setLanguage } = useAppStore();
-    const { currentUser } = useAuthStore();
+    const { currentUser, updateCurrentUser } = useAuthStore();
     
     // --- STATE MANAGEMENT ---
     
-    // 1. App Language State (Immediate Action)
+    // 1. App Language (UI)
     const [isAppLangOpen, setIsAppLangOpen] = useState(false);
     const [isAppLangSaving, setIsAppLangSaving] = useState(false);
 
-    // 2. Content Language State (Transactional Action)
-    const [isContentLangOpen, setIsContentLangOpen] = useState(false);
+    // 2. Content Language (Learning Material)
+    const [isContentLangOpen, setIsContentLangOpen] = useState(true); // Default open for better visibility
     const [draftContentLangs, setDraftContentLangs] = useState<LanguageCode[]>([]);
     const [isContentAdding, setIsContentAdding] = useState(false);
     const [isContentSaving, setIsContentSaving] = useState(false);
     
     // 3. Stability Refs (The Source of Truth)
-    // We use refs to store the "Original" state to compare against. 
-    // This prevents "Changes Detected" on initial load.
     const originalContentLangs = useRef<LanguageCode[]>([]);
     const [isDirty, setIsDirty] = useState(false);
 
-    // --- INITIALIZATION ---
+    // --- INITIALIZATION (CRITICAL FIX) ---
+    // This effect runs ONLY when the user ID changes (Login/Load).
+    // It does NOT run when 'currentLanguage' changes. This prevents the list from resetting.
     useEffect(() => {
         if (currentUser) {
-            let initialList: LanguageCode[] = [currentLanguage];
+            let initialList: LanguageCode[] = [];
             
+            // Priority 1: Modern Array Format
             if (currentUser.preferences?.contentLanguages && currentUser.preferences.contentLanguages.length > 0) {
                 initialList = [...currentUser.preferences.contentLanguages];
-            } else if ((currentUser.preferences as any)?.contentLanguage) {
+            } 
+            // Priority 2: Legacy String Format
+            else if ((currentUser.preferences as any)?.contentLanguage) {
                 initialList = [(currentUser.preferences as any).contentLanguage as LanguageCode];
             }
+            // Priority 3: Default to English (Base) + Current UI Lang if nothing saved
+            else {
+                // If brand new user, default to [English] as base to ensure stability
+                initialList = ['en'];
+            }
             
-            // Set State & Lock Reference
+            // Lock references
             setDraftContentLangs(initialList);
             originalContentLangs.current = initialList;
         }
-    }, [currentUser]); // Run once when user data arrives
+    }, [currentUser?.id]); 
 
     // --- DIRTY CHECK ENGINE ---
     useEffect(() => {
@@ -60,26 +68,29 @@ export const LanguagePreferences: React.FC = () => {
     // --- HANDLERS: APP LANGUAGE (Immediate) ---
     const handleAppLangChange = async (code: LanguageCode) => {
         if (!currentUser) return;
-        if (code === currentLanguage) {
-            setIsAppLangOpen(false);
-            return;
-        }
+        
+        // 1. Update UI Instantly (The app will re-render, but our useEffect above won't reset content list)
+        setLanguage(code); 
+        setIsAppLangOpen(false);
+
+        if (code === currentUser.preferences?.appLanguage) return;
 
         setIsAppLangSaving(true);
         try {
-            // 1. Update UI Instantly
-            setLanguage(code);
-            
             // 2. Save to DB in background
             await updateUserPreferences(currentUser.id, { appLanguage: code });
             
-            // 3. Close menu after short delay for visual feedback
-            setTimeout(() => {
-                setIsAppLangOpen(false);
-                setIsAppLangSaving(false);
-            }, 500);
+            // 3. Update Local Store Optimistically
+            updateCurrentUser({
+                preferences: {
+                    ...currentUser.preferences,
+                    appLanguage: code,
+                    contentLanguages: currentUser.preferences?.contentLanguages || []
+                }
+            });
         } catch (e) {
             console.error(e);
+        } finally {
             setIsAppLangSaving(false);
         }
     };
@@ -89,21 +100,30 @@ export const LanguagePreferences: React.FC = () => {
         if (!currentUser) return;
         setIsContentSaving(true);
         try {
+            // 1. Save to DB
             await updateUserPreferences(currentUser.id, { contentLanguages: draftContentLangs });
             
-            // Sync Reference to new state
+            // 2. Update Local Store Optimistically
+            updateCurrentUser({
+                preferences: {
+                    ...currentUser.preferences,
+                    appLanguage: currentUser.preferences?.appLanguage || currentLanguage,
+                    contentLanguages: draftContentLangs
+                }
+            });
+
+            // 3. Sync Reference
             originalContentLangs.current = draftContentLangs;
             setIsDirty(false);
-            setIsContentLangOpen(false); // Optional: close on save
+            
         } catch (e) {
-            alert("Kaydedilemedi");
+            alert("Tercihler kaydedilemedi.");
         } finally {
             setIsContentSaving(false);
         }
     };
 
     const handleCancelContentPrefs = () => {
-        // Revert to original reference
         setDraftContentLangs(originalContentLangs.current);
         setIsDirty(false);
         setIsContentAdding(false);
@@ -171,7 +191,7 @@ export const LanguagePreferences: React.FC = () => {
                             className="overflow-hidden bg-gray-50 border-t border-gray-100"
                         >
                             <div className="p-2 space-y-1">
-                                {SUPPORTED_LANGUAGES.filter(l => ['tr','en','ru','ar'].includes(l.code)).map(lang => (
+                                {SUPPORTED_LANGUAGES.filter(l => ['tr','en','ru','ar','de','id'].includes(l.code)).map(lang => (
                                     <button
                                         key={lang.code}
                                         onClick={() => handleAppLangChange(lang.code)}

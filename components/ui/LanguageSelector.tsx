@@ -9,12 +9,12 @@ import { updateUserPreferences } from '../../services/userService';
 
 export const LanguageSelector: React.FC = () => {
   const { currentLanguage, setLanguage } = useAppStore(); // UI State
-  const { currentUser } = useAuthStore();
+  const { currentUser, updateCurrentUser } = useAuthStore();
   
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'APP' | 'CONTENT'>('APP');
   
-  // Local state for Content Language (defaults to current UI lang if not set)
+  // Initialize contentLang from currentUser, fallback to currentLanguage
   const [contentLang, setContentLang] = useState<LanguageCode>(
       (currentUser?.preferences?.contentLanguages && currentUser.preferences.contentLanguages.length > 0)
         ? currentUser.preferences.contentLanguages[0]
@@ -22,7 +22,6 @@ export const LanguageSelector: React.FC = () => {
   );
 
   useEffect(() => {
-      // Sync local state when user profile updates
       if (currentUser?.preferences?.contentLanguages && currentUser.preferences.contentLanguages.length > 0) {
           setContentLang(currentUser.preferences.contentLanguages[0]);
       }
@@ -34,13 +33,15 @@ export const LanguageSelector: React.FC = () => {
     setLanguage(code); // Updates i18n immediately
     if (currentUser) {
         await updateUserPreferences(currentUser.id, { appLanguage: code });
+        updateCurrentUser({ preferences: { ...currentUser.preferences, appLanguage: code } });
     }
   };
 
   const handleContentLangSelect = async (code: LanguageCode) => {
     setContentLang(code);
     if (currentUser) {
-        await updateUserPreferences(currentUser.id, { contentLanguages: [code] });
+        await updateUserPreferences(currentUser.id, { contentLanguages: [code] }); // Sets just this one as primary
+        updateCurrentUser({ preferences: { ...currentUser.preferences, contentLanguages: [code] } });
     }
   };
 

@@ -18,7 +18,8 @@ interface AuthState {
   setError: (msg: string | null) => void;
   loginSuccess: (user: User) => void;
   logout: () => void;
-  refreshProfile: () => Promise<void>; // New Action
+  refreshProfile: () => Promise<void>;
+  updateCurrentUser: (updates: Partial<User>) => void; // New Action
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -41,6 +42,13 @@ export const useAuthStore = create<AuthState>()(
           isLoading: false,
           error: null,
         });
+      },
+
+      updateCurrentUser: (updates) => {
+          const { currentUser } = get();
+          if (currentUser) {
+              set({ currentUser: { ...currentUser, ...updates } });
+          }
       },
 
       logout: async () => {
