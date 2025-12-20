@@ -8,6 +8,7 @@ import { getCourse, updateUserProgress } from '../../services/db';
 import { Course, StoryCard } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { logEvent, createEventPayload } from '../../services/analyticsService';
+import { getLocalizedContent } from '../../i18n/config';
 
 export const CoursePlayerPage: React.FC = () => {
   const { courseId } = useParams<{ courseId: string }>();
@@ -88,12 +89,13 @@ export const CoursePlayerPage: React.FC = () => {
 
       // ANALYTICS: Log Quiz Answer
       if (currentUser && course) {
+          const questionText = getLocalizedContent(currentCard.interaction.question);
           logEvent(createEventPayload(currentUser, {
               pageId: course.organizationId || 'unknown',
               channelId: course.channelId,
               contentId: course.id
           }, 'QUIZ_ANSWER', {
-              question: currentCard.interaction.question,
+              question: questionText,
               selectedOptionIndex: optionIndex,
               isCorrect: isRight
           }));
@@ -170,8 +172,14 @@ export const CoursePlayerPage: React.FC = () => {
                     <div className="absolute bottom-0 left-0 right-0 p-8 pb-24 z-20 pointer-events-none">
                         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
                             <div className="inline-block px-2 py-0.5 rounded bg-accent text-primary text-[10px] font-black mb-3 uppercase tracking-widest">{currentCard.type}</div>
-                            <h1 className="text-3xl font-black text-white mb-4 leading-tight drop-shadow-2xl">{currentCard.title}</h1>
-                            <p className="text-lg text-gray-200 mb-8 leading-relaxed font-medium drop-shadow-md whitespace-pre-wrap">{currentCard.content}</p>
+                            
+                            {/* FIX: Use getLocalizedContent to extract string from object */}
+                            <h1 className="text-3xl font-black text-white mb-4 leading-tight drop-shadow-2xl">
+                                {getLocalizedContent(currentCard.title)}
+                            </h1>
+                            <p className="text-lg text-gray-200 mb-8 leading-relaxed font-medium drop-shadow-md whitespace-pre-wrap">
+                                {getLocalizedContent(currentCard.content)}
+                            </p>
 
                             {/* QUIZ INTERACTION */}
                             {currentCard.type === 'QUIZ' && (
@@ -182,7 +190,9 @@ export const CoursePlayerPage: React.FC = () => {
                                     </div>
                                 ) : (
                                     <div className="flex flex-col gap-3 pointer-events-auto">
-                                        <p className="text-white font-bold mb-2 text-sm uppercase opacity-60 tracking-wider">{currentCard.interaction?.question}</p>
+                                        <p className="text-white font-bold mb-2 text-sm uppercase opacity-60 tracking-wider">
+                                            {getLocalizedContent(currentCard.interaction?.question)}
+                                        </p>
                                         {currentCard.interaction?.options.map((option, idx) => {
                                             let bgClass = "bg-white/10 backdrop-blur-md text-white border-white/10 hover:bg-white/20";
                                             if (isAnswered) {
@@ -192,7 +202,7 @@ export const CoursePlayerPage: React.FC = () => {
                                             }
                                             return (
                                                 <button key={idx} onClick={() => handleQuizAnswer(idx)} disabled={isAnswered} className={`p-4 rounded-2xl text-left font-bold text-sm border-2 transition-all active:scale-[0.98] ${bgClass}`}>
-                                                    {option}
+                                                    {getLocalizedContent(option)}
                                                 </button>
                                             );
                                         })}
@@ -218,7 +228,9 @@ export const CoursePlayerPage: React.FC = () => {
                         <motion.div initial={{ y: '100%' }} animate={{ y: '25%' }} exit={{ y: '100%' }} transition={{ type: "spring", damping: 30 }} className="absolute inset-0 bg-white rounded-t-[3rem] z-50 overflow-y-auto p-8 pb-32">
                             <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-8" />
                             <h2 className="text-2xl font-black text-gray-900 mb-4">Eğitim Özeti</h2>
-                            <p className="text-gray-600 leading-relaxed font-medium">{course.description}</p>
+                            <p className="text-gray-600 leading-relaxed font-medium">
+                                {getLocalizedContent(course.description)}
+                            </p>
                             <div className="mt-8 p-6 bg-gray-50 rounded-[2rem] border border-gray-100">
                                 <div className="flex items-center gap-3 text-primary font-bold mb-2"><BookOpen className="w-5 h-5" /> Kaynak Bilgisi</div>
                                 <p className="text-sm text-gray-500">Bu içerik yapay zeka tarafından işletme standartlarına uygun olarak özetlenmiştir.</p>
