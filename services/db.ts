@@ -20,7 +20,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Course, Task, Issue, Category, CareerPath, FeedPost, Organization, Membership, JoinRequest, OrganizationSector, PageRole, PermissionType } from '../types';
+import { User, Course, Task, Issue, Category, CareerPath, FeedPost, Organization, Membership, JoinRequest, OrganizationSector, PageRole, PermissionType, ChannelStoryData } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -53,6 +53,75 @@ export const getAdminCourses = async (userId: string, orgId?: string | null): Pr
             .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (e) {
         console.error("Get Admin Courses Error:", e);
+        return [];
+    }
+};
+
+// --- STORY RAIL ENGINE (NEW) ---
+// Returns formatted data for the Story Rail (Channel Rings)
+export const getChannelStories = async (user: User): Promise<ChannelStoryData[]> => {
+    if (!user.currentOrganizationId || !user.subscribedChannelIds || user.subscribedChannelIds.length === 0) {
+        return [];
+    }
+
+    try {
+        // 1. Get Organization (to get Channel details like name/icon)
+        const org = await getOrganizationDetails(user.currentOrganizationId);
+        if (!org) return [];
+
+        // 2. Get All Courses for this Org (Optimized: Get all and filter in memory for now)
+        // In large scale, we would query by channelId batching.
+        const coursesQ = query(
+            coursesRef, 
+            where('organizationId', '==', user.currentOrganizationId),
+            where('visibility', '==', 'PRIVATE') // Stories are usually internal
+        );
+        const coursesSnap = await getDocs(coursesQ);
+        const allOrgCourses = coursesSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
+
+        // 3. Map Data
+        const storyData: ChannelStoryData[] = [];
+
+        // Filter only subscribed channels
+        const subscribedChannels = org.channels.filter(c => user.subscribedChannelIds.includes(c.id));
+
+        for (const channel of subscribedChannels) {
+            const channelCourses = allOrgCourses.filter(c => c.channelId === channel.id);
+            
+            // Determine Status
+            let status: 'HAS_NEW' | 'ALL_CAUGHT_UP' | 'EMPTY' = 'EMPTY';
+            let nextCourseId = undefined;
+
+            if (channelCourses.length > 0) {
+                // Check if any course is NOT completed
+                const uncompleted = channelCourses.find(c => !user.completedCourses.includes(c.id));
+                
+                if (uncompleted) {
+                    status = 'HAS_NEW';
+                    nextCourseId = uncompleted.id;
+                } else {
+                    status = 'ALL_CAUGHT_UP';
+                    // If all done, next course is the last one (for re-watching) or first
+                    nextCourseId = channelCourses[channelCourses.length - 1].id;
+                }
+            }
+
+            storyData.push({
+                channel,
+                status,
+                nextCourseId
+            });
+        }
+
+        // Sort: HAS_NEW first
+        return storyData.sort((a, b) => {
+            if (a.status === 'HAS_NEW' && b.status !== 'HAS_NEW') return -1;
+            if (a.status !== 'HAS_NEW' && b.status === 'HAS_NEW') return 1;
+            return 0;
+        });
+
+    } catch (e) {
+        console.error("Story Engine Error:", e);
         return [];
     }
 };
@@ -118,6 +187,7 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
 };
 
 export const getDashboardStories = async (user: User): Promise<Course[]> => {
+    // DEPRECATED: Use getChannelStories instead for the new UI
     if (!user.currentOrganizationId) return [];
     
     try {
@@ -128,8 +198,6 @@ export const getDashboardStories = async (user: User): Promise<Course[]> => {
         );
         
         const snap = await getDocs(q);
-        // Simple logic: return assigned high priority courses.
-        // In this new model, assignments are looser, but HIGH priority is still shown.
         return snap.docs.map(d => ({id: d.id, ...d.data()} as Course));
 
     } catch (error) { 

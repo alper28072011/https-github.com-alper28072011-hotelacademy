@@ -1,14 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-/* Added Loader2 to imports from lucide-react */
-import { X, ChevronDown, CheckCircle, AlertCircle, BookOpen, Share2, Heart, AlertTriangle, Loader2 } from 'lucide-react';
+import { X, ChevronDown, BookOpen, AlertTriangle, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getCourse, updateUserProgress } from '../../services/db';
 import { Course, StoryCard } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { logEvent, createEventPayload } from '../../services/analyticsService';
 
 export const CoursePlayerPage: React.FC = () => {
   const { courseId } = useParams<{ courseId: string }>();
@@ -24,16 +23,29 @@ export const CoursePlayerPage: React.FC = () => {
   const [isCorrect, setIsCorrect] = useState(false);
   const [isDeepDiveOpen, setIsDeepDiveOpen] = useState(false);
 
+  // Time Tracking
+  const startTimeRef = useRef(Date.now());
+
   useEffect(() => {
     const fetch = async () => {
-        if(courseId) {
+        if(courseId && currentUser) {
             const c = await getCourse(courseId);
             setCourse(c);
             setLoading(false);
+            
+            // ANALYTICS: Log View Start
+            if (c) {
+                logEvent(createEventPayload(currentUser, {
+                    pageId: c.organizationId || 'unknown',
+                    channelId: c.channelId,
+                    contentId: c.id
+                }, 'VIEW'));
+                startTimeRef.current = Date.now();
+            }
         }
     };
     fetch();
-  }, [courseId]);
+  }, [courseId, currentUser]);
 
   if (loading || !course) return <div className="bg-black h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
 
@@ -74,6 +86,19 @@ export const CoursePlayerPage: React.FC = () => {
       setIsAnswered(true);
       setIsCorrect(isRight);
 
+      // ANALYTICS: Log Quiz Answer
+      if (currentUser && course) {
+          logEvent(createEventPayload(currentUser, {
+              pageId: course.organizationId || 'unknown',
+              channelId: course.channelId,
+              contentId: course.id
+          }, 'QUIZ_ANSWER', {
+              question: currentCard.interaction.question,
+              selectedOptionIndex: optionIndex,
+              isCorrect: isRight
+          }));
+      }
+
       if (isRight) {
           confetti({
               particleCount: 100,
@@ -85,8 +110,17 @@ export const CoursePlayerPage: React.FC = () => {
   };
 
   const finishCourse = async () => {
-      if (currentUser && courseId) {
+      if (currentUser && courseId && course) {
+          // 1. Update Progress
           await updateUserProgress(currentUser.id, courseId, course.xpReward);
+          
+          // 2. Analytics: Complete
+          const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
+          logEvent(createEventPayload(currentUser, {
+              pageId: course.organizationId || 'unknown',
+              channelId: course.channelId,
+              contentId: course.id
+          }, 'COMPLETE', { timeSpentSeconds: timeSpent }));
       }
       navigate('/');
   };

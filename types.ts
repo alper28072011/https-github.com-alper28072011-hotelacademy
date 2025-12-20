@@ -43,6 +43,29 @@ export interface Channel {
   createdAt: number;
 }
 
+export type ChannelStoryStatus = 'HAS_NEW' | 'ALL_CAUGHT_UP' | 'EMPTY';
+
+export interface ChannelStoryData {
+    channel: Channel;
+    status: ChannelStoryStatus;
+    nextCourseId?: string; // The specific course to play when clicked
+}
+
+// --- ANALYTICS ENGINE ---
+export interface AnalyticsEvent {
+  id?: string; // Firestore ID
+  userId: string;
+  userRole?: string; // Snapshot of role at time of event
+  userName?: string; // Snapshot for faster reporting
+  pageId: string;       // Organization ID
+  channelId?: string;    // Context
+  contentId: string;    // Course ID
+  cardId?: string;       // Specific Slide/Step ID
+  type: 'VIEW' | 'COMPLETE' | 'QUIZ_ANSWER' | 'TIME_SPENT' | 'DROP_OFF';
+  payload?: any;        // { question: "...", answer: "...", isCorrect: true }
+  timestamp: number;
+}
+
 export interface User {
   id: string;
   email: string;
