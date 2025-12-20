@@ -1,12 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Star, Users, Zap, Bookmark, Check, Play, Clock, Building2, BadgeCheck } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Star, Users, Zap, Bookmark, Play, Clock, Building2, BadgeCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { FeedPost, KudosType, Course } from '../../../types';
-import { togglePostLike, toggleSaveCourse } from '../../../services/db';
+import { togglePostLike, toggleSaveCourse, getUserById, getOrganizationDetails } from '../../../services/db';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { getLocalizedContent } from '../../../i18n/config';
+import { Avatar } from '../../../components/ui/Avatar';
 
 interface FeedPostCardProps {
   post: FeedPost | (Course & { type: 'course' });
@@ -30,13 +31,47 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
   const isSavedByMe = isCourse && currentUser?.savedCourses?.includes(post.id);
   const [saved, setSaved] = useState(isSavedByMe);
 
-  // -- Author Logic --
+  // -- Author Logic (Initial Static Data) --
   // Fallback to orgId if author info is missing (Legacy support)
-  const authorName = post.authorName || (post.organizationId ? 'Kurumsal' : 'Anonim');
-  // FIX: Access authorAvatar conditionally to satisfy TypeScript as Course has authorAvatarUrl and FeedPost has authorAvatar
-  const authorAvatar = isCourse ? (post as any).authorAvatarUrl : (post as any).authorAvatar;
+  const initialAuthorName = post.authorName || (post.organizationId ? 'Kurumsal' : 'Anonim');
+  const initialAuthorAvatar = isCourse ? (post as any).authorAvatarUrl : (post as any).authorAvatar;
   const authorType = (post as any).authorType || 'ORGANIZATION'; 
   const authorId = post.authorId || post.organizationId;
+
+  // -- LIVE DATA FETCHING --
+  // This ensures we always show the CURRENT avatar/name, not the one saved when posted.
+  const [liveAuthor, setLiveAuthor] = useState<{ name: string; avatar: string | null } | null>(null);
+
+  useEffect(() => {
+      let isMounted = true;
+      const fetchLiveAuthor = async () => {
+          if (!authorId) return;
+
+          try {
+              if (authorType === 'USER') {
+                  const user = await getUserById(authorId);
+                  if (isMounted && user) {
+                      setLiveAuthor({ name: user.name, avatar: user.avatar });
+                  }
+              } else {
+                  // Organization
+                  const org = await getOrganizationDetails(authorId);
+                  if (isMounted && org) {
+                      setLiveAuthor({ name: org.name, avatar: org.logoUrl });
+                  }
+              }
+          } catch (e) {
+              console.error("Failed to fetch live author data", e);
+          }
+      };
+
+      fetchLiveAuthor();
+      return () => { isMounted = false; };
+  }, [authorId, authorType]);
+
+  // Use live data if available, fallback to static snapshot
+  const displayAvatar = liveAuthor?.avatar ?? initialAuthorAvatar;
+  const displayName = liveAuthor?.name ?? initialAuthorName;
 
   const handleLike = async () => {
       if (!currentUser || isCourse) return;
@@ -96,17 +131,11 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
               
               <div className="flex items-center justify-between p-3 md:p-4 relative z-10">
                   <div className="flex items-center gap-2 cursor-pointer" onClick={handleAuthorClick}>
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-100 border border-white shadow-sm">
-                            {authorAvatar ? (
-                                <img src={authorAvatar} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-primary text-white text-xs font-bold">
-                                    {authorName[0]}
-                                </div>
-                            )}
+                        <div className="w-8 h-8 rounded-full overflow-hidden shadow-sm bg-white">
+                            <Avatar src={displayAvatar} alt={displayName} size="sm" />
                         </div>
                         <div>
-                            <div className="text-xs font-bold text-gray-900">{authorName}</div>
+                            <div className="text-xs font-bold text-gray-900">{displayName}</div>
                             <div className="text-[10px] text-gray-400">Takdir Gönderdi • {formatTime(p.createdAt)}</div>
                         </div>
                   </div>
@@ -121,7 +150,7 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
                   </div>
                   <h2 className="text-xl font-bold text-gray-800 mb-1">{config.label}</h2>
                   <div className="flex items-center justify-center gap-2 text-sm text-gray-600 mb-6">
-                      <span className="font-bold cursor-pointer hover:underline" onClick={handleAuthorClick}>{p.authorName}</span>
+                      <span className="font-bold cursor-pointer hover:underline" onClick={handleAuthorClick}>{displayName}</span>
                       <span className="text-gray-400">➔</span>
                       <span className="font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded cursor-pointer hover:underline" onClick={() => navigate(`/user/${p.kudosData?.recipientId}`)}>
                           {p.kudosData?.recipientName}
@@ -152,14 +181,12 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
               {/* Dynamic Header */}
               <div className="flex items-center justify-between p-3 md:p-4">
                   <div className="flex items-center gap-2 cursor-pointer" onClick={handleAuthorClick}>
-                      <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-xs overflow-hidden border border-gray-200">
-                          {authorAvatar ? (
-                              <img src={authorAvatar} className="w-full h-full object-cover" />
-                          ) : authorType === 'ORGANIZATION' ? <Building2 className="w-5 h-5 text-gray-400" /> : authorName[0]}
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 border border-gray-200">
+                          <Avatar src={displayAvatar} alt={displayName} size="md" />
                       </div>
                       <div>
                           <div className="font-bold text-sm text-gray-900 leading-none flex items-center gap-1">
-                              {authorName}
+                              {displayName}
                               {authorType === 'ORGANIZATION' && <BadgeCheck className="w-3 h-3 text-blue-500" />}
                           </div>
                           <div className="text-[10px] text-gray-500 mt-0.5">
@@ -218,10 +245,10 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
         <div className="flex items-center justify-between p-3 md:p-4">
             <div className="flex items-center gap-3 cursor-pointer" onClick={handleAuthorClick}>
                 <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 overflow-hidden">
-                    <img src={authorAvatar} alt={authorName} className="w-full h-full object-cover" />
+                    <Avatar src={displayAvatar} alt={displayName} size="md" />
                 </div>
                 <div>
-                    <div className="font-bold text-sm text-gray-900 leading-none">{authorName}</div>
+                    <div className="font-bold text-sm text-gray-900 leading-none">{displayName}</div>
                     <div className="text-xs text-gray-500 mt-1">{formatTime(p.createdAt)}</div>
                 </div>
             </div>
@@ -267,7 +294,7 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
             
             <div className="font-bold text-sm text-gray-900 mb-2">{likeCount} beğeni</div>
             <div className="text-sm text-gray-800 mb-1">
-                <span className="font-bold mr-2 cursor-pointer hover:underline" onClick={handleAuthorClick}>{authorName}</span>
+                <span className="font-bold mr-2 cursor-pointer hover:underline" onClick={handleAuthorClick}>{displayName}</span>
                 {p.caption}
             </div>
         </div>
