@@ -15,6 +15,50 @@ const cleanJsonResponse = (text: string): string => {
 };
 
 /**
+ * SEMANTIC SEARCH EXPANDER
+ * Takes a raw user query and returns related tags/synonyms to broaden search.
+ */
+export const expandSearchQuery = async (query: string): Promise<string[]> => {
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        const schema: Schema = {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+        };
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: `
+                You are a search engine optimizer for a Hotel Staff Training App.
+                User Query: "${query}"
+                
+                Task: Return a JSON array of 3-5 related keywords, synonyms, or category tags (in English or Turkish) that would match this query in a database of hotel operations courses and staff profiles.
+                
+                Example 1: Input "temizlik" -> Output ["housekeeping", "cleaning", "sanitation", "room-service"]
+                Example 2: Input "wine" -> Output ["f&b", "sommelier", "service", "beverage"]
+                Example 3: Input "resepsiyon" -> Output ["front-office", "guest-relations", "check-in"]
+            `,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+                temperature: 0.3
+            }
+        });
+
+        if (response.text) {
+            const tags = JSON.parse(cleanJsonResponse(response.text));
+            // Ensure unique and lowercase
+            return Array.from(new Set([query.toLowerCase(), ...tags.map((t: string) => t.toLowerCase())]));
+        }
+        return [query.toLowerCase()];
+    } catch (e) {
+        console.warn("Gemini Search Expansion Failed, falling back to raw query:", e);
+        return [query.toLowerCase()];
+    }
+};
+
+/**
  * GENERATE CARDS FROM RAW TEXT (For PDF/URL Injection)
  */
 export const generateCardsFromText = async (

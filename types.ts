@@ -34,6 +34,26 @@ export type SourceType = 'TEXT' | 'PDF' | 'URL' | 'YOUTUBE';
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
+// --- SEARCH ENGINE TYPES ---
+export type SearchResultType = 'COURSE' | 'ORGANIZATION' | 'USER' | 'JOURNEY';
+
+export interface SearchResult {
+    type: SearchResultType;
+    id: string;
+    title: string;       // Display Name / Title
+    subtitle?: string;   // Role / Category / Location
+    imageUrl?: string;   // Avatar / Thumbnail
+    relevanceScore: number; 
+    metadata?: any;      // Extra data like xpReward, memberCount
+    url: string;         // Navigation target
+}
+
+export interface SearchTrend {
+    term: string;
+    count: number;
+    lastSearchedAt: number;
+}
+
 // --- ADAPTIVE LEARNING & SKILLS ---
 export interface SkillMetric {
     level: number; // 0 to 100
