@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Wand2, ChevronRight, Upload, CheckCircle2, Save, Loader2, 
-    Hash, Target, Globe, BookOpen, Layers, MonitorPlay, RefreshCw
+    Hash, Target, Globe, BookOpen, Layers, MonitorPlay, RefreshCw, Languages
 } from 'lucide-react';
 import { generateMagicCourse } from '../../services/geminiService';
 import { publishContent } from '../../services/courseService';
@@ -13,16 +13,9 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { StoryCard, DifficultyLevel, CourseTone, PedagogyMode, Course, LocalizedString } from '../../types';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { SUPPORTED_LANGUAGES } from '../../i18n/config';
 
 type StudioStep = 'SETUP' | 'DESIGN' | 'GENERATING' | 'DIRECTOR' | 'PUBLISH';
-
-const AVAILABLE_LANGS = [
-    { code: 'tr', label: 'Türkçe', flag: '🇹🇷' },
-    { code: 'en', label: 'English', flag: '🇬🇧' },
-    { code: 'ru', label: 'Русский', flag: '🇷🇺' },
-    { code: 'ar', label: 'العربية', flag: '🇸🇦' },
-    { code: 'de', label: 'Deutsch', flag: '🇩🇪' },
-];
 
 export const ContentStudio: React.FC = () => {
   const { currentUser } = useAuthStore();
@@ -38,7 +31,8 @@ export const ContentStudio: React.FC = () => {
   
   // Setup State
   const [sourceText, setSourceText] = useState('');
-  const [targetLangs, setTargetLangs] = useState<string[]>(['tr']); // Default TR
+  const [sourceLang, setSourceLang] = useState<string>('tr'); // Default Input Lang
+  const [targetLangs, setTargetLangs] = useState<string[]>(['tr']); // Additional Targets (EN is implicit)
   const [selectedChannelId, setSelectedChannelId] = useState<string>('');
   
   // Design State
@@ -54,7 +48,7 @@ export const ContentStudio: React.FC = () => {
       tags: string[];
   } | null>(null);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
-  const [activeEditorLang, setActiveEditorLang] = useState<string>('tr'); // Which lang tab is open
+  const [activeEditorLang, setActiveEditorLang] = useState<string>('en'); // Defaults to Base
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
@@ -66,8 +60,9 @@ export const ContentStudio: React.FC = () => {
           setExistingCourseId(incoming.id);
           // Auto-detect available languages from the title object
           const availableKeys = Object.keys(incoming.title);
-          setTargetLangs(availableKeys);
-          setActiveEditorLang(availableKeys[0] || 'tr');
+          // Remove 'en' from target list as it's implicit base
+          setTargetLangs(availableKeys.filter(k => k !== 'en'));
+          setActiveEditorLang('en');
           
           setCourseData({
               title: incoming.title,
@@ -82,9 +77,10 @@ export const ContentStudio: React.FC = () => {
 
   // --- ACTIONS ---
 
-  const toggleLang = (code: string) => {
+  const toggleTargetLang = (code: string) => {
+      if (code === 'en') return; // Cannot toggle base
       if (targetLangs.includes(code)) {
-          if (targetLangs.length > 1) setTargetLangs(prev => prev.filter(l => l !== code));
+          setTargetLangs(prev => prev.filter(l => l !== code));
       } else {
           setTargetLangs(prev => [...prev, code]);
       }
@@ -94,16 +90,17 @@ export const ContentStudio: React.FC = () => {
       setStep('GENERATING');
       try {
           const result = await generateMagicCourse(sourceText, {
+              sourceLanguage: SUPPORTED_LANGUAGES.find(l => l.code === sourceLang)?.name || 'Turkish',
               level: difficulty,
               tone: tone,
-              length: 'SHORT', // Hardcoded for demo
-              targetLanguages: targetLangs,
+              length: 'SHORT',
+              targetLanguages: targetLangs, // Pass selected targets
               pedagogyMode: pedagogy
           });
 
           if (result) {
               setCourseData(result);
-              setActiveEditorLang(targetLangs[0]); // Set editor to first selected lang
+              setActiveEditorLang('en'); // Start editing in English Base
               setStep('DIRECTOR');
           } else {
               alert("İçerik oluşturulamadı. Lütfen tekrar deneyin.");
@@ -120,7 +117,6 @@ export const ContentStudio: React.FC = () => {
       const newCards = [...courseData.cards];
       const card = newCards[activeCardIndex];
       
-      // Update specific language key in LocalizedString
       newCards[activeCardIndex] = {
           ...card,
           [field]: { ...card[field], [activeEditorLang]: value }
@@ -159,7 +155,7 @@ export const ContentStudio: React.FC = () => {
       const payload: any = {
           ...courseData,
           thumbnailUrl: courseData.cards[0].mediaUrl,
-          duration: courseData.cards.length, // rough calc
+          duration: courseData.cards.length, 
           xpReward: 100,
           visibility: 'PRIVATE',
           channelId: selectedChannelId,
@@ -172,7 +168,7 @@ export const ContentStudio: React.FC = () => {
           // New Config Fields
           config: {
               pedagogyMode: pedagogy,
-              targetLanguages: targetLangs,
+              targetLanguages: ['en', ...targetLangs], // All supported langs
               sourceType: 'TEXT',
               level: difficulty,
               tone: tone
@@ -193,8 +189,9 @@ export const ContentStudio: React.FC = () => {
       }
   };
 
-  // --- RENDER HELPERS ---
   const currentCard = courseData?.cards[activeCardIndex];
+  // Calculate editor tabs: Always EN + selected targets
+  const editorTabs = ['en', ...targetLangs];
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
@@ -208,7 +205,6 @@ export const ContentStudio: React.FC = () => {
                 <span className="font-bold text-gray-800">AI Studio</span>
             </div>
             
-            {/* PROGRESS STEPS */}
             <div className="flex items-center gap-2">
                 {['SETUP', 'DESIGN', 'DIRECTOR', 'PUBLISH'].map((s, idx) => (
                     <div key={s} className={`flex items-center gap-2 ${step === s ? 'opacity-100' : 'opacity-40'}`}>
@@ -220,8 +216,7 @@ export const ContentStudio: React.FC = () => {
                     </div>
                 ))}
             </div>
-
-            <div className="w-20" /> {/* Spacer */}
+            <div className="w-20" />
         </div>
 
         {/* BODY */}
@@ -233,15 +228,27 @@ export const ContentStudio: React.FC = () => {
                     <div className="max-w-2xl w-full space-y-8">
                         <div>
                             <h1 className="text-3xl font-black text-gray-900 mb-2">Eğitim Kaynağı</h1>
-                            <p className="text-gray-500">Neyi öğretmek istiyorsun? Metni buraya yapıştır veya dosya yükle.</p>
+                            <p className="text-gray-500">İçeriğini gir ve hedef kitleyi belirle.</p>
                         </div>
 
-                        <textarea 
-                            className="w-full h-40 p-4 rounded-2xl border-2 border-gray-200 focus:border-primary focus:ring-0 resize-none text-lg font-medium"
-                            placeholder="Örn: Otelimizin yangın güvenlik prosedürü şöyledir..."
-                            value={sourceText}
-                            onChange={e => setSourceText(e.target.value)}
-                        />
+                        <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-bold text-gray-400 uppercase flex items-center gap-1"><Languages className="w-3 h-3"/> Kaynak Dili</label>
+                                <select 
+                                    className="bg-gray-50 border border-gray-200 rounded-lg text-sm px-2 py-1 font-bold outline-none"
+                                    value={sourceLang}
+                                    onChange={e => setSourceLang(e.target.value)}
+                                >
+                                    {SUPPORTED_LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.nativeName}</option>)}
+                                </select>
+                            </div>
+                            <textarea 
+                                className="w-full h-32 p-3 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-primary/20 resize-none text-base font-medium"
+                                placeholder="Örn: Otelimizin check-in prosedürü şöyledir..."
+                                value={sourceText}
+                                onChange={e => setSourceText(e.target.value)}
+                            />
+                        </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div>
@@ -259,12 +266,12 @@ export const ContentStudio: React.FC = () => {
                             </div>
 
                             <div>
-                                <label className="text-xs font-bold text-gray-400 uppercase mb-3 block"><Globe className="w-4 h-4 inline mr-1"/> Hedef Diller</label>
+                                <label className="text-xs font-bold text-gray-400 uppercase mb-3 block"><Globe className="w-4 h-4 inline mr-1"/> Ek Diller (EN Hariç)</label>
                                 <div className="flex flex-wrap gap-2">
-                                    {AVAILABLE_LANGS.map(lang => (
+                                    {SUPPORTED_LANGUAGES.filter(l => !l.isBase).map(lang => (
                                         <button 
                                             key={lang.code}
-                                            onClick={() => toggleLang(lang.code)}
+                                            onClick={() => toggleTargetLang(lang.code)}
                                             className={`px-3 py-2 rounded-lg border flex items-center gap-2 transition-all ${targetLangs.includes(lang.code) ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                                         >
                                             <span className="text-lg">{lang.flag}</span>
@@ -273,13 +280,14 @@ export const ContentStudio: React.FC = () => {
                                         </button>
                                     ))}
                                 </div>
+                                <div className="text-[10px] text-gray-400 mt-2 flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-green-500" /> İngilizce (EN) varsayılan olarak her zaman oluşturulur.</div>
                             </div>
                         </div>
 
                         <div className="flex justify-end pt-4">
                             <button 
                                 onClick={() => setStep('DESIGN')} 
-                                disabled={!sourceText || !selectedChannelId || targetLangs.length === 0}
+                                disabled={!sourceText || !selectedChannelId}
                                 className="bg-primary text-white px-8 py-4 rounded-xl font-bold shadow-xl flex items-center gap-2 disabled:opacity-50 hover:scale-[1.02] transition-transform"
                             >
                                 Devam Et <ChevronRight className="w-5 h-5" />
@@ -304,7 +312,7 @@ export const ContentStudio: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {[
                                         { id: 'STANDARD', label: 'Standart', desc: 'Klasik bilgi ve test karışımı.' },
-                                        { id: 'ACTIVE_RECALL', label: 'Aktif Hatırlama (Pekiştirme)', desc: 'Sık sık soru sorarak bilgiyi taze tutar.' },
+                                        { id: 'ACTIVE_RECALL', label: 'Aktif Hatırlama', desc: 'Sık soru sorarak bilgiyi taze tutar.' },
                                         { id: 'SOCRATIC', label: 'Sokratik Yöntem', desc: 'Düşündürücü sorularla öğretir.' },
                                         { id: 'STORYTELLING', label: 'Hikayeleştirme', desc: 'Bir senaryo üzerinden anlatır.' },
                                     ].map(mode => (
@@ -359,15 +367,14 @@ export const ContentStudio: React.FC = () => {
                 <div className="h-full flex flex-col items-center justify-center">
                     <Loader2 className="w-16 h-16 text-purple-600 animate-spin mb-6" />
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Eğitim Tasarlanıyor...</h2>
-                    <p className="text-gray-500 animate-pulse">Pedagoji uygulanıyor • İçerik çevriliyor • Görseller hazırlanıyor</p>
+                    <p className="text-gray-500 animate-pulse">Master Copy (EN) hazırlanıyor • Çeviriler yapılıyor</p>
                 </div>
             )}
 
             {/* STEP 3: DIRECTOR (EDITOR) */}
             {step === 'DIRECTOR' && courseData && (
                 <div className="h-full flex flex-col md:flex-row">
-                    
-                    {/* LEFT: TIMELINE */}
+                    {/* TIMELINE (Left) - Same as before */}
                     <div className="w-full md:w-64 bg-white border-r border-gray-200 flex flex-col overflow-y-auto shrink-0">
                         <div className="p-4 bg-gray-50 border-b border-gray-200 font-bold text-xs text-gray-500 uppercase tracking-wider">
                             Akış ({courseData.cards.length})
@@ -383,7 +390,7 @@ export const ContentStudio: React.FC = () => {
                                         {idx + 1}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-bold text-gray-800 truncate">{card.title[activeEditorLang] || '(Başlıksız)'}</div>
+                                        <div className="text-xs font-bold text-gray-800 truncate">{card.title[activeEditorLang] || card.title['en']}</div>
                                         <div className="text-[10px] text-gray-500 uppercase">{card.type}</div>
                                     </div>
                                 </div>
@@ -397,13 +404,14 @@ export const ContentStudio: React.FC = () => {
                         {/* EDITOR TOOLBAR (LANG TABS) */}
                         <div className="bg-white border-b border-gray-200 px-6 py-2 flex items-center justify-between shrink-0">
                             <div className="flex gap-1">
-                                {targetLangs.map(lang => (
+                                {editorTabs.map(lang => (
                                     <button
                                         key={lang}
                                         onClick={() => setActiveEditorLang(lang)}
                                         className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeEditorLang === lang ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
                                     >
-                                        {AVAILABLE_LANGS.find(l => l.code === lang)?.flag} {lang.toUpperCase()}
+                                        {SUPPORTED_LANGUAGES.find(l => l.code === lang)?.flag} {lang.toUpperCase()}
+                                        {lang === 'en' && <span className="bg-blue-200 text-blue-800 text-[9px] px-1 rounded">BASE</span>}
                                     </button>
                                 ))}
                             </div>
@@ -425,19 +433,19 @@ export const ContentStudio: React.FC = () => {
                                         <div className="absolute bottom-0 left-0 right-0 p-6 text-white pb-12">
                                             <div className="inline-block bg-white/20 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold mb-2 uppercase">{currentCard?.type}</div>
                                             <h2 className="text-2xl font-bold mb-2 leading-tight drop-shadow-md">
-                                                {currentCard?.title[activeEditorLang]}
+                                                {currentCard?.title[activeEditorLang] || currentCard?.title['en']}
                                             </h2>
                                             <p className="text-sm opacity-90 leading-relaxed drop-shadow-md">
-                                                {currentCard?.content[activeEditorLang]}
+                                                {currentCard?.content[activeEditorLang] || currentCard?.content['en']}
                                             </p>
                                             
                                             {/* Quiz Preview */}
                                             {currentCard?.type === 'QUIZ' && currentCard.interaction && (
                                                 <div className="mt-4 space-y-2">
-                                                    <p className="text-xs font-bold text-yellow-400 uppercase">{currentCard.interaction.question[activeEditorLang]}</p>
+                                                    <p className="text-xs font-bold text-yellow-400 uppercase">{currentCard.interaction.question[activeEditorLang] || currentCard.interaction.question['en']}</p>
                                                     {currentCard.interaction.options.map((opt, i) => (
                                                         <div key={i} className="bg-white/10 p-2 rounded-lg text-xs font-bold border border-white/10">
-                                                            {opt[activeEditorLang]}
+                                                            {opt[activeEditorLang] || opt['en']}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -466,9 +474,6 @@ export const ContentStudio: React.FC = () => {
                                                 <span className="text-xs font-bold">Görseli Değiştir</span>
                                             </div>
                                             <input type="file" ref={cardMediaRef} className="hidden" accept="image/*" onChange={handleMediaUpload} />
-                                        </div>
-                                        <div className="mt-2 text-[10px] text-gray-400 bg-gray-50 p-2 rounded border border-gray-100">
-                                            <b>AI Prompt:</b> {currentCard?.mediaPrompt}
                                         </div>
                                     </div>
 
@@ -500,8 +505,7 @@ export const ContentStudio: React.FC = () => {
                                                     className="w-full p-2 bg-white border border-yellow-300 rounded-lg text-sm mb-3"
                                                     value={currentCard.interaction.question[activeEditorLang] || ''}
                                                     onChange={e => {
-                                                        // Complex nested update needed for quiz question in localized object
-                                                        // For simplicity in this view, assuming direct update via similar pattern
+                                                        // Simplified update logic for nested object would go here
                                                     }}
                                                 />
                                                 <label className="text-xs font-bold text-yellow-700 uppercase mb-2 block">Seçenekler</label>
@@ -513,7 +517,7 @@ export const ContentStudio: React.FC = () => {
                                                             </div>
                                                             <input 
                                                                 className="flex-1 p-2 bg-white border border-yellow-300 rounded-lg text-sm"
-                                                                value={opt[activeEditorLang]}
+                                                                value={opt[activeEditorLang] || ''}
                                                                 onChange={e => updateQuizOption(i, e.target.value)}
                                                             />
                                                         </div>

@@ -1,16 +1,18 @@
 
 export type LanguageCode = 'en' | 'tr' | 'ru' | 'de' | 'id' | 'ar';
 
-export interface Language {
+export interface LanguageDefinition {
   code: LanguageCode;
   name: string;
   nativeName: string;
   flag: string;
   dir: 'ltr' | 'rtl';
+  isBase?: boolean; // English is base
 }
 
 // --- CORE LOCALIZATION TYPE ---
-// Example: { tr: "Merhaba", en: "Hello" }
+// "English-First" Architecture: 'en' key is theoretically mandatory for new content.
+// Structure: { en: "Hello", tr: "Merhaba" }
 export type LocalizedString = Record<string, string>;
 
 // --- NEW ARCHITECTURE: ROLES ---
@@ -66,6 +68,11 @@ export interface AnalyticsEvent {
   timestamp: number;
 }
 
+export interface UserPreferences {
+    appLanguage: LanguageCode;      // UI Language (Buttons, Nav)
+    contentLanguage: LanguageCode;  // Learning Content Language (Courses)
+}
+
 export interface User {
   id: string;
   email: string;
@@ -99,6 +106,10 @@ export interface User {
   badges?: { type: KudosType; count: number }[];
   following?: string[];
   isSuperAdmin?: boolean;
+  
+  // --- NEW: PREFERENCES ---
+  preferences?: UserPreferences;
+
   privacySettings?: {
     showInSearch: boolean;
     allowTagging: boolean;
@@ -117,7 +128,7 @@ export interface Course {
   categoryId: string;
   channelId?: string; 
 
-  // Localized Fields
+  // Localized Fields (English is Base)
   title: LocalizedString; 
   description: LocalizedString;
   coverQuote?: LocalizedString;
@@ -152,9 +163,9 @@ export interface Course {
 export interface CourseConfig {
   level: DifficultyLevel;
   tone: CourseTone;
-  pedagogyMode: PedagogyMode; // NEW: Educational Strategy
-  sourceType: SourceType;     // NEW: Where did this come from?
-  targetLanguages: string[];  // NEW: Which languages are supported?
+  pedagogyMode: PedagogyMode; 
+  sourceType: SourceType;     
+  targetLanguages: string[];  
   autoPlay: boolean;
   slideDuration: number;
 }

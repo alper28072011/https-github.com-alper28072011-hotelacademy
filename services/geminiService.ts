@@ -14,35 +14,35 @@ const cleanJsonResponse = (text: string): string => {
 };
 
 /**
- * GENERATE MAGIC COURSE V2 (Multi-Language & Pedagogical)
+ * GENERATE MAGIC COURSE V2 (Multi-Language & English-First)
  */
 export const generateMagicCourse = async (
   sourceContent: string,
   config: {
+    sourceLanguage: string; // New: What language did the user type?
+    targetLanguages: string[]; // ['tr', 'ru'] - 'en' is implicitly added
     level: DifficultyLevel;
     tone: CourseTone;
     length: 'SHORT' | 'MEDIUM';
-    targetLanguages: string[]; // ['en', 'tr', 'ru']
     pedagogyMode: PedagogyMode;
   }
 ): Promise<GeneratedCourse | null> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const cardCount = config.length === 'SHORT' ? 5 : 8;
-    const languages = config.targetLanguages;
+    
+    // Ensure EN is always present in output targets
+    const outputLanguages = Array.from(new Set(['en', ...config.targetLanguages]));
 
     // --- 1. DYNAMIC SCHEMA CONSTRUCTION ---
-    // We need to tell Gemini exactly what structure to return for "title", "content", etc.
-    // based on the requested languages.
-    
     const localizedStringSchema: Schema = {
         type: Type.OBJECT,
         properties: {},
-        required: languages
+        required: ['en'] // English is the BASE Source of Truth
     };
     
-    // Add each language code as a required string property
-    languages.forEach(lang => {
+    // Add each language code
+    outputLanguages.forEach(lang => {
         if(localizedStringSchema.properties) {
             localizedStringSchema.properties[lang] = { type: Type.STRING };
         }
@@ -87,41 +87,32 @@ export const generateMagicCourse = async (
       required: ["title", "description", "cards", "tags"]
     };
 
-    // --- 2. PEDAGOGY PROMPT ENGINEERING ---
+    // --- 2. PROMPT ENGINEERING ---
     let pedagogyInstruction = "";
     switch (config.pedagogyMode) {
-        case 'ACTIVE_RECALL':
-            pedagogyInstruction = "Use the 'Active Recall' method. Every 2nd card MUST be a QUIZ. Force the user to retrieve information just presented.";
-            break;
-        case 'SOCRATIC':
-            pedagogyInstruction = "Use the 'Socratic Method'. Ask rhetorical questions in INFO cards. Make the learner think before revealing answers. Use QUIZ cards to challenge assumptions.";
-            break;
-        case 'STORYTELLING':
-            pedagogyInstruction = "Use a narrative arc. Introduce a character or a scenario at the start. All content should relate to solving this character's problem.";
-            break;
-        case 'CASE_STUDY':
-            pedagogyInstruction = "Present a real-world hotel scenario (Problem -> Analysis -> Solution). Use concrete examples.";
-            break;
-        default:
-            pedagogyInstruction = "Use standard micro-learning best practices. mix INFO and QUIZ cards for engagement.";
+        case 'ACTIVE_RECALL': pedagogyInstruction = "Use 'Active Recall'. Every 2nd card MUST be a QUIZ."; break;
+        case 'SOCRATIC': pedagogyInstruction = "Use 'Socratic Method'. Ask rhetorical questions in INFO cards."; break;
+        case 'STORYTELLING': pedagogyInstruction = "Use a narrative arc. Introduce a character or scenario."; break;
+        case 'CASE_STUDY': pedagogyInstruction = "Present a real-world hotel scenario (Problem -> Analysis -> Solution)."; break;
+        default: pedagogyInstruction = "Use standard micro-learning best practices.";
     }
 
     const prompt = `
-      ROLE: Elite Instructional Designer & Polyglot Linguist for Luxury Hospitality.
+      ROLE: Instructional Designer & Polyglot Linguist.
       
       TASK: Create a micro-course based on the source text.
-      TARGET LANGUAGES: ${languages.join(', ')}.
       
-      PEDAGOGY STRATEGY: ${pedagogyInstruction}
+      INPUT LANGUAGE: ${config.sourceLanguage}
+      OUTPUT LANGUAGES: ${outputLanguages.join(', ')}.
       
+      IMPORTANT: "en" (English) is the MASTER COPY. 
+      1. First, create the content in English (even if source is ${config.sourceLanguage}).
+      2. Then, translate the English version to: ${config.targetLanguages.join(', ')}.
+      
+      PEDAGOGY: ${pedagogyInstruction}
       TONE: ${config.tone}.
-      DIFFICULTY: ${config.level}.
+      LEVEL: ${config.level}.
       LENGTH: ~${cardCount} cards.
-      
-      CRITICAL INSTRUCTIONS:
-      1. Returns ALL text fields (title, content, question, options) as objects containing translations for: ${languages.join(', ')}.
-      2. 'mediaPrompt' must be in English, describing a high-end, photorealistic scene suitable for Unsplash.
-      3. For QUIZ cards, ensure 'options' is an array where each item is a localized object.
       
       [SOURCE CONTENT]:
       ${sourceContent.substring(0, 15000)}
@@ -133,7 +124,7 @@ export const generateMagicCourse = async (
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        temperature: 0.4, // Lower temperature for stricter translation adherence
+        temperature: 0.4,
         maxOutputTokens: 8192,
       }
     });
@@ -147,7 +138,7 @@ export const generateMagicCourse = async (
       data.cards = data.cards.map((card, i) => ({
           ...card,
           id: `card-${Date.now()}-${i}`,
-          mediaUrl: `https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800&auto=format&fit=crop`, // Placeholder, usually handled by UI fetching Unsplash
+          mediaUrl: `https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800&auto=format&fit=crop`,
       }));
       
       return data;
@@ -157,16 +148,4 @@ export const generateMagicCourse = async (
     console.error("Gemini Magic Error:", error);
     return null;
   }
-};
-
-/**
- * LEGACY TRANSLATION (Kept for compatibility or single-field translation)
- */
-export const translateContent = async (
-    content: Record<string, any>, 
-    sourceLang: string, 
-    targetLangs: string[]
-): Promise<Record<string, any> | null> => {
-    // This function can be deprecated or updated to use the new schema approach if needed individually
-    return null; 
 };

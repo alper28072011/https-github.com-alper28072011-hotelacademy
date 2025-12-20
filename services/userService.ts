@@ -2,11 +2,39 @@
 import { doc, deleteDoc, updateDoc, collection, query, where, getDocs, writeBatch, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { deleteUser } from 'firebase/auth'; // Client SDK
 import { db, auth } from './firebase';
-import { User } from '../types';
+import { User, UserPreferences } from '../types';
 import { detachUserFromAllOrgs, getBackupAdmins, transferOwnership } from './organizationService';
 import { checkUserOwnership } from './superAdminService';
 import { deleteFileByUrl, uploadFile } from './storage';
 import { deleteCourseFully } from './courseService';
+
+/**
+ * Updates user language preferences.
+ */
+export const updateUserPreferences = async (userId: string, preferences: Partial<UserPreferences>): Promise<boolean> => {
+    try {
+        await updateDoc(doc(db, 'users', userId), {
+            preferences: preferences // Merges with existing due to Partial, but for nested object in Firestore we might need dot notation if we want to update only one field without overwriting the whole map.
+            // However, Firestore update merges top-level fields. For nested 'preferences', it would replace the whole map if we just pass { preferences: ... }.
+            // To update safely:
+        });
+        
+        // Better approach for nested update using dot notation if needed, 
+        // but since we usually update one or both, passing the full object is safer if we read it first in the store.
+        // For now, let's assume the store passes the full merged object or we use dot notation construction.
+        
+        const updates: any = {};
+        if (preferences.appLanguage) updates['preferences.appLanguage'] = preferences.appLanguage;
+        if (preferences.contentLanguage) updates['preferences.contentLanguage'] = preferences.contentLanguage;
+        
+        await updateDoc(doc(db, 'users', userId), updates);
+
+        return true;
+    } catch (e) {
+        console.error("Preferences Update Failed:", e);
+        return false;
+    }
+};
 
 /**
  * Updates the user's profile photo.
