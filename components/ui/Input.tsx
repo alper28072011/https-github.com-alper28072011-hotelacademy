@@ -20,7 +20,7 @@ export const Input: React.FC<InputProps> = ({
     return (
         <div className={`flex flex-col gap-1.5 ${containerClassName}`}>
             {label && (
-                <label className="text-xs font-bold text-gray-500 uppercase ml-1 tracking-wide">
+                <label className="text-xs font-bold text-text-muted uppercase ml-1 tracking-wide">
                     {label}
                 </label>
             )}
@@ -32,13 +32,13 @@ export const Input: React.FC<InputProps> = ({
                 )}
                 <input 
                     className={`
-                        w-full bg-white border-2 border-gray-100 rounded-xl
-                        py-3.5 text-gray-800 font-medium placeholder-gray-400
+                        w-full bg-gray-50 border border-transparent rounded-xl
+                        py-3.5 text-text-main font-medium placeholder-gray-400
                         transition-all duration-300 outline-none
-                        focus:border-primary focus:ring-4 focus:ring-primary/10
-                        disabled:bg-gray-50 disabled:text-gray-400
+                        focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5
+                        disabled:bg-gray-100 disabled:text-gray-400
                         ${Icon ? 'pl-12' : 'pl-4'} pr-4
-                        ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-100' : ''}
+                        ${error ? 'bg-red-50 text-red-900 border-red-100 focus:border-red-200 focus:ring-red-50' : ''}
                         ${className}
                     `}
                     {...props}

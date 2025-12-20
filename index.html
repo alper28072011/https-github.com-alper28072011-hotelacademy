@@ -12,31 +12,35 @@
           extend: {
             colors: {
               primary: {
-                DEFAULT: '#336699', // Vibrant Ocean - Trust, Professionalism
+                DEFAULT: '#336699', // Professional Blue - Use sparingly
                 hover: '#28527a',
-                light: '#4d80b3',
+                light: '#EBF1F6', // Very light blue for backgrounds
               },
-              secondary: {
-                DEFAULT: '#F0F4F8', // Soft Cloud - Backgrounds
-                dark: '#D9E2EC',
+              surface: {
+                DEFAULT: '#FFFFFF',
+                subtle: '#F8FAFC', // Slate-50 (Main App Background)
+              },
+              text: {
+                main: '#1E293B', // Slate-800
+                muted: '#64748B', // Slate-500
               },
               accent: {
-                DEFAULT: '#FF7F50', // Coral - Stories & Notifications
-                light: '#FF9F7D',
+                DEFAULT: '#EAB308', // Soft Gold (Yellow-500) for rewards/stars
+                light: '#FEF9C3',
               },
-              surface: '#FFFFFF',
             },
             fontFamily: {
               sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
             },
             borderRadius: {
-              'xl': '16px',
-              '2xl': '24px',
-              '3xl': '32px',
+              'xl': '12px',
+              '2xl': '20px',
+              '3xl': '24px',
+              '4xl': '32px',
             },
             boxShadow: {
-              'soft': '0 4px 20px -2px rgba(51, 102, 153, 0.08)',
-              'glow': '0 0 15px rgba(51, 102, 153, 0.3)',
+              'soft': '0 10px 40px -10px rgba(0,0,0,0.05)',
+              'card': '0 2px 10px rgba(0,0,0,0.03)',
             }
           },
         },
@@ -46,7 +50,8 @@
     <style>
       body {
         font-family: 'Plus Jakarta Sans', sans-serif;
-        background-color: #F0F4F8;
+        background-color: #F8FAFC;
+        color: #1E293B;
         -webkit-tap-highlight-color: transparent;
       }
       /* Hide scrollbar for horizontal scrolling areas */

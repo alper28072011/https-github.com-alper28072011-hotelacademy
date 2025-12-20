@@ -2,26 +2,22 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  User as UserIcon, 
-  Lock, 
-  Mail, 
-  Eye, 
-  EyeOff, 
-  ArrowRight,
-  ShieldCheck,
-  CheckCircle2,
-  Globe
+  User as UserIcon, Lock, Mail, Eye, EyeOff, 
+  ArrowRight, ShieldCheck, CheckCircle2, Globe
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
+import { useAppStore } from '../../stores/useAppStore';
 import { loginUser, registerUser } from '../../services/authService';
 import { getMyMemberships } from '../../services/db';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { SUPPORTED_LANGUAGES } from '../../i18n/config';
 
 export const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { setLanguage } = useAppStore();
   const { 
     authMode, setAuthMode, 
     isLoading, setLoading, 
@@ -36,19 +32,15 @@ export const LoginPage: React.FC = () => {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
 
-  // Clear errors on mode switch
-  useEffect(() => {
-      setError(null);
-  }, [authMode]);
+  useEffect(() => { setError(null); }, [authMode]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier || !password) return;
-
     setLoading(true);
     setError(null);
-
     try {
       const user = await loginUser(identifier, password);
       await getMyMemberships(user.id);
@@ -68,10 +60,8 @@ export const LoginPage: React.FC = () => {
       setError("Lütfen tüm alanları doldur.");
       return;
     }
-
     setLoading(true);
     setError(null);
-
     try {
       const user = await registerUser({ email, password, username, name });
       loginSuccess(user);
@@ -81,221 +71,158 @@ export const LoginPage: React.FC = () => {
     }
   };
 
+  const changeLanguage = (code: any) => {
+      setLanguage(code);
+      setLangMenuOpen(false);
+  };
+
   return (
-    <div className="min-h-screen w-full flex bg-surface">
+    <div className="w-full max-w-5xl bg-white md:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative">
       
-      {/* LEFT SIDE: FORM (Scrollable on mobile, Fixed on Desktop) */}
-      <div className="w-full md:w-1/2 flex flex-col justify-center items-center p-6 md:p-12 lg:p-20 bg-white relative z-10">
-        
-        <div className="w-full max-w-sm space-y-8">
-            
-            {/* BRAND HEADER */}
-            <div className="text-center md:text-left space-y-2">
-                <motion.div 
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.5 }}
-                    className="inline-block"
-                >
-                    <div className="w-14 h-14 bg-gradient-to-br from-primary to-primary-light text-white rounded-2xl flex items-center justify-center shadow-soft mb-4 mx-auto md:mx-0">
-                        <span className="text-2xl font-extrabold tracking-tighter">H</span>
-                    </div>
-                </motion.div>
-                <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight">
-                    {authMode === 'LOGIN' ? 'Tekrar Hoş Geldiniz' : 'Aramıza Katılın'}
+      {/* MINIMAL LANG SELECTOR (Top Right) */}
+      <div className="absolute top-6 right-6 z-20">
+          <div className="relative">
+              <button 
+                onClick={() => setLangMenuOpen(!langMenuOpen)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-50 hover:bg-gray-100 transition-colors text-xs font-bold text-gray-600 border border-gray-100"
+              >
+                  <Globe className="w-3.5 h-3.5" />
+                  {i18n.language.toUpperCase()}
+              </button>
+              {langMenuOpen && (
+                  <div className="absolute top-full right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-lg py-1 min-w-[120px] overflow-hidden">
+                      {SUPPORTED_LANGUAGES.map(l => (
+                          <button
+                            key={l.code}
+                            onClick={() => changeLanguage(l.code)}
+                            className="w-full text-left px-4 py-2 text-xs hover:bg-gray-50 flex items-center gap-2"
+                          >
+                              <span>{l.flag}</span>
+                              <span className={i18n.language === l.code ? 'font-bold text-primary' : 'text-gray-600'}>
+                                  {l.nativeName}
+                              </span>
+                          </button>
+                      ))}
+                  </div>
+              )}
+          </div>
+      </div>
+
+      {/* LEFT: FORM AREA */}
+      <div className="w-full md:w-1/2 p-8 md:p-12 lg:p-16 flex flex-col justify-center">
+        <div className="max-w-sm mx-auto w-full">
+            {/* Brand */}
+            <div className="mb-10">
+                <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center mb-4">
+                    <span className="text-xl font-black tracking-tighter">H</span>
+                </div>
+                <h1 className="text-3xl font-extrabold text-text-main tracking-tight mb-2">
+                    {authMode === 'LOGIN' ? t('login_title') : 'Kariyerini Başlat'}
                 </h1>
-                <p className="text-gray-500 font-medium">
-                    {authMode === 'LOGIN' 
-                        ? 'Kariyer yolculuğunuza kaldığınız yerden devam edin.' 
-                        : 'Profesyonel gelişim platformuna adım atın.'}
+                <p className="text-text-muted font-medium text-sm">
+                    {authMode === 'LOGIN' ? 'Kaldığın yerden devam et.' : 'Profesyonel ağımıza katıl.'}
                 </p>
             </div>
 
-            {/* FORM AREA */}
             <AnimatePresence mode="wait">
                 {authMode === 'LOGIN' ? (
                     <motion.form 
                         key="login"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
                         onSubmit={handleLogin}
                         className="space-y-5"
                     >
                         <Input 
-                            label="Kullanıcı Adı veya E-posta"
+                            label="Kullanıcı Adı"
                             icon={UserIcon}
-                            placeholder="kullaniciadi"
                             value={identifier}
                             onChange={(e) => setIdentifier(e.target.value)}
+                            placeholder="username"
                             required
                         />
-
                         <div className="relative">
                             <Input 
                                 label="Şifre"
                                 icon={Lock}
                                 type={showPassword ? "text" : "password"}
-                                placeholder="••••••••"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
                                 required
                             />
-                            <button 
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-4 top-[38px] text-gray-400 hover:text-primary transition-colors"
-                            >
-                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                            </button>
-                        </div>
-
-                        {/* Forgot Password Link */}
-                        <div className="flex justify-end">
-                            <button type="button" className="text-xs font-bold text-primary hover:text-primary-hover transition-colors">
-                                Şifreni mi unuttun?
+                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-[38px] text-gray-400 hover:text-primary">
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                         </div>
 
                         {error && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-600 flex items-center gap-2">
+                            <div className="text-xs text-red-500 font-bold bg-red-50 p-3 rounded-lg border border-red-100 flex items-center gap-2">
                                 <div className="w-1.5 h-1.5 rounded-full bg-red-500" /> {error}
-                            </motion.div>
+                            </div>
                         )}
 
-                        <Button 
-                            type="submit" 
-                            fullWidth 
-                            size="lg" 
-                            isLoading={isLoading}
-                            icon={<ArrowRight className="w-5 h-5" />}
-                        >
-                            Giriş Yap
-                        </Button>
+                        <div className="pt-2">
+                            <Button type="submit" fullWidth size="lg" isLoading={isLoading} icon={<ArrowRight className="w-4 h-4" />}>
+                                {t('btn_start') || 'Giriş Yap'}
+                            </Button>
+                        </div>
                     </motion.form>
                 ) : (
                     <motion.form 
                         key="register"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
                         onSubmit={handleRegister}
                         className="space-y-4"
                     >
-                        <Input 
-                            label="Ad Soyad"
-                            icon={CheckCircle2}
-                            placeholder="Ad Soyad"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            required
-                        />
-                        <Input 
-                            label="Kullanıcı Adı"
-                            icon={UserIcon}
-                            placeholder="kullaniciadi"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
-                            required
-                        />
-                        <Input 
-                            label="E-posta"
-                            icon={Mail}
-                            type="email"
-                            placeholder="ad@sirket.com"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                        />
-                        <div className="relative">
-                            <Input 
-                                label="Şifre"
-                                icon={Lock}
-                                type={showPassword ? "text" : "password"}
-                                placeholder="••••••••"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                            />
-                            <button 
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-4 top-[38px] text-gray-400 hover:text-primary transition-colors"
-                            >
-                                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                            </button>
-                        </div>
+                        <Input label="Ad Soyad" icon={CheckCircle2} value={name} onChange={(e) => setName(e.target.value)} required />
+                        <Input label="Kullanıcı Adı" icon={UserIcon} value={username} onChange={(e) => setUsername(e.target.value)} required />
+                        <Input label="E-posta" icon={Mail} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                        <Input label="Şifre" icon={Lock} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
 
-                        {error && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs font-bold text-red-600">
-                                {error}
-                            </motion.div>
-                        )}
+                        {error && <div className="text-xs text-red-500 font-bold">{error}</div>}
 
-                        <Button 
-                            type="submit" 
-                            fullWidth 
-                            size="lg" 
-                            variant="secondary"
-                            isLoading={isLoading}
-                            icon={<ShieldCheck className="w-5 h-5" />}
-                        >
-                            Hesap Oluştur
+                        <Button type="submit" fullWidth size="lg" variant="secondary" isLoading={isLoading} icon={<ShieldCheck className="w-4 h-4" />}>
+                            Kayıt Ol
                         </Button>
                     </motion.form>
                 )}
             </AnimatePresence>
 
-            {/* SWITCH MODE */}
-            <div className="text-center pt-4">
-                <p className="text-sm text-gray-500 font-medium">
-                    {authMode === 'LOGIN' ? "Hesabın yok mu?" : "Zaten üye misin?"}{' '}
-                    <button 
-                        onClick={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')}
-                        className="text-primary font-bold hover:underline"
-                    >
-                        {authMode === 'LOGIN' ? "Şimdi Kayıt Ol" : "Giriş Yap"}
-                    </button>
-                </p>
-            </div>
-
-            {/* Footer Info */}
-            <div className="pt-8 text-center md:text-left">
-                <p className="text-[10px] text-gray-400">
-                    Otomatik dil algılama aktiftir: <span className="font-bold uppercase text-gray-500">{i18n.language}</span>
-                </p>
+            <div className="mt-8 text-center">
+                <button 
+                    onClick={() => setAuthMode(authMode === 'LOGIN' ? 'REGISTER' : 'LOGIN')}
+                    className="text-sm font-bold text-gray-500 hover:text-primary transition-colors"
+                >
+                    {authMode === 'LOGIN' ? "Hesabın yok mu? Kayıt Ol" : "Zaten üye misin? Giriş Yap"}
+                </button>
             </div>
         </div>
       </div>
 
-      {/* RIGHT SIDE: IMAGE (Hidden on Mobile) */}
-      <div className="hidden md:block w-1/2 relative overflow-hidden bg-primary">
-          <img 
-            src="https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&q=80&w=2000" 
-            alt="Hotel Luxury" 
-            className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-primary via-primary/80 to-transparent" />
-          
-          <div className="absolute bottom-0 left-0 right-0 p-12 lg:p-20 text-white">
-              <motion.div 
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.8 }}
-              >
-                  <h2 className="text-4xl lg:text-5xl font-extrabold mb-6 leading-tight">
-                      Mükemmellik <br/> detaylarda gizlidir.
+      {/* RIGHT: IMAGE AREA (Soft Overlay) */}
+      <div className="hidden md:block w-1/2 bg-gray-50 relative p-4">
+          <div className="w-full h-full rounded-3xl overflow-hidden relative shadow-inner">
+              <img 
+                src="https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1200" 
+                alt="Luxury Hotel" 
+                className="w-full h-full object-cover"
+              />
+              {/* Soft Blue Overlay */}
+              <div className="absolute inset-0 bg-primary/20 mix-blend-multiply" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              
+              <div className="absolute bottom-10 left-10 right-10 text-white">
+                  <h2 className="text-3xl font-bold leading-tight mb-4 drop-shadow-lg">
+                      Detaylardaki Mükemmellik.
                   </h2>
-                  <p className="text-lg text-white/80 max-w-md font-medium leading-relaxed">
-                      Hotel Academy ile ekibinizin potansiyelini ortaya çıkarın ve misafir deneyimini sanata dönüştürün.
+                  <p className="text-white/90 font-medium drop-shadow-md">
+                      Hotel Academy ile ekibinizi güçlendirin, misafir deneyimini sanata dönüştürün.
                   </p>
-                  
-                  <div className="flex gap-2 mt-8">
-                      <div className="w-12 h-1 bg-accent rounded-full" />
-                      <div className="w-3 h-1 bg-white/30 rounded-full" />
-                      <div className="w-3 h-1 bg-white/30 rounded-full" />
-                  </div>
-              </motion.div>
+              </div>
           </div>
       </div>
 

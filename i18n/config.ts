@@ -28,9 +28,10 @@ i18n
     resources,
     fallbackLng: 'en',
     supportedLngs: ['en', 'tr', 'de', 'ru', 'uk', 'ar', 'id', 'es', 'fr'],
-    load: 'languageOnly', // e.g. load 'en' instead of 'en-US'
+    load: 'languageOnly', 
     detection: {
-        order: ['localStorage', 'navigator'],
+        // Intelligent detection order
+        order: ['navigator', 'localStorage', 'htmlTag'],
         caches: ['localStorage'],
         lookupLocalStorage: 'i18nextLng',
     },
@@ -38,36 +39,27 @@ i18n
       escapeValue: false, 
     },
     react: {
-      useSuspense: true,
+      useSuspense: false, // Critical for instant load
     },
   });
 
-/**
- * WRAPPER FOR SMART RESOLUTION ENGINE
- * Keeps backward compatibility while enabling array-based priority.
- */
 export const getLocalizedContent = (
     content: LocalizedString | string | undefined, 
     langOrPrefs?: string | string[]
 ): string => {
     let prefs: string[] = [];
 
-    // 1. Explicit Override
     if (Array.isArray(langOrPrefs)) {
         prefs = langOrPrefs;
     } else if (typeof langOrPrefs === 'string') {
         prefs = [langOrPrefs];
     } else {
-        // 2. Smart Detection
         try {
-            // We access the store state directly (non-reactive)
             const user = useAuthStore.getState().currentUser;
-            
             if (user?.preferences?.contentLanguages && user.preferences.contentLanguages.length > 0) {
                 prefs = [...user.preferences.contentLanguages];
                 if (!prefs.includes('en')) prefs.push('en');
             } else {
-                // 3. Fallback: User has no preference or is guest -> Use UI Language
                 prefs = [i18n.language, 'en'];
             }
         } catch (e) {
