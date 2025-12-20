@@ -18,15 +18,28 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-interface SortableItemProps {
-    id: string;
-    children: React.ReactNode;
-    className?: string;
-    isActive?: boolean;
-    onClick?: () => void;
+interface RenderItemProps {
+    item: any;
+    index: number;
+    dragListeners: any;
+    dragAttributes: any;
 }
 
-const SortableItem: React.FC<SortableItemProps> = ({ id, children, className, onClick }) => {
+interface SortableListProps {
+    items: { id: string }[];
+    onOrderChange: (newItems: any[]) => void;
+    renderItem: (props: RenderItemProps) => React.ReactNode;
+    className?: string;
+    itemClassName?: string;
+}
+
+const SortableItem: React.FC<{ 
+    id: string; 
+    item: any;
+    index: number;
+    renderItem: (props: RenderItemProps) => React.ReactNode;
+    className?: string;
+}> = ({ id, item, index, renderItem, className }) => {
     const {
         attributes,
         listeners,
@@ -41,25 +54,15 @@ const SortableItem: React.FC<SortableItemProps> = ({ id, children, className, on
         transition,
         zIndex: isDragging ? 999 : 'auto',
         position: 'relative' as const,
+        touchAction: 'none'
     };
 
     return (
-        <div ref={setNodeRef} style={style} className={className} onClick={onClick}>
-            {/* Drag Handle Wrapper */}
-            <div {...attributes} {...listeners} className="touch-none h-full">
-                {children}
-            </div>
+        <div ref={setNodeRef} style={style} className={className}>
+            {renderItem({ item, index, dragListeners: listeners, dragAttributes: attributes })}
         </div>
     );
 };
-
-interface SortableListProps {
-    items: { id: string }[];
-    onOrderChange: (newItems: any[]) => void;
-    renderItem: (item: any, index: number) => React.ReactNode;
-    className?: string;
-    itemClassName?: string;
-}
 
 export const SortableList: React.FC<SortableListProps> = ({ items, onOrderChange, renderItem, className, itemClassName }) => {
     const sensors = useSensors(
@@ -95,10 +98,11 @@ export const SortableList: React.FC<SortableListProps> = ({ items, onOrderChange
                         <SortableItem 
                             key={item.id} 
                             id={item.id} 
+                            item={item}
+                            index={index}
                             className={itemClassName}
-                        >
-                            {renderItem(item, index)}
-                        </SortableItem>
+                            renderItem={renderItem}
+                        />
                     ))}
                 </div>
             </SortableContext>

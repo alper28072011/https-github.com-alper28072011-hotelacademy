@@ -75,30 +75,43 @@ export const generateCardsFromText = async (
 
 /**
  * SMART TRANSLATION SYNC
- * Translates specific fields from EN (Base) to Target Langs.
+ * Translates specific fields from SOURCE (Reference) to Target Langs.
  */
 export const translateContent = async (
     content: LocalizedString, 
-    targetLangs: string[]
+    targetLangs: string[],
+    sourceLang: string = 'en'
 ): Promise<LocalizedString> => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const baseText = content['en'];
+        const baseText = content[sourceLang];
         
-        if (!baseText) return content;
+        // If source is missing, find first available
+        const effectiveSourceText = baseText || Object.values(content)[0];
+        if (!effectiveSourceText) return content;
+
+        // Don't translate to source language
+        const realTargets = targetLangs.filter(l => l !== sourceLang);
+        if (realTargets.length === 0) return content;
 
         const schema: Schema = {
             type: Type.OBJECT,
             properties: {},
             required: []
         };
-        targetLangs.forEach(l => {
+        realTargets.forEach(l => {
             if(schema.properties) schema.properties[l] = { type: Type.STRING };
         });
 
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `Translate this text to ${targetLangs.join(', ')}. Keep tone professional/casual as implied. Text: "${baseText}"`,
+            contents: `
+                You are a professional translator.
+                Translate the following text from "${sourceLang}" to these languages: ${realTargets.join(', ')}.
+                Keep the tone consistent.
+                
+                Source Text: "${effectiveSourceText}"
+            `,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: schema
@@ -111,6 +124,7 @@ export const translateContent = async (
         }
         return content;
     } catch (e) {
+        console.error("Translation Error:", e);
         return content;
     }
 };

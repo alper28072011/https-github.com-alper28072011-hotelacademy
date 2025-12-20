@@ -6,7 +6,7 @@ import {
     Hash, Target, Globe, MonitorPlay, RefreshCw, Languages,
     FileText, Plus, GripVertical, Trash2, LayoutTemplate, Smartphone,
     Image as ImageIcon, Type, AlertTriangle, MoreHorizontal, Settings2,
-    Eye, Play
+    Eye, Play, Crown
 } from 'lucide-react';
 import { generateMagicCourse, generateCardsFromText, translateContent } from '../../services/geminiService';
 import { publishContent, deleteCourseFully } from '../../services/courseService';
@@ -56,6 +56,7 @@ export const ContentStudio: React.FC = () => {
   } | null>(null);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [activeEditorLang, setActiveEditorLang] = useState<string>('en'); 
+  const [referenceLang, setReferenceLang] = useState<string>('en'); // NEW: Source of Truth
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
@@ -70,6 +71,7 @@ export const ContentStudio: React.FC = () => {
           const availableKeys = Object.keys(incoming.title);
           setTargetLangs(availableKeys.filter(k => k !== 'en'));
           setActiveEditorLang('en');
+          setReferenceLang('en');
           
           setCourseData({
               title: incoming.title,
@@ -186,8 +188,12 @@ export const ContentStudio: React.FC = () => {
       });
 
       let newStatus = { ...courseData.translationStatus };
-      if (activeEditorLang === 'en') {
-          targetLangs.forEach(l => newStatus[l] = 'STALE');
+      
+      // IF editing Reference Lang -> Mark others STALE
+      if (activeEditorLang === referenceLang) {
+          [...targetLangs, 'en'].forEach(l => {
+              if (l !== referenceLang) newStatus[l] = 'STALE';
+          });
       }
 
       setCourseData({ ...courseData, cards: newCards, translationStatus: newStatus });
@@ -201,22 +207,19 @@ export const ContentStudio: React.FC = () => {
       const activeCard = courseData.cards.find(c => c.id === activeCardId);
       if (!activeCard) return;
 
-      const staleLangs = targetLangs.filter(l => courseData.translationStatus?.[l] === 'STALE');
-      
-      if (staleLangs.length === 0) {
-          // If no specific stale found, maybe force translate empty ones
-          // For now just translate all target langs to ensure sync
-      }
+      // Identify targets (All active langs except Reference)
+      const allLangs = Array.from(new Set(['en', ...targetLangs]));
+      const syncTargets = allLangs.filter(l => l !== referenceLang);
 
-      const newTitle = await translateContent(activeCard.title, targetLangs);
-      const newContent = await translateContent(activeCard.content, targetLangs);
+      const newTitle = await translateContent(activeCard.title, syncTargets, referenceLang);
+      const newContent = await translateContent(activeCard.content, syncTargets, referenceLang);
 
       const newCards = courseData.cards.map(c => 
           c.id === activeCardId ? { ...c, title: newTitle, content: newContent } : c
       );
 
       const newStatus = { ...courseData.translationStatus };
-      targetLangs.forEach(l => newStatus[l] = 'SYNCED');
+      syncTargets.forEach(l => newStatus[l] = 'SYNCED');
 
       setCourseData({ ...courseData, cards: newCards, translationStatus: newStatus });
       setIsProcessingAI(false);
@@ -293,7 +296,7 @@ export const ContentStudio: React.FC = () => {
 
   // --- RENDER HELPERS ---
   const currentCard = courseData?.cards.find(c => c.id === activeCardId);
-  const editorTabs = ['en', ...targetLangs];
+  const editorTabs = Array.from(new Set(['en', ...targetLangs]));
 
   return (
     <div className="flex flex-col h-screen bg-gray-100 overflow-hidden">
@@ -444,21 +447,28 @@ export const ContentStudio: React.FC = () => {
                                 items={courseData.cards}
                                 onOrderChange={handleOrderChange}
                                 className="flex flex-col gap-2"
-                                renderItem={(card, idx) => (
+                                renderItem={({ item: card, dragListeners, dragAttributes }) => (
                                     <div 
-                                        className={`p-3 rounded-xl border cursor-pointer transition-all flex gap-3 items-center group relative select-none ${
+                                        className={`p-3 rounded-xl border transition-all flex gap-3 items-center group relative select-none ${
                                             activeCardId === card.id 
                                             ? 'border-blue-500 bg-blue-50/50 ring-1 ring-blue-500/20 shadow-sm' 
                                             : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
                                         }`}
                                         onClick={() => setActiveCardId(card.id)}
                                     >
-                                        <div className="text-gray-300 group-hover:text-gray-500 cursor-grab active:cursor-grabbing"><GripVertical className="w-4 h-4" /></div>
+                                        <div 
+                                            {...dragListeners} 
+                                            {...dragAttributes}
+                                            className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing p-1 -ml-1 touch-none"
+                                        >
+                                            <GripVertical className="w-4 h-4" />
+                                        </div>
+                                        
                                         <div className="w-10 h-10 rounded-lg bg-gray-100 shrink-0 overflow-hidden border border-gray-100">
                                             {card.mediaUrl && <img src={card.mediaUrl} className="w-full h-full object-cover" />}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="text-xs font-bold text-gray-800 truncate mb-0.5">{card.title['en']}</div>
+                                            <div className={`text-xs font-bold truncate mb-0.5 ${activeCardId === card.id ? 'text-blue-900' : 'text-gray-800'}`}>{card.title['en']}</div>
                                             <div className="text-[9px] text-gray-400 uppercase font-semibold bg-gray-100 px-1.5 py-0.5 rounded w-max">{card.type}</div>
                                         </div>
                                         <button 
@@ -483,9 +493,19 @@ export const ContentStudio: React.FC = () => {
                             <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                 <div className="flex justify-between items-center text-[10px] text-gray-400 uppercase font-bold mb-2">Dil Durumu</div>
                                 <div className="space-y-1.5">
-                                    {targetLangs.map(l => (
-                                        <div key={l} className="flex justify-between items-center">
-                                            <span className="text-xs font-bold text-gray-600 uppercase">{l}</span>
+                                    {Array.from(new Set(['en', ...targetLangs])).map(l => (
+                                        <div key={l} className="flex justify-between items-center group">
+                                            <div className="flex items-center gap-2">
+                                                <button 
+                                                    onClick={() => setReferenceLang(l)}
+                                                    className={`p-1 rounded-md transition-colors ${referenceLang === l ? 'bg-yellow-100 text-yellow-600' : 'text-gray-300 hover:text-gray-500 hover:bg-gray-200'}`}
+                                                    title={referenceLang === l ? 'Referans Dil (Master)' : 'Referans Yap'}
+                                                >
+                                                    <Crown className="w-3 h-3" />
+                                                </button>
+                                                <span className={`text-xs font-bold uppercase ${referenceLang === l ? 'text-gray-800' : 'text-gray-500'}`}>{l}</span>
+                                            </div>
+                                            
                                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${courseData.translationStatus?.[l] === 'STALE' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}>
                                                 {courseData.translationStatus?.[l] || 'SYNCED'}
                                             </span>
@@ -533,6 +553,7 @@ export const ContentStudio: React.FC = () => {
                                     >
                                         {SUPPORTED_LANGUAGES.find(l => l.code === lang)?.flag} {lang.toUpperCase()}
                                         {courseData.translationStatus?.[lang] === 'STALE' && <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />}
+                                        {referenceLang === lang && <Crown className="w-3 h-3 text-yellow-500 fill-yellow-500" />}
                                     </button>
                                 ))}
                             </div>
@@ -588,7 +609,7 @@ export const ContentStudio: React.FC = () => {
                                         <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
                                             <div className="flex items-center gap-3">
                                                 <div className="p-2 bg-white rounded-lg text-orange-500 shadow-sm"><AlertTriangle className="w-5 h-5" /></div>
-                                                <div className="text-sm text-orange-800 font-medium">Bu dilin içeriği ana metinle (EN) uyumlu değil.</div>
+                                                <div className="text-sm text-orange-800 font-medium">Bu dilin içeriği ana metinle ({referenceLang.toUpperCase()}) uyumlu değil.</div>
                                             </div>
                                             <button 
                                                 onClick={handleSmartSync}
