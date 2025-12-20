@@ -1,12 +1,11 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, LogOut, Globe, Trash2, AlertTriangle, Loader2, Building2, Eye } from 'lucide-react';
+import { X, LogOut, Trash2, AlertTriangle, Loader2, Building2, Eye, Languages } from 'lucide-react';
 import { useAuthStore } from '../../../stores/useAuthStore';
-import { useAppStore } from '../../../stores/useAppStore';
-import { LanguageCode } from '../../../types';
 import { deleteUserSmart } from '../../../services/userService';
 import { updateUserProfile } from '../../../services/db';
+import { LanguagePreferences } from './LanguagePreferences';
 
 interface SettingsDrawerProps {
   onClose: () => void;
@@ -14,7 +13,6 @@ interface SettingsDrawerProps {
 
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
   const { logout, currentUser } = useAuthStore();
-  const { setLanguage, currentLanguage } = useAppStore();
   
   // Danger Zone State
   const [deleteStep, setDeleteStep] = useState(0); 
@@ -34,13 +32,6 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
           isPrivate: key === 'isPrivateAccount' ? newVal : currentUser.isPrivate
       });
   };
-
-  const languages: {code: LanguageCode, label: string, flag: string}[] = [
-      { code: 'tr', label: 'Türkçe', flag: '🇹🇷' },
-      { code: 'en', label: 'English', flag: '🇬🇧' },
-      { code: 'ru', label: 'Русский', flag: '🇷🇺' },
-      { code: 'ar', label: 'العربية', flag: '🇸🇦' },
-  ];
 
   const handleDeleteAccount = async () => {
       if (confirmText !== 'SIL' || !currentUser) return;
@@ -70,7 +61,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
         <motion.div
             initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="relative w-full max-w-xs h-full bg-white shadow-2xl flex flex-col overflow-hidden rounded-l-[2rem]"
+            className="relative w-full max-w-sm h-full bg-white shadow-2xl flex flex-col overflow-hidden rounded-l-[2rem]"
         >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50/50">
@@ -80,9 +71,16 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-8">
+            <div className="flex-1 overflow-y-auto p-6 space-y-10 custom-scrollbar">
                 
-                {/* 1. Privacy Section */}
+                {/* 1. Language Section (NEW) */}
+                <section>
+                    <LanguagePreferences />
+                </section>
+
+                <div className="h-px bg-gray-100" />
+
+                {/* 2. Privacy Section */}
                 <section>
                     <h3 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
                         <Eye className="w-4 h-4" /> Gizlilik & Görünürlük
@@ -92,18 +90,6 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
                         <button onClick={() => togglePrivacy('isPrivateAccount')} className={`w-12 h-7 rounded-full p-1 transition-colors ${privacy.isPrivateAccount ? 'bg-primary' : 'bg-gray-200'}`}>
                             <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${privacy.isPrivateAccount ? 'translate-x-5' : ''}`} />
                         </button>
-                    </div>
-                </section>
-
-                {/* 2. Language Section */}
-                <section>
-                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
-                        <Globe className="w-4 h-4" /> Dil Seçimi
-                    </h3>
-                    <div className="grid grid-cols-2 gap-2">
-                        {languages.map(lang => (
-                            <button key={lang.code} onClick={() => setLanguage(lang.code)} className={`p-3 rounded-xl border text-sm font-bold transition-all ${currentLanguage === lang.code ? 'border-primary bg-primary/5 text-primary ring-1 ring-primary' : 'border-gray-100 text-gray-600 hover:bg-gray-50'}`}>{lang.flag} {lang.label}</button>
-                        ))}
                     </div>
                 </section>
 

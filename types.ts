@@ -69,8 +69,8 @@ export interface AnalyticsEvent {
 }
 
 export interface UserPreferences {
-    appLanguage: LanguageCode;      // UI Language (Buttons, Nav)
-    contentLanguage: LanguageCode;  // Learning Content Language (Courses)
+    appLanguage: LanguageCode;           // UI Language (Single Source)
+    contentLanguages: LanguageCode[];    // PRIORITY LIST (e.g. ['tr', 'ru', 'en'])
 }
 
 export interface User {

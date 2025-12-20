@@ -3,6 +3,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { resources } from '../locales/resources';
 import { LocalizedString, LanguageDefinition } from '../types';
+import { resolveContent } from '../utils/localization';
 
 // --- CENTRALIZED LANGUAGE CONFIG ---
 export const SUPPORTED_LANGUAGES: LanguageDefinition[] = [
@@ -19,10 +20,10 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
-    lng: 'en', // default startup language (will be overwritten by user prefs)
+    lng: 'en', 
     fallbackLng: 'en',
     interpolation: {
-      escapeValue: false, // React already escapes by default
+      escapeValue: false, 
     },
     react: {
       useSuspense: true,
@@ -30,34 +31,29 @@ i18n
   });
 
 /**
- * SMART LOCALIZATION HELPER
- * Returns the best matching string for the requested language.
+ * WRAPPER FOR SMART RESOLUTION ENGINE
+ * Keeps backward compatibility while enabling array-based priority.
  * 
- * Logic:
- * 1. Check if content exists for the requested `lang`.
- * 2. If not, fallback to 'en' (The Source of Truth).
- * 3. If 'en' is missing, return the first available key.
- * 
- * @param content - The LocalizedString object (e.g., { en: "Hello", tr: "Merhaba" })
- * @param lang - The desired language code (defaults to current i18n language)
+ * @param content - Localized object
+ * @param langOrPrefs - Either a single language code OR a priority array. 
+ *                      Defaults to current i18n language if omitted.
  */
-export const getLocalizedContent = (content: LocalizedString | string | undefined, lang: string = i18n.language): string => {
-    if (!content) return "";
-    
-    // Handle legacy string data (migrated from old DB schema)
-    if (typeof content === 'string') return content;
+export const getLocalizedContent = (
+    content: LocalizedString | string | undefined, 
+    langOrPrefs?: string | string[]
+): string => {
+    let prefs: string[] = [];
 
-    // 1. Try Requested Language
-    if (content[lang]) return content[lang];
+    if (Array.isArray(langOrPrefs)) {
+        prefs = langOrPrefs;
+    } else if (typeof langOrPrefs === 'string') {
+        prefs = [langOrPrefs];
+    } else {
+        // Default to current UI language, then fallback to English
+        prefs = [i18n.language, 'en'];
+    }
 
-    // 2. Try English (Global Base)
-    if (content['en']) return content['en'];
-
-    // 3. Fallback to first available
-    const keys = Object.keys(content);
-    if (keys.length > 0) return content[keys[0]];
-
-    return "";
+    return resolveContent(content, prefs);
 };
 
 export default i18n;

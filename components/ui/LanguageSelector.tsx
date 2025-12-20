@@ -16,13 +16,15 @@ export const LanguageSelector: React.FC = () => {
   
   // Local state for Content Language (defaults to current UI lang if not set)
   const [contentLang, setContentLang] = useState<LanguageCode>(
-      currentUser?.preferences?.contentLanguage || currentLanguage
+      (currentUser?.preferences?.contentLanguages && currentUser.preferences.contentLanguages.length > 0)
+        ? currentUser.preferences.contentLanguages[0]
+        : currentLanguage
   );
 
   useEffect(() => {
       // Sync local state when user profile updates
-      if (currentUser?.preferences?.contentLanguage) {
-          setContentLang(currentUser.preferences.contentLanguage);
+      if (currentUser?.preferences?.contentLanguages && currentUser.preferences.contentLanguages.length > 0) {
+          setContentLang(currentUser.preferences.contentLanguages[0]);
       }
   }, [currentUser]);
 
@@ -38,7 +40,7 @@ export const LanguageSelector: React.FC = () => {
   const handleContentLangSelect = async (code: LanguageCode) => {
     setContentLang(code);
     if (currentUser) {
-        await updateUserPreferences(currentUser.id, { contentLanguage: code });
+        await updateUserPreferences(currentUser.id, { contentLanguages: [code] });
     }
   };
 
