@@ -13,6 +13,8 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       phoneNumber: '+905550000001', 
       avatar: 'AY', 
       currentOrganizationId: null,
+      pageRoles: {},
+      subscribedChannelIds: [],
       department: 'housekeeping', 
       role: 'staff', 
       xp: 120, 
@@ -46,6 +48,8 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       creatorLevel: 'NOVICE',
       reputationPoints: 20,
       currentOrganizationId: SEED_ORG_ID,
+      pageRoles: { [SEED_ORG_ID]: 'MEMBER' },
+      subscribedChannelIds: [],
       followersCount: 0,
       followingCount: 0
   },
@@ -67,6 +71,8 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       creatorLevel: 'RISING_STAR',
       reputationPoints: 150,
       currentOrganizationId: SEED_ORG_ID,
+      pageRoles: { [SEED_ORG_ID]: 'MEMBER' },
+      subscribedChannelIds: [],
       followersCount: 0,
       followingCount: 0
   },
@@ -89,6 +95,8 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       creatorLevel: 'EXPERT',
       reputationPoints: 400,
       currentOrganizationId: SEED_ORG_ID,
+      pageRoles: { [SEED_ORG_ID]: 'MEMBER' },
+      subscribedChannelIds: [],
       followersCount: 0,
       followingCount: 0
   },
@@ -110,6 +118,8 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       creatorLevel: 'MASTER',
       reputationPoints: 9999,
       currentOrganizationId: SEED_ORG_ID,
+      pageRoles: { [SEED_ORG_ID]: 'ADMIN' },
+      subscribedChannelIds: [],
       followersCount: 0,
       followingCount: 0
   },

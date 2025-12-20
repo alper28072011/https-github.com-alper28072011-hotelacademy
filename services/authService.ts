@@ -99,7 +99,9 @@ export const registerUser = async (data: {
     savedCourses: [],
     completedTasks: [],
     followersCount: 0,
-    followingCount: 0
+    followingCount: 0,
+    pageRoles: {},
+    subscribedChannelIds: []
   };
 
   await setDoc(doc(db, 'users', uid), newUser);

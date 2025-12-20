@@ -12,7 +12,7 @@ import { createChannel, deleteChannel, updateUserPageRole } from '../../services
 import confetti from 'canvas-confetti';
 
 export const OrganizationManager: React.FC = () => {
-  const { currentOrganization } = useOrganizationStore();
+  const { currentOrganization, switchOrganization } = useOrganizationStore();
   
   // -- GLOBAL STATE --
   const [activeTab, setActiveTab] = useState<'CHANNELS' | 'MEMBERS'>('CHANNELS');
@@ -52,9 +52,11 @@ export const OrganizationManager: React.FC = () => {
       if (success) {
           setNewChannelName('');
           setNewChannelDesc('');
+          
+          // CRITICAL FIX: Refresh store data immediately instead of window reload
+          await switchOrganization(currentOrganization.id);
+          
           alert("Kanal oluşturuldu!");
-          // Reloading whole org context ideally happens via listener, but manual reload for now
-          window.location.reload(); 
       }
       setIsProcessing(false);
   };
@@ -63,7 +65,8 @@ export const OrganizationManager: React.FC = () => {
       if (!currentOrganization) return;
       if (window.confirm("Kanalı silmek istediğinize emin misiniz?")) {
           await deleteChannel(currentOrganization.id, id);
-          window.location.reload();
+          // CRITICAL FIX: Refresh store data immediately
+          await switchOrganization(currentOrganization.id);
       }
   };
 
