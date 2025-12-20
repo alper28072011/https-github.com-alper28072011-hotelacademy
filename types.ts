@@ -10,10 +10,10 @@ export interface Language {
 }
 
 // --- CORE LOCALIZATION TYPE ---
+// Example: { tr: "Merhaba", en: "Hello" }
 export type LocalizedString = Record<string, string>;
 
 // --- NEW ARCHITECTURE: ROLES ---
-// System Level Roles (Platform Owners)
 export type UserRole = 'user' | 'super_admin' | 'staff' | 'manager' | 'admin'; 
 
 // Page Level Roles (Organization Context)
@@ -27,19 +27,20 @@ export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'mana
 
 // --- EDUCATION TYPES ---
 export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
-export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN';
+export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN' | 'INSPIRATIONAL' | 'AUTHORITATIVE';
 export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VIDEO' | 'XP_REWARD';
+export type PedagogyMode = 'STANDARD' | 'ACTIVE_RECALL' | 'SOCRATIC' | 'CASE_STUDY' | 'STORYTELLING';
+export type SourceType = 'TEXT' | 'PDF' | 'URL' | 'YOUTUBE';
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
-// --- NEW: CHANNEL DEFINITION ---
 export interface Channel {
   id: string;
-  name: string;        // e.g. "Front Office", "Life at Rubi", "English 101"
+  name: string;
   description?: string;
-  icon?: string;       // Lucide icon name
-  isPrivate: boolean;  // If true, only invitees or approved members can see
-  managerIds: string[]; // User IDs who can post content here (Moderators)
+  icon?: string;
+  isPrivate: boolean;
+  managerIds: string[];
   createdAt: number;
 }
 
@@ -48,21 +49,20 @@ export type ChannelStoryStatus = 'HAS_NEW' | 'ALL_CAUGHT_UP' | 'EMPTY';
 export interface ChannelStoryData {
     channel: Channel;
     status: ChannelStoryStatus;
-    nextCourseId?: string; // The specific course to play when clicked
+    nextCourseId?: string;
 }
 
-// --- ANALYTICS ENGINE ---
 export interface AnalyticsEvent {
-  id?: string; // Firestore ID
+  id?: string;
   userId: string;
-  userRole?: string; // Snapshot of role at time of event
-  userName?: string; // Snapshot for faster reporting
-  pageId: string;       // Organization ID
-  channelId?: string;    // Context
-  contentId: string;    // Course ID
-  cardId?: string;       // Specific Slide/Step ID
+  userRole?: string;
+  userName?: string;
+  pageId: string;
+  channelId?: string;
+  contentId: string;
+  cardId?: string;
   type: 'VIEW' | 'COMPLETE' | 'QUIZ_ANSWER' | 'TIME_SPENT' | 'DROP_OFF';
-  payload?: any;        // { question: "...", answer: "...", isCorrect: true }
+  payload?: any;
   timestamp: number;
 }
 
@@ -73,18 +73,13 @@ export interface User {
   name: string;
   phoneNumber: string; 
   avatar: string; 
-  
-  // --- NEW STRUCTURE FIELDS ---
   currentOrganizationId: string | null; 
-  pageRoles: Record<string, PageRole>; // { "org_123": "ADMIN" }
-  subscribedChannelIds: string[]; // ["channel_hk", "channel_news"]
-  
-  // Legacy fields kept optional for transition safety, but logic moved away
-  role: UserRole; // System role
+  pageRoles: Record<string, PageRole>;
+  subscribedChannelIds: string[];
+  role: UserRole;
   department?: DepartmentType | null; 
   positionId?: string | null; 
   roleTitle?: string;
-
   status: UserStatus;
   xp: number;
   creatorLevel: CreatorLevel;
@@ -120,10 +115,9 @@ export interface Course {
   authorAvatarUrl: string;
   visibility: 'PRIVATE' | 'PUBLIC';
   categoryId: string;
-  
-  // --- NEW: CHANNEL TARGETING ---
   channelId?: string; 
 
+  // Localized Fields
   title: LocalizedString; 
   description: LocalizedString;
   coverQuote?: LocalizedString;
@@ -139,8 +133,8 @@ export interface Course {
   price: number;
   priceType: 'FREE' | 'PAID';
   isFeatured?: boolean;
-  assignmentType?: 'GLOBAL' | 'OPTIONAL' | 'DEPARTMENT'; // Simplified
-  targetDepartments?: string[]; // Deprecated
+  assignmentType?: 'GLOBAL' | 'OPTIONAL' | 'DEPARTMENT';
+  targetDepartments?: string[];
   studentCount?: number;
   isNew?: boolean;
   popularityScore?: number;
@@ -158,7 +152,9 @@ export interface Course {
 export interface CourseConfig {
   level: DifficultyLevel;
   tone: CourseTone;
-  language: string; 
+  pedagogyMode: PedagogyMode; // NEW: Educational Strategy
+  sourceType: SourceType;     // NEW: Where did this come from?
+  targetLanguages: string[];  // NEW: Which languages are supported?
   autoPlay: boolean;
   slideDuration: number;
 }
@@ -166,18 +162,34 @@ export interface CourseConfig {
 export interface StoryCard {
   id: string;
   type: StoryCardType;
+  // Localized Content
   title: LocalizedString;
   content: LocalizedString;
+  
   mediaUrl: string;
   mediaPrompt?: string; 
   duration: number; 
   interaction?: {
     question: LocalizedString;
-    options: LocalizedString[]; 
-    correctAnswer: string; 
+    options: LocalizedString[]; // Array of localized strings
+    correctAnswer: string; // Identifier or key, not display text
     correctOptionIndex?: number;
     explanation?: LocalizedString;
   };
+}
+
+// --- NEW: LEARNING JOURNEY (SERIES) ---
+export interface LearningJourney {
+    id: string;
+    organizationId: string;
+    title: LocalizedString;
+    description: LocalizedString;
+    channelId?: string;
+    coverUrl: string;
+    courseIds: string[]; // Ordered list of Course IDs
+    isPublished: boolean;
+    createdAt: number;
+    tags: string[];
 }
 
 export type AuthorType = 'USER' | 'ORGANIZATION';
@@ -244,11 +256,7 @@ export interface Organization {
   size?: OrganizationSize; 
   status: OrganizationStatus; 
   deletionReason?: string; 
-  
-  // --- NEW: CHANNELS ---
   channels: Channel[];
-  
-  // --- NEW: DEFINITIONS ---
   definitions?: {
       departments: OrgDepartmentDefinition[];
       positionPrototypes: PositionPrototype[];
