@@ -7,6 +7,7 @@ interface GeneratedCourse {
   description: LocalizedString;
   cards: StoryCard[];
   tags: string[];
+  topics: string[]; // Adaptive learning topics
 }
 
 const cleanJsonResponse = (text: string): string => {
@@ -32,6 +33,8 @@ export const generateCardsFromText = async (
                 content: { type: Type.OBJECT, properties: { en: { type: Type.STRING } }, required: ['en'] },
                 mediaPrompt: { type: Type.STRING },
                 duration: { type: Type.NUMBER },
+                // AI should tag the specific topic of this card
+                topics: { type: Type.ARRAY, items: { type: Type.STRING } }, 
                 interaction: {
                     type: Type.OBJECT,
                     properties: {
@@ -50,6 +53,7 @@ export const generateCardsFromText = async (
                 Create ${count} micro-learning cards based on this text.
                 Language: English (Master Copy).
                 Format: JSON Array.
+                Also extract 1-2 key 'topics' (e.g., 'fire-safety', 'greeting-guests') for each card for adaptive learning.
                 Text: "${text.substring(0, 5000)}"
             `,
             config: {
@@ -75,7 +79,6 @@ export const generateCardsFromText = async (
 
 /**
  * SMART TRANSLATION SYNC
- * Translates specific fields from SOURCE (Reference) to Target Langs.
  */
 export const translateContent = async (
     content: LocalizedString, 
@@ -86,11 +89,9 @@ export const translateContent = async (
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const baseText = content[sourceLang];
         
-        // If source is missing, find first available
         const effectiveSourceText = baseText || Object.values(content)[0];
         if (!effectiveSourceText) return content;
 
-        // Don't translate to source language
         const realTargets = targetLangs.filter(l => l !== sourceLang);
         if (realTargets.length === 0) return content;
 
@@ -130,13 +131,13 @@ export const translateContent = async (
 };
 
 /**
- * GENERATE MAGIC COURSE V2 (Multi-Language & English-First)
+ * GENERATE MAGIC COURSE V2 (Multi-Language & Adaptive)
  */
 export const generateMagicCourse = async (
   sourceContent: string,
   config: {
-    sourceLanguage: string; // New: What language did the user type?
-    targetLanguages: string[]; // ['tr', 'ru'] - 'en' is implicitly added
+    sourceLanguage: string;
+    targetLanguages: string[];
     level: DifficultyLevel;
     tone: CourseTone;
     length: 'SHORT' | 'MEDIUM';
@@ -147,17 +148,14 @@ export const generateMagicCourse = async (
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const cardCount = config.length === 'SHORT' ? 5 : 8;
     
-    // Ensure EN is always present in output targets
     const outputLanguages = Array.from(new Set(['en', ...config.targetLanguages]));
 
-    // --- 1. DYNAMIC SCHEMA CONSTRUCTION ---
     const localizedStringSchema: Schema = {
         type: Type.OBJECT,
         properties: {},
-        required: ['en'] // English is the BASE Source of Truth
+        required: ['en']
     };
     
-    // Add each language code
     outputLanguages.forEach(lang => {
         if(localizedStringSchema.properties) {
             localizedStringSchema.properties[lang] = { type: Type.STRING };
@@ -170,6 +168,7 @@ export const generateMagicCourse = async (
         title: localizedStringSchema,
         description: localizedStringSchema,
         tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+        topics: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Specific skills or topics this course teaches (e.g. 'wine-pairing', 'conflict-resolution')" },
         cards: {
           type: Type.ARRAY,
           items: {
@@ -181,11 +180,11 @@ export const generateMagicCourse = async (
               content: localizedStringSchema,
               mediaPrompt: { type: Type.STRING, description: "Detailed English prompt for Unsplash" },
               duration: { type: Type.NUMBER },
+              topics: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Topics specific to this card/question" },
               interaction: {
                 type: Type.OBJECT,
                 properties: {
                   question: localizedStringSchema,
-                  // Options is an array of LocalizedObjects
                   options: { 
                       type: Type.ARRAY, 
                       items: localizedStringSchema 
@@ -200,21 +199,19 @@ export const generateMagicCourse = async (
           }
         }
       },
-      required: ["title", "description", "cards", "tags"]
+      required: ["title", "description", "cards", "tags", "topics"]
     };
 
-    // --- 2. PROMPT ENGINEERING ---
     let pedagogyInstruction = "";
     switch (config.pedagogyMode) {
         case 'ACTIVE_RECALL': pedagogyInstruction = "Use 'Active Recall'. Every 2nd card MUST be a QUIZ."; break;
         case 'SOCRATIC': pedagogyInstruction = "Use 'Socratic Method'. Ask rhetorical questions in INFO cards."; break;
         case 'STORYTELLING': pedagogyInstruction = "Use a narrative arc. Introduce a character or scenario."; break;
-        case 'CASE_STUDY': pedagogyInstruction = "Present a real-world hotel scenario (Problem -> Analysis -> Solution)."; break;
         default: pedagogyInstruction = "Use standard micro-learning best practices.";
     }
 
     const prompt = `
-      ROLE: Instructional Designer & Polyglot Linguist.
+      ROLE: Instructional Designer & Data Scientist.
       
       TASK: Create a micro-course based on the source text.
       
@@ -222,8 +219,12 @@ export const generateMagicCourse = async (
       OUTPUT LANGUAGES: ${outputLanguages.join(', ')}.
       
       IMPORTANT: "en" (English) is the MASTER COPY. 
-      1. First, create the content in English (even if source is ${config.sourceLanguage}).
-      2. Then, translate the English version to: ${config.targetLanguages.join(', ')}.
+      1. First, create the content in English.
+      2. Then, translate to: ${config.targetLanguages.join(', ')}.
+      
+      INTELLIGENCE:
+      - Identify 2-3 specific 'topics' (kebab-case) that represent the skills taught (e.g., 'upselling-techniques', 'room-service-etiquette').
+      - Add these to the course 'topics' field.
       
       PEDAGOGY: ${pedagogyInstruction}
       TONE: ${config.tone}.
@@ -250,7 +251,6 @@ export const generateMagicCourse = async (
       const cleanedJson = cleanJsonResponse(rawText);
       const data = JSON.parse(cleanedJson) as GeneratedCourse;
       
-      // Post-process IDs and Images
       data.cards = data.cards.map((card, i) => ({
           ...card,
           id: `card-${Date.now()}-${i}`,

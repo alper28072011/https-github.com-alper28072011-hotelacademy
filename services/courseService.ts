@@ -25,6 +25,7 @@ import {
 } from '../types';
 import { getOrganizationDetails } from './db';
 import { deleteFileByUrl } from './storage';
+import { getPersonalizedRecommendations } from './recommendationService';
 
 // Helper to remove undefined values which Firestore rejects
 const sanitizeData = (data: any): any => {
@@ -83,7 +84,6 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
             authorAvatarUrl
         };
 
-        // Sanitize data to remove undefined fields before sending to Firestore
         const cleanData = sanitizeData(finalData);
 
         await addDoc(collection(db, 'courses'), cleanData);
@@ -164,13 +164,26 @@ export const submitReview = async (
 };
 
 /**
- * Intelligent Feed Algorithm
+ * INTELLIGENT FEED ALGORITHM
+ * Combines general "Verified" content with "Personalized Recommendations"
  */
 export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promise<Course[]> => {
     try {
         const coursesRef = collection(db, 'courses');
-        let q;
+        let courses: Course[] = [];
 
+        // 1. Fetch Personalized Recs (If Org user)
+        if (user.currentOrganizationId) {
+            const { courses: recCourses } = await getPersonalizedRecommendations(user.id, user.currentOrganizationId);
+            
+            // Mark them as "Recommended" (Client-side flag if needed, or just prepend)
+            // Ideally we filter out completed ones in the service, but let's double check
+            const newRecs = recCourses.filter(c => !user.completedCourses.includes(c.id));
+            courses = [...newRecs]; 
+        }
+
+        // 2. Fetch General Feed
+        let q;
         if (showVerifiedOnly) {
             q = query(
                 coursesRef, 
@@ -187,8 +200,19 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
         }
 
         const snapshot = await getDocs(q);
-        let courses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Course));
+        const generalCourses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Course));
         
+        // Merge and Deduplicate
+        const idSet = new Set(courses.map(c => c.id));
+        generalCourses.forEach(c => {
+            if (!idSet.has(c.id)) {
+                courses.push(c);
+            }
+        });
+
+        // Sort: Recommended first, then by Date
+        // If it's a recommendation (in top N), keep it. Otherwise sort by date.
+        // Simple sort for now: Date descending.
         return courses.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (error) {
         console.error("Smart Feed Error:", error);
@@ -196,50 +220,29 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
     }
 };
 
-/**
- * DELETION ENGINE
- * Deletes the course document AND all associated media from Storage.
- * Guaranteed Cleanup: Even if media deletion fails, document is removed.
- */
 export const deleteCourseFully = async (courseId: string): Promise<boolean> => {
     try {
-        // 1. Fetch Course Data
         const courseRef = doc(db, 'courses', courseId);
         const courseSnap = await getDoc(courseRef);
         
-        if (!courseSnap.exists()) return true; // Already deleted
+        if (!courseSnap.exists()) return true; 
         
         const course = courseSnap.data() as Course;
 
-        // 2. Try to Delete Files (Best Effort)
         try {
             const filesToDelete: Promise<void>[] = [];
-
-            // Cover Image
-            if (course.thumbnailUrl) {
-                filesToDelete.push(deleteFileByUrl(course.thumbnailUrl));
-            }
-
-            // Slide Media
+            if (course.thumbnailUrl) filesToDelete.push(deleteFileByUrl(course.thumbnailUrl));
             if (course.steps && course.steps.length > 0) {
                 course.steps.forEach((step: StoryCard) => {
-                    if (step.mediaUrl) {
-                        filesToDelete.push(deleteFileByUrl(step.mediaUrl));
-                    }
+                    if (step.mediaUrl) filesToDelete.push(deleteFileByUrl(step.mediaUrl));
                 });
             }
-
-            // Execute parallel deletion, wait for all, ignore individual errors inside deleteFileByUrl
-            if (filesToDelete.length > 0) {
-                await Promise.allSettled(filesToDelete);
-            }
+            if (filesToDelete.length > 0) await Promise.allSettled(filesToDelete);
         } catch (fileErr) {
-            console.warn("Media deletion partial failure (ignoring to proceed with doc delete):", fileErr);
+            console.warn("Media deletion partial failure", fileErr);
         }
 
-        // 3. Delete Document (Guaranteed)
         await deleteDoc(courseRef);
-
         return true;
     } catch (error) {
         console.error("Course Full Delete Failed:", error);

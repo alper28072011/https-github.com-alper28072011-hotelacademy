@@ -1,5 +1,4 @@
 
-
 export type LanguageCode = 'en' | 'tr' | 'ru' | 'de' | 'id' | 'ar' | 'uk' | 'es' | 'fr';
 
 export interface LanguageDefinition {
@@ -35,6 +34,21 @@ export type SourceType = 'TEXT' | 'PDF' | 'URL' | 'YOUTUBE';
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
+// --- ADAPTIVE LEARNING & SKILLS ---
+export interface SkillMetric {
+    level: number; // 0 to 100
+    lastTestedAt: number;
+    failureCount: number;
+    successCount: number;
+}
+
+export interface UserSkillProfile {
+    userId: string;
+    // Key is the topic ID (e.g., 'english-grammar', 'front-desk-checkin')
+    skills: Record<string, SkillMetric>; 
+    updatedAt: number;
+}
+
 export interface Channel {
   id: string;
   name: string;
@@ -64,6 +78,11 @@ export interface AnalyticsEvent {
   contentId: string;
   cardId?: string;
   type: 'VIEW' | 'COMPLETE' | 'QUIZ_ANSWER' | 'TIME_SPENT' | 'DROP_OFF';
+  
+  // Adaptive Learning Extensions
+  relatedTopics?: string[];
+  outcome?: 'SUCCESS' | 'FAILURE' | 'NEUTRAL';
+  
   payload?: any;
   timestamp: number;
 }
@@ -167,7 +186,11 @@ export interface Course {
   xpReward: number;
   createdAt?: number;
   steps: StoryCard[]; 
-  tags?: string[];
+  
+  // Tagging & Intelligence
+  tags?: string[]; // General search tags (e.g. #summer, #vip)
+  topics?: string[]; // Skill-based topics (e.g. 'wine-service', 'fire-safety')
+
   priority?: 'HIGH' | 'NORMAL';
   config?: CourseConfig;
   price: number;
@@ -224,6 +247,9 @@ export interface StoryCard {
     explanation?: LocalizedString;
   };
   
+  // Adaptive Learning per Card
+  topics?: string[]; // Specific topics this card/question tests
+
   source?: ContentSource;
 }
 
@@ -379,3 +405,7 @@ export interface PositionPrototype {
 }
 
 export type PermissionType = 'CAN_CREATE_CONTENT' | 'CAN_MANAGE_TEAM';
+/* 
+ Future Optimization:
+ export interface UserFeed { userId: string; feedItems: string[]; lastUpdated: number; } 
+*/
