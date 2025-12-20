@@ -1,7 +1,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Organization, Membership, User, DepartmentType, UserRole } from '../types';
+import { Organization, Membership, User, DepartmentType, UserRole, Channel } from '../types';
 import { getOrganizationDetails, getMyMemberships, switchUserActiveOrganization } from '../services/db';
 import { useAuthStore } from './useAuthStore'; // Import Auth Store for cross-store update
 
@@ -13,6 +13,11 @@ interface OrganizationState {
   // Actions
   fetchMemberships: (userId: string) => Promise<void>;
   switchOrganization: (orgId: string) => Promise<boolean>;
+  
+  // Optimistic UI Actions
+  addLocalChannel: (channel: Channel) => void;
+  removeLocalChannel: (channelId: string) => void;
+  
   reset: () => void;
 }
 
@@ -94,6 +99,29 @@ export const useOrganizationStore = create<OrganizationState>()(
             return false;
         }
       },
+
+      addLocalChannel: (channel: Channel) => set((state) => {
+          if (!state.currentOrganization) return {};
+          // Add to start of list for better visibility
+          const newChannels = [channel, ...(state.currentOrganization.channels || [])];
+          return {
+              currentOrganization: {
+                  ...state.currentOrganization,
+                  channels: newChannels
+              }
+          };
+      }),
+
+      removeLocalChannel: (channelId: string) => set((state) => {
+          if (!state.currentOrganization) return {};
+          const newChannels = (state.currentOrganization.channels || []).filter(c => c.id !== channelId);
+          return {
+              currentOrganization: {
+                  ...state.currentOrganization,
+                  channels: newChannels
+              }
+          };
+      }),
 
       reset: () => set({ currentOrganization: null, myMemberships: [] })
     }),

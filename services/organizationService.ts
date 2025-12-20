@@ -20,7 +20,7 @@ export const updateOrganizationLogo = async (orgId: string, file: File, oldUrl?:
 
 // --- CHANNEL MANAGEMENT (NEW) ---
 
-export const createChannel = async (orgId: string, name: string, description: string, isPrivate: boolean): Promise<boolean> => {
+export const createChannel = async (orgId: string, name: string, description: string, isPrivate: boolean): Promise<Channel | null> => {
     try {
         const newChannel: Channel = {
             id: `ch_${Date.now()}`,
@@ -33,10 +33,10 @@ export const createChannel = async (orgId: string, name: string, description: st
         await updateDoc(doc(db, 'organizations', orgId), {
             channels: arrayUnion(newChannel)
         });
-        return true;
+        return newChannel;
     } catch (e) {
         console.error("Create Channel Error:", e);
-        return false;
+        return null;
     }
 };
 
