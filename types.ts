@@ -187,6 +187,10 @@ export interface Course {
     type: string;
   };
   
+  // Scalable Counters
+  likesCount?: number;
+  completesCount?: number;
+  
   // NEW: Translation Management
   translationStatus?: Record<string, TranslationStatus>;
 }
@@ -243,7 +247,27 @@ export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
 
 export interface Category { id: string; title: string; icon: string; color: string; }
 export interface CareerPath { id: string; organizationId: string; title: string; description: string; targetRole: string; department: string; courseIds: string[]; }
-export interface FeedPost { id: string; organizationId: string; authorType: AuthorType; authorId: string; authorName: string; authorAvatar: string; type: 'image' | 'video' | 'kudos' | 'course'; mediaUrl?: string; caption: string; likes: number; createdAt: number; likedBy?: string[]; kudosData?: { badgeType: KudosType; recipientId: string; recipientName: string; }; channelId?: string; }
+
+export interface FeedPost { 
+    id: string; 
+    organizationId: string; 
+    authorType: AuthorType; 
+    authorId: string; 
+    authorName: string; 
+    authorAvatar: string; 
+    type: 'image' | 'video' | 'kudos' | 'course'; 
+    mediaUrl?: string; 
+    caption: string; 
+    
+    // Scalable Counters
+    likesCount: number; 
+    commentsCount: number;
+    
+    createdAt: number; 
+    // removed likedBy array for scalability, handled via subcollection check
+    kudosData?: { badgeType: KudosType; recipientId: string; recipientName: string; }; 
+    channelId?: string; 
+}
 
 export interface Task {
   id: string;

@@ -1,8 +1,8 @@
 
 /**
  * NATIVE IMAGE OPTIMIZER
- * Uses HTML5 Canvas to resize and compress images on the client-side before upload.
- * No external dependencies required.
+ * Uses HTML5 Canvas to resize and compress images to WebP on the client-side.
+ * Drastically reduces bandwidth usage.
  */
 
 export type OptimizationType = 'AVATAR' | 'POST' | 'BANNER';
@@ -11,13 +11,12 @@ interface OptimizationConfig {
     maxWidth: number;
     maxHeight: number;
     quality: number; // 0 to 1
-    mimeType: string;
 }
 
 const CONFIGS: Record<OptimizationType, OptimizationConfig> = {
-    AVATAR: { maxWidth: 500, maxHeight: 500, quality: 0.7, mimeType: 'image/jpeg' }, // Instagram-like avatar
-    POST: { maxWidth: 1920, maxHeight: 1920, quality: 0.8, mimeType: 'image/jpeg' }, // High quality feed
-    BANNER: { maxWidth: 1200, maxHeight: 600, quality: 0.75, mimeType: 'image/jpeg' } // Cover images
+    AVATAR: { maxWidth: 500, maxHeight: 500, quality: 0.75 }, 
+    POST: { maxWidth: 1920, maxHeight: 1920, quality: 0.8 }, 
+    BANNER: { maxWidth: 1200, maxHeight: 600, quality: 0.8 } 
 };
 
 export const compressImage = (file: File, type: OptimizationType): Promise<File> => {
@@ -60,11 +59,14 @@ export const compressImage = (file: File, type: OptimizationType): Promise<File>
                 // Smooth resizing
                 ctx.drawImage(img, 0, 0, width, height);
 
+                // Convert to WebP
                 canvas.toBlob(
                     (blob) => {
                         if (blob) {
-                            const optimizedFile = new File([blob], file.name, {
-                                type: config.mimeType,
+                            // Replace extension with .webp
+                            const newName = file.name.replace(/\.[^/.]+$/, "") + ".webp";
+                            const optimizedFile = new File([blob], newName, {
+                                type: 'image/webp',
                                 lastModified: Date.now(),
                             });
                             resolve(optimizedFile);
@@ -72,7 +74,7 @@ export const compressImage = (file: File, type: OptimizationType): Promise<File>
                             reject(new Error("Image compression failed"));
                         }
                     },
-                    config.mimeType,
+                    'image/webp',
                     config.quality
                 );
             };

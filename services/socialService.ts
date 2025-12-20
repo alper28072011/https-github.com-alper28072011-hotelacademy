@@ -1,10 +1,10 @@
 
 import { 
     doc, runTransaction, collection, query, where, getDocs, 
-    serverTimestamp, limit
+    serverTimestamp, limit, increment, writeBatch, getDoc, setDoc, deleteDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { FollowStatus, Relationship, User } from '../types';
+import { FollowStatus, Relationship, User, FeedPost } from '../types';
 
 const relationshipsRef = collection(db, 'relationships');
 
@@ -31,11 +31,10 @@ export const checkFollowStatus = async (currentUserId: string, targetId: string)
 };
 
 /**
- * Polymorphic Follow Function
+ * Polymorphic Follow Function (SCALABLE VERSION)
  * Updates:
- * 1. Relationships collection
- * 2. Follower's 'following' array and count
- * 3. Target's (User or Org) 'followers' count
+ * 1. Relationships collection (Source of Truth)
+ * 2. Atomic Counters (followingCount, followersCount)
  */
 export const followEntity = async (
     currentUserId: string, 
@@ -45,23 +44,17 @@ export const followEntity = async (
     try {
         const result = await runTransaction(db, async (transaction) => {
             let isPrivate = false;
-            let currentFollowersCount = 0;
 
-            // 1. Get Target Data
+            // 1. Get Target Data (Optimized Read)
+            const targetCollection = targetType === 'USER' ? 'users' : 'organizations';
+            const targetRef = doc(db, targetCollection, targetId);
+            const targetSnap = await transaction.get(targetRef);
+            
+            if (!targetSnap.exists()) throw new Error("Target not found");
+            
             if (targetType === 'USER') {
-                const targetRef = doc(db, 'users', targetId);
-                const targetSnap = await transaction.get(targetRef);
-                if (!targetSnap.exists()) throw new Error("Target user not found");
                 const data = targetSnap.data() as User;
                 isPrivate = data.isPrivate || false;
-                currentFollowersCount = data.followersCount || 0;
-            } else {
-                const targetRef = doc(db, 'organizations', targetId);
-                const targetSnap = await transaction.get(targetRef);
-                if (!targetSnap.exists()) throw new Error("Target organization not found");
-                // Orgs are public by default in this context
-                isPrivate = false; 
-                currentFollowersCount = targetSnap.data()?.followersCount || 0;
             }
 
             // 2. Check existing relationship
@@ -84,22 +77,19 @@ export const followEntity = async (
                 createdAt: Date.now()
             });
 
-            // 4. If immediately accepted, update counts and arrays
+            // 4. ATOMIC INCREMENTS (No Array Manipulation)
             if (relStatus === 'ACCEPTED') {
                 const currentUserRef = doc(db, 'users', currentUserId);
-                const currentUserSnap = await transaction.get(currentUserRef);
-                const currentFollowing = currentUserSnap.data()?.following || [];
-
-                // Update my following list
+                
+                // Increment 'followingCount' on me
                 transaction.update(currentUserRef, { 
-                    following: [...currentFollowing, targetId],
-                    followingCount: (currentUserSnap.data()?.followingCount || 0) + 1
+                    followingCount: increment(1)
                 });
 
-                // Update target's followers count
-                const targetCollection = targetType === 'USER' ? 'users' : 'organizations';
-                const targetRef = doc(db, targetCollection, targetId);
-                transaction.update(targetRef, { followersCount: currentFollowersCount + 1 });
+                // Increment 'followersCount' on target
+                transaction.update(targetRef, { 
+                    followersCount: increment(1) 
+                });
             }
 
             return { status: relStatus === 'ACCEPTED' ? 'FOLLOWING' : 'PENDING', success: true };
@@ -113,7 +103,7 @@ export const followEntity = async (
 };
 
 /**
- * Polymorphic Unfollow Function
+ * Polymorphic Unfollow Function (SCALABLE VERSION)
  */
 export const unfollowEntity = async (
     currentUserId: string, 
@@ -133,26 +123,17 @@ export const unfollowEntity = async (
             // 1. Delete Relationship Doc
             transaction.delete(snapshot.docs[0].ref);
 
-            // 2. Update my counts
+            // 2. Atomic Decrements
             const currentUserRef = doc(db, 'users', currentUserId);
-            const userSnap = await transaction.get(currentUserRef);
-            if (userSnap.exists()) {
-                const newFollowing = (userSnap.data()?.following || []).filter((id: string) => id !== targetId);
-                transaction.update(currentUserRef, { 
-                    following: newFollowing,
-                    followingCount: Math.max(0, (userSnap.data()?.followingCount || 0) - 1)
-                });
-            }
+            transaction.update(currentUserRef, { 
+                followingCount: increment(-1)
+            });
 
-            // 3. Update target's count
             const targetCollection = targetType === 'USER' ? 'users' : 'organizations';
             const targetRef = doc(db, targetCollection, targetId);
-            const targetSnap = await transaction.get(targetRef);
-            if (targetSnap.exists()) {
-                transaction.update(targetRef, { 
-                    followersCount: Math.max(0, (targetSnap.data()?.followersCount || 0) - 1) 
-                });
-            }
+            transaction.update(targetRef, { 
+                followersCount: increment(-1) 
+            });
         });
         return true;
     } catch (e) {
@@ -170,7 +151,47 @@ export const unfollowUserSmart = async (currentUserId: string, targetId: string)
     return unfollowEntity(currentUserId, targetId, 'USER');
 };
 
-// Added followOrganizationSmart to fix error in OrganizationProfile.tsx
 export const followOrganizationSmart = async (currentUserId: string, orgId: string) => {
     return followEntity(currentUserId, orgId, 'ORGANIZATION');
+};
+
+/**
+ * SCALABLE POST LIKE SYSTEM (Sub-collection Pattern)
+ * Avoids 1MB limit on main document
+ */
+export const togglePostLikeScalable = async (postId: string, userId: string, isLiked: boolean) => {
+    try {
+        const batch = writeBatch(db);
+        const postRef = doc(db, 'posts', postId);
+        const likeRef = doc(db, 'posts', postId, 'likes', userId); // Consistent ID for idempotency
+
+        if (isLiked) {
+            // Add Like
+            batch.set(likeRef, { userId, createdAt: Date.now() });
+            batch.update(postRef, { likesCount: increment(1) });
+        } else {
+            // Remove Like
+            batch.delete(likeRef);
+            batch.update(postRef, { likesCount: increment(-1) });
+        }
+
+        await batch.commit();
+        return true;
+    } catch (e) {
+        console.error("Like Toggle Error:", e);
+        return false;
+    }
+};
+
+/**
+ * Checks if user liked a post (using subcollection)
+ */
+export const hasUserLikedPost = async (postId: string, userId: string): Promise<boolean> => {
+    try {
+        const likeRef = doc(db, 'posts', postId, 'likes', userId);
+        const snap = await getDoc(likeRef);
+        return snap.exists();
+    } catch (e) {
+        return false;
+    }
 };

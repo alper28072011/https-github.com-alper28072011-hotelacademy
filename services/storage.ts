@@ -5,6 +5,7 @@ import { compressImage, OptimizationType } from '../utils/imageOptimizer';
 
 /**
  * Uploads a file to Firebase Storage with automatic client-side compression.
+ * Enforces WebP for images.
  */
 export const uploadFile = async (
   file: File, 
@@ -15,11 +16,18 @@ export const uploadFile = async (
   
   // 1. Compress Image (if it's an image)
   let fileToUpload = file;
+  
   if (file.type.startsWith('image/')) {
       try {
           fileToUpload = await compressImage(file, optimizationType);
       } catch (e) {
           console.warn("Image compression failed, uploading original.", e);
+      }
+  } 
+  // 2. Video Validation (Basic)
+  else if (file.type.startsWith('video/')) {
+      if (file.size > 100 * 1024 * 1024) { // 100MB Limit for client upload
+          throw new Error("Video boyutu 100MB'dan küçük olmalıdır.");
       }
   }
 
@@ -56,12 +64,10 @@ export const deleteFileByUrl = async (url: string | undefined | null): Promise<v
     if (!url || !url.includes('firebasestorage')) return;
 
     try {
-        // Extract the path from the URL properly or create ref from URL directly
         const fileRef = ref(storage, url);
         await deleteObject(fileRef);
         console.log(`Deleted file: ${url}`);
     } catch (error: any) {
-        // Ignore "Object not found" errors, log others
         if (error.code !== 'storage/object-not-found') {
             console.warn(`Failed to delete file (${url}):`, error);
         }

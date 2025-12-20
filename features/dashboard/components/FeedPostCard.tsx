@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Star, Users, Zap, Bookmark, Play, Clock, Building2, BadgeCheck } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Star, Users, Zap, Bookmark, Play, Clock, BadgeCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { FeedPost, KudosType, Course } from '../../../types';
-import { togglePostLike, toggleSaveCourse, getUserById, getOrganizationDetails } from '../../../services/db';
+import { toggleSaveCourse, getUserById, getOrganizationDetails } from '../../../services/db';
+import { togglePostLikeScalable, hasUserLikedPost } from '../../../services/socialService';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { getLocalizedContent } from '../../../i18n/config';
 import { Avatar } from '../../../components/ui/Avatar';
@@ -22,31 +23,34 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
   const isKudos = (post as any).type === 'kudos';
   
   // Like State (For Posts)
-  const isLikedByMe = !isCourse && (post as FeedPost).likedBy?.includes(currentUser?.id || '');
-  const [liked, setLiked] = useState(isLikedByMe);
-  const [likeCount, setLikeCount] = useState(!isCourse ? (post as FeedPost).likes : 0);
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(!isCourse ? (post as FeedPost).likesCount || 0 : 0);
   const [isLikeAnimating, setIsLikeAnimating] = useState(false);
+
+  // Check Liked Status on Mount
+  useEffect(() => {
+      if (!isCourse && currentUser) {
+          hasUserLikedPost(post.id, currentUser.id).then(setLiked);
+      }
+  }, [post.id, currentUser, isCourse]);
 
   // Bookmark State (For Courses)
   const isSavedByMe = isCourse && currentUser?.savedCourses?.includes(post.id);
   const [saved, setSaved] = useState(isSavedByMe);
 
   // -- Author Logic (Initial Static Data) --
-  // Fallback to orgId if author info is missing (Legacy support)
   const initialAuthorName = post.authorName || (post.organizationId ? 'Kurumsal' : 'Anonim');
   const initialAuthorAvatar = isCourse ? (post as any).authorAvatarUrl : (post as any).authorAvatar;
   const authorType = (post as any).authorType || 'ORGANIZATION'; 
   const authorId = post.authorId || post.organizationId;
 
   // -- LIVE DATA FETCHING --
-  // This ensures we always show the CURRENT avatar/name, not the one saved when posted.
   const [liveAuthor, setLiveAuthor] = useState<{ name: string; avatar: string | null } | null>(null);
 
   useEffect(() => {
       let isMounted = true;
       const fetchLiveAuthor = async () => {
           if (!authorId) return;
-
           try {
               if (authorType === 'USER') {
                   const user = await getUserById(authorId);
@@ -54,7 +58,6 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
                       setLiveAuthor({ name: user.name, avatar: user.avatar });
                   }
               } else {
-                  // Organization
                   const org = await getOrganizationDetails(authorId);
                   if (isMounted && org) {
                       setLiveAuthor({ name: org.name, avatar: org.logoUrl });
@@ -64,22 +67,24 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
               console.error("Failed to fetch live author data", e);
           }
       };
-
       fetchLiveAuthor();
       return () => { isMounted = false; };
   }, [authorId, authorType]);
 
-  // Use live data if available, fallback to static snapshot
   const displayAvatar = liveAuthor?.avatar ?? initialAuthorAvatar;
   const displayName = liveAuthor?.name ?? initialAuthorName;
 
   const handleLike = async () => {
       if (!currentUser || isCourse) return;
+      
       const newStatus = !liked;
+      
+      // Optimistic Update
       setLiked(newStatus);
       setLikeCount(prev => newStatus ? prev + 1 : prev - 1);
-      setIsLikeAnimating(true);
-      await togglePostLike(post.id, currentUser.id, !newStatus);
+      if(newStatus) setIsLikeAnimating(true);
+      
+      await togglePostLikeScalable(post.id, currentUser.id, newStatus);
   };
 
   const handleBookmark = async (e: React.MouseEvent) => {
@@ -92,11 +97,8 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
 
   const handleAuthorClick = (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (authorType === 'USER') {
-          navigate(`/user/${authorId}`);
-      } else {
-          navigate(`/org/${authorId}`);
-      }
+      if (authorType === 'USER') navigate(`/user/${authorId}`);
+      else navigate(`/org/${authorId}`);
   };
 
   const handleCourseClick = () => {
