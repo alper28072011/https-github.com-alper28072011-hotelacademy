@@ -20,7 +20,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Course, Task, Issue, Category, CareerPath, FeedPost, Organization, Membership, JoinRequest, OrganizationSector, PageRole } from '../types';
+import { User, Course, Task, Issue, Category, CareerPath, FeedPost, Organization, Membership, JoinRequest, OrganizationSector, PageRole, PermissionType } from '../types';
 
 // Collection References
 const usersRef = collection(db, 'users');
@@ -356,14 +356,14 @@ export const cancelJoinRequest = async (requestId: string): Promise<boolean> => 
     } catch (e) { return false; }
 };
 
-export const getJoinRequests = async (orgId: string, department?: string): Promise<(JoinRequest & { user?: User })[]> => {
+export const getJoinRequests = async (orgId: string, departmentFilter?: string): Promise<(JoinRequest & { user?: User })[]> => {
     try {
         let q = query(requestsRef, where('organizationId', '==', orgId), where('status', '==', 'PENDING'));
-        if (department) {
-            // Assumed filter logic, requires field in DB or post-filter
-            q = query(q, where('targetDepartment', '==', department));
-        }
         
+        if (departmentFilter) {
+            q = query(q, where('targetDepartment', '==', departmentFilter));
+        }
+
         const snap = await getDocs(q);
         const reqs = snap.docs.map(d => ({ id: d.id, ...d.data() } as JoinRequest));
         
@@ -374,7 +374,7 @@ export const getJoinRequests = async (orgId: string, department?: string): Promi
     } catch (e) { return []; }
 };
 
-export const approveJoinRequest = async (requestId: string, request: JoinRequest, roleTitle?: string, permissions?: string[]) => {
+export const approveJoinRequest = async (requestId: string, request: JoinRequest, roleTitle?: string, permissions?: PermissionType[]) => {
     try {
         return await runTransaction(db, async (transaction) => {
             // 1. Create Membership
@@ -397,6 +397,7 @@ export const approveJoinRequest = async (requestId: string, request: JoinRequest
                 [`pageRoles.${request.organizationId}`]: 'MEMBER'
             };
             if (roleTitle) updates.roleTitle = roleTitle;
+            // TODO: Handle permissions if needed, usually stored in position or membership
             
             transaction.update(userRef, updates);
 
@@ -500,21 +501,25 @@ export const getCareerPath = async (id: string): Promise<CareerPath | null> => {
     } catch (e) { return null; }
 };
 
-export const getCareerPathByDepartment = async (department: string, orgId: string): Promise<CareerPath | null> => {
+export const getCareerPathByDepartment = async (dept: string, orgId: string): Promise<CareerPath | null> => {
     try {
-        const q = query(collection(db, 'careerPaths'), where('department', '==', department), where('organizationId', '==', orgId), limit(1));
+        const q = query(collection(db, 'careerPaths'), where('organizationId', '==', orgId), where('department', '==', dept), limit(1));
         const snap = await getDocs(q);
-        if (snap.empty) return null;
-        return { id: snap.docs[0].id, ...snap.docs[0].data() } as CareerPath;
+        if (!snap.empty) {
+            return { id: snap.docs[0].id, ...snap.docs[0].data() } as CareerPath;
+        }
+        return null;
     } catch (e) { return null; }
 };
 
-export const getUsersByDepartment = async (department: string, orgId: string): Promise<User[]> => {
+export const getUsersByDepartment = async (dept: string, orgId: string): Promise<User[]> => {
     try {
-        const q = query(usersRef, where('department', '==', department), where('currentOrganizationId', '==', orgId));
+        const q = query(usersRef, where('currentOrganizationId', '==', orgId), where('department', '==', dept));
         const snap = await getDocs(q);
         return snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
-    } catch (e) { return []; }
+    } catch (e) {
+        return [];
+    }
 };
 
 export const togglePostLike = async (postId: string, userId: string, isLiked: boolean) => {

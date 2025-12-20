@@ -14,7 +14,7 @@ export type LocalizedString = Record<string, string>;
 
 // --- NEW ARCHITECTURE: ROLES ---
 // System Level Roles (Platform Owners)
-export type UserRole = 'user' | 'super_admin' | 'admin' | 'manager' | 'staff';
+export type UserRole = 'user' | 'super_admin' | 'staff' | 'manager' | 'admin'; 
 
 // Page Level Roles (Organization Context)
 export type PageRole = 'ADMIN' | 'MODERATOR' | 'MEMBER';
@@ -23,14 +23,14 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
 
+export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management';
+
 // --- EDUCATION TYPES ---
 export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
 export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN';
 export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VIDEO' | 'XP_REWARD';
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
-
-export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management';
 
 // --- NEW: CHANNEL DEFINITION ---
 export interface Channel {
@@ -42,47 +42,6 @@ export interface Channel {
   managerIds: string[]; // User IDs who can post content here (Moderators)
   createdAt: number;
 }
-
-export type ContentTargetingScope = 'NONE' | 'BELOW_HIERARCHY' | 'ENTIRE_ORG' | 'OWN_DEPT';
-
-export interface RolePermissions {
-    adminAccess: boolean;
-    manageStructure: boolean;
-    manageStaff: boolean;
-    viewAnalytics: boolean;
-    canCreateContent: boolean;
-    contentTargeting: ContentTargetingScope;
-    canPostFeed: boolean;
-    canApproveRequests: boolean;
-}
-
-export interface Position {
-    id: string;
-    organizationId: string;
-    title: string;
-    departmentId: string;
-    parentId: string | null;
-    occupantId: string | null;
-    level: number;
-    permissions?: RolePermissions;
-}
-
-export interface OrgDepartmentDefinition {
-    id: string;
-    name: string;
-    color: string;
-}
-
-export interface PositionPrototype {
-    id: string;
-    title: string;
-    departmentId: string;
-    defaultLevel: number;
-    isManagerial: boolean;
-    permissions?: RolePermissions;
-}
-
-export type PermissionType = 'CAN_CREATE_CONTENT' | 'CAN_MANAGE_TEAM';
 
 export interface User {
   id: string;
@@ -157,7 +116,7 @@ export interface Course {
   price: number;
   priceType: 'FREE' | 'PAID';
   isFeatured?: boolean;
-  assignmentType?: 'GLOBAL' | 'OPTIONAL' | 'DEPARTMENT';
+  assignmentType?: 'GLOBAL' | 'OPTIONAL' | 'DEPARTMENT'; // Simplified
   targetDepartments?: string[]; // Deprecated
   studentCount?: number;
   isNew?: boolean;
@@ -266,7 +225,7 @@ export interface Organization {
   // --- NEW: CHANNELS ---
   channels: Channel[];
   
-  // --- DEFINITIONS ---
+  // --- NEW: DEFINITIONS ---
   definitions?: {
       departments: OrgDepartmentDefinition[];
       positionPrototypes: PositionPrototype[];
@@ -276,6 +235,47 @@ export interface Organization {
 export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
 export type OrganizationSectorExtended = OrganizationSector;
 export type OrganizationSize = '1-10' | '11-50' | '50-200' | '200+';
-export interface Membership { id: string; userId: string; organizationId: string; role: PageRole; status: 'ACTIVE' | 'SUSPENDED'; joinedAt: number; }
+export interface Membership { id: string; userId: string; organizationId: string; role: PageRole; status: 'ACTIVE' | 'SUSPENDED'; joinedAt: number; department?: DepartmentType; }
 export type FollowStatus = 'NONE' | 'FOLLOWING' | 'PENDING';
 export interface Relationship { followerId: string; followingId: string; status: 'PENDING' | 'ACCEPTED'; createdAt: number; }
+
+export type ContentTargetingScope = 'NONE' | 'BELOW_HIERARCHY' | 'ENTIRE_ORG' | 'OWN_DEPT';
+
+export interface RolePermissions {
+    adminAccess: boolean;
+    manageStructure: boolean;
+    manageStaff: boolean;
+    viewAnalytics: boolean;
+    canCreateContent: boolean;
+    contentTargeting: ContentTargetingScope | string;
+    canPostFeed: boolean;
+    canApproveRequests: boolean;
+    [key: string]: boolean | string;
+}
+
+export interface Position {
+    id: string;
+    title: string;
+    departmentId: string;
+    parentId: string | null;
+    occupantId?: string | null;
+    level?: number;
+    permissions?: RolePermissions;
+}
+
+export interface OrgDepartmentDefinition {
+    id: string;
+    name: string;
+    color: string;
+}
+
+export interface PositionPrototype {
+    id: string;
+    title: string;
+    departmentId: string;
+    defaultLevel: number;
+    isManagerial: boolean;
+    permissions?: RolePermissions;
+}
+
+export type PermissionType = 'CAN_CREATE_CONTENT' | 'CAN_MANAGE_TEAM';

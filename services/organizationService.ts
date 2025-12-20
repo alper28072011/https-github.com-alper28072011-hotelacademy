@@ -1,7 +1,7 @@
 
 import { doc, runTransaction, updateDoc, collection, query, where, getDocs, writeBatch, deleteDoc, setDoc, getDoc, arrayUnion, arrayRemove, addDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Organization, Membership, Channel, PageRole, Position, RolePermissions, OrgDepartmentDefinition, PositionPrototype } from '../types';
+import { User, Organization, Membership, Channel, PageRole, OrgDepartmentDefinition, PositionPrototype, Position, RolePermissions } from '../types';
 import { deleteFileByUrl, uploadFile } from './storage';
 
 // --- MEDIA MANAGEMENT ---
@@ -20,7 +20,7 @@ export const updateOrganizationLogo = async (orgId: string, file: File, oldUrl?:
 
 // --- CHANNEL MANAGEMENT (NEW) ---
 
-export const createChannel = async (orgId: string, name: string, description: string, isPrivate: boolean): Promise<Channel | null> => {
+export const createChannel = async (orgId: string, name: string, description: string, isPrivate: boolean): Promise<boolean> => {
     try {
         const newChannel: Channel = {
             id: `ch_${Date.now()}`,
@@ -33,10 +33,10 @@ export const createChannel = async (orgId: string, name: string, description: st
         await updateDoc(doc(db, 'organizations', orgId), {
             channels: arrayUnion(newChannel)
         });
-        return newChannel;
+        return true;
     } catch (e) {
         console.error("Create Channel Error:", e);
-        return null;
+        return false;
     }
 };
 
@@ -197,15 +197,41 @@ export const detachUserFromAllOrgs = async (userId: string): Promise<boolean> =>
     }
 };
 
-// --- ORG STRUCTURE MANAGEMENT ---
+// --- STRUCTURE MANAGEMENT ---
 
-export const getDescendantPositions = (rootId: string, allPositions: Position[]): string[] => {
-    const children = allPositions.filter(p => p.parentId === rootId);
-    let descendants = children.map(c => c.id);
-    children.forEach(child => {
-        descendants = [...descendants, ...getDescendantPositions(child.id, allPositions)];
-    });
-    return descendants;
+export const saveOrganizationDefinitions = async (orgId: string, departments: OrgDepartmentDefinition[], positionPrototypes: PositionPrototype[]): Promise<boolean> => {
+    try {
+        await updateDoc(doc(db, 'organizations', orgId), {
+            definitions: {
+                departments,
+                positionPrototypes
+            }
+        });
+        return true;
+    } catch (e) {
+        console.error("Save Org Definitions Error:", e);
+        return false;
+    }
+};
+
+export const createPosition = async (position: Position): Promise<boolean> => {
+    try {
+        // Assume 'positions' collection exists, usually subcollection or top-level with orgId
+        await addDoc(collection(db, 'positions'), position);
+        return true;
+    } catch (e) {
+        console.error("Create Position Error:", e);
+        return false;
+    }
+};
+
+export const deletePosition = async (positionId: string): Promise<boolean> => {
+    try {
+        await deleteDoc(doc(db, 'positions', positionId));
+        return true;
+    } catch (e) {
+        return false;
+    }
 };
 
 export const updatePositionPermissions = async (positionId: string, permissions: RolePermissions): Promise<boolean> => {
@@ -217,28 +243,14 @@ export const updatePositionPermissions = async (positionId: string, permissions:
     }
 };
 
-export const deletePosition = async (positionId: string): Promise<boolean> => {
-    try {
-        await deleteDoc(doc(db, 'positions', positionId));
-        return true;
-    } catch (e) { return false; }
-};
-
-export const createPosition = async (position: Omit<Position, 'id'>): Promise<string | null> => {
-    try {
-        const ref = await addDoc(collection(db, 'positions'), position);
-        return ref.id;
-    } catch (e) { return null; }
-};
-
-export const saveOrganizationDefinitions = async (orgId: string, departments: OrgDepartmentDefinition[], positionPrototypes: PositionPrototype[]): Promise<boolean> => {
-    try {
-        await updateDoc(doc(db, 'organizations', orgId), {
-            definitions: {
-                departments,
-                positionPrototypes
-            }
-        });
-        return true;
-    } catch (e) { return false; }
+export const getDescendantPositions = (rootId: string, allPositions: Position[]): string[] => {
+    let descendants: string[] = [];
+    const children = allPositions.filter(p => p.parentId === rootId);
+    
+    children.forEach(child => {
+        descendants.push(child.id);
+        descendants = [...descendants, ...getDescendantPositions(child.id, allPositions)];
+    });
+    
+    return descendants;
 };
