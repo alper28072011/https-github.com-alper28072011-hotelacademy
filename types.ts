@@ -1,5 +1,6 @@
 
-export type LanguageCode = 'en' | 'tr' | 'ru' | 'de' | 'id' | 'ar';
+
+export type LanguageCode = 'en' | 'tr' | 'ru' | 'de' | 'id' | 'ar' | 'uk' | 'es' | 'fr';
 
 export interface LanguageDefinition {
   code: LanguageCode;
