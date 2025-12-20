@@ -2,17 +2,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Search, Loader2, Sparkles, Building2, MapPin, ArrowRight, Laptop, Heart, GraduationCap, ShoppingBag, CheckCircle2 } from 'lucide-react';
+import { Search, Loader2, Sparkles, Building2, MapPin, ArrowRight, X, Filter } from 'lucide-react';
 import { useContentStore } from '../../stores/useContentStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { getAllPublicOrganizations } from '../../services/db';
 import { getSmartFeed } from '../../services/courseService'; 
-import { Organization, OrganizationSector, Course } from '../../types';
-import { FilterPills } from './components/FilterPills';
+import { Organization, Course } from '../../types';
 import { HeroCourseCard } from './components/HeroCourseCard';
 import { TopicSection } from './components/TopicSection';
 import { MasonryGrid } from './components/MasonryGrid';
 import { getLocalizedContent } from '../../i18n/config';
+
+type FilterType = 'ALL' | 'COURSES' | 'ORGS';
 
 export const ExplorePage: React.FC = () => {
   const { t } = useTranslation();
@@ -26,248 +27,267 @@ export const ExplorePage: React.FC = () => {
     courses: allCourses 
   } = useContentStore();
 
-  const [activeTab, setActiveTab] = useState<'LEARNING' | 'ORGS'>('LEARNING');
-  const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
-  const [selectedSector, setSelectedSector] = useState<OrganizationSector | null>(null);
+  // Unified State
+  const [activeFilter, setActiveFilter] = useState<FilterType>('ALL');
   const [orgs, setOrgs] = useState<Organization[]>([]);
-  
-  // Smart Feed State
   const [smartFeed, setSmartFeed] = useState<Course[]>([]);
-  const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
   const [feedLoading, setFeedLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch organizations
     getAllPublicOrganizations().then(setOrgs);
   }, []);
 
-  // Fetch Smart Feed when filter changes
   useEffect(() => {
       if (currentUser) {
           setFeedLoading(true);
-          getSmartFeed(currentUser, showVerifiedOnly).then(data => {
+          getSmartFeed(currentUser, false).then(data => {
               setSmartFeed(data);
               setFeedLoading(false);
           });
       }
-  }, [currentUser, showVerifiedOnly]);
+  }, [currentUser]);
 
-  // Derived State: Search/Filter Logic
-  const displayContent = useMemo(() => {
-      // Search Logic (Overrides feed)
-      if (searchQuery.length > 0) {
-          if (activeTab === 'LEARNING') {
-              return {
-                  mode: 'search',
-                  // Use getLocalizedContent here
-                  items: allCourses.filter(c => getLocalizedContent(c.title).toLowerCase().includes(searchQuery.toLowerCase()))
-              };
-          } else {
-              return {
-                  mode: 'search_orgs',
-                  items: orgs.filter(h => h.name.toLowerCase().includes(searchQuery.toLowerCase()))
-              };
-          }
-      }
+  // --- UNIFIED SEARCH LOGIC ---
+  const results = useMemo(() => {
+      const query = searchQuery.toLowerCase().trim();
+      
+      // 1. Filter Courses
+      const filteredCourses = allCourses.filter(c => 
+          getLocalizedContent(c.title).toLowerCase().includes(query) ||
+          c.tags?.some(tag => tag.toLowerCase().includes(query))
+      );
 
-      // If Learning Category Selected
-      if (selectedCatId && activeTab === 'LEARNING') {
-          return {
-              mode: 'category',
-              items: allCourses.filter(c => c.categoryId === selectedCatId)
-          };
-      }
+      // 2. Filter Orgs
+      const filteredOrgs = orgs.filter(o => 
+          o.name.toLowerCase().includes(query) || 
+          o.code.toLowerCase().includes(query)
+      );
 
-      // If Org Sector Selected
-      if (selectedSector && activeTab === 'ORGS') {
-          return {
-              mode: 'sector',
-              items: orgs.filter(o => o.sector === selectedSector)
-          };
-      }
-
-      // Default Feed
       return {
-          mode: 'feed',
-          items: smartFeed
+          courses: filteredCourses,
+          orgs: filteredOrgs,
+          hasResults: filteredCourses.length > 0 || filteredOrgs.length > 0
       };
+  }, [searchQuery, allCourses, orgs]);
 
-  }, [smartFeed, searchQuery, selectedCatId, selectedSector, allCourses, orgs, activeTab]);
+  // Determine what to show based on Filter + Search
+  const showCourses = activeFilter === 'ALL' || activeFilter === 'COURSES';
+  const showOrgs = activeFilter === 'ALL' || activeFilter === 'ORGS';
 
-  const sectors: { id: OrganizationSector, label: string }[] = [
-      { id: 'tourism', label: 'Turizm' },
-      { id: 'technology', label: 'Teknoloji' },
-      { id: 'health', label: 'Sağlık' },
-      { id: 'education', label: 'Eğitim' },
-      { id: 'retail', label: 'Perakende' },
-  ];
-
-  if (isLoading || !displayContent) {
+  if (isLoading) {
       return (
-          <div className="h-screen flex items-center justify-center bg-primary-dark">
-              <Loader2 className="w-10 h-10 animate-spin text-accent" />
+          <div className="h-screen flex items-center justify-center bg-gray-50">
+              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
           </div>
       );
   }
 
   return (
-    <div className="min-h-screen bg-primary-dark text-white pb-24">
+    <div className="min-h-screen bg-gray-50 pb-24">
         
-        {/* 1. STICKY HEADER & SEARCH */}
-        <div className="sticky top-0 z-40 bg-primary-dark/95 backdrop-blur-md border-b border-white/5 pt-4 pb-2">
-            
-            {/* Tab Switcher */}
-            <div className="flex justify-center mb-4">
-                <div className="bg-white/10 p-1 rounded-xl flex">
-                    <button 
-                        onClick={() => setActiveTab('LEARNING')}
-                        className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'LEARNING' ? 'bg-accent text-primary shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        Eğitim
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('ORGS')}
-                        className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'ORGS' ? 'bg-accent text-primary shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        Kurumlar
-                    </button>
-                </div>
-            </div>
-
-            <div className="px-4 mb-2 flex gap-2">
-                <div className="relative group flex-1">
-                    <Search className="absolute left-4 top-3.5 w-5 h-5 text-gray-400 group-focus-within:text-accent transition-colors" />
+        {/* 1. COMPACT STICKY HEADER */}
+        <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-gray-200/50 shadow-sm transition-all duration-300">
+            <div className="px-4 py-3">
+                {/* Search Input */}
+                <div className="relative group">
+                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                        <Search className="w-4 h-4 text-gray-400 group-focus-within:text-primary transition-colors" />
+                    </div>
                     <input 
                         type="text"
-                        placeholder={activeTab === 'LEARNING' ? "Eğitim ara..." : "Kurum ara..."}
+                        placeholder="Eğitim, otel veya konu ara..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-white/10 rounded-2xl py-3 pl-12 pr-4 text-white placeholder-gray-400 font-medium focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/50 transition-all border border-white/10"
+                        className="w-full bg-gray-100/80 border-0 rounded-xl py-2.5 pl-10 pr-10 text-gray-900 placeholder-gray-500 text-sm font-medium focus:ring-2 focus:ring-primary/10 focus:bg-white transition-all shadow-inner"
                     />
-                </div>
-                {activeTab === 'LEARNING' && !searchQuery && (
-                    <button 
-                        onClick={() => setShowVerifiedOnly(!showVerifiedOnly)}
-                        className={`p-3 rounded-2xl border transition-all ${showVerifiedOnly ? 'bg-blue-600 border-blue-400 text-white shadow-lg shadow-blue-500/30' : 'bg-white/10 border-white/10 text-gray-400'}`}
-                    >
-                        <CheckCircle2 className="w-6 h-6" />
-                    </button>
-                )}
-            </div>
-            
-            {/* Filter Pills (Learning) */}
-            {activeTab === 'LEARNING' && (
-                <FilterPills 
-                    categories={categories} 
-                    selectedCatId={selectedCatId} 
-                    onSelect={setSelectedCatId} 
-                />
-            )}
-
-            {/* Filter Pills (Orgs) */}
-            {activeTab === 'ORGS' && (
-                <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 pb-2 pt-2">
-                    <button onClick={() => setSelectedSector(null)} className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${!selectedSector ? 'bg-white text-primary' : 'bg-white/10 border-white/10 text-white/70'}`}>Tümü</button>
-                    {sectors.map(s => (
+                    {searchQuery && (
                         <button 
-                            key={s.id}
-                            onClick={() => setSelectedSector(s.id)}
-                            className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${selectedSector === s.id ? 'bg-white text-primary' : 'bg-white/10 border-white/10 text-white/70'}`}
+                            onClick={() => setSearchQuery('')}
+                            className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600"
                         >
-                            {s.label}
+                            <X className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+
+                {/* Filter Pills (Horizontal Scroll) */}
+                <div className="flex gap-2 mt-3 overflow-x-auto no-scrollbar pb-1">
+                    <FilterButton 
+                        label="Tümü" 
+                        isActive={activeFilter === 'ALL'} 
+                        onClick={() => setActiveFilter('ALL')} 
+                    />
+                    <FilterButton 
+                        label="Eğitimler" 
+                        isActive={activeFilter === 'COURSES'} 
+                        onClick={() => setActiveFilter('COURSES')} 
+                        count={results.courses.length > 0 && searchQuery ? results.courses.length : undefined}
+                    />
+                    <FilterButton 
+                        label="Kurumlar" 
+                        isActive={activeFilter === 'ORGS'} 
+                        onClick={() => setActiveFilter('ORGS')} 
+                        count={results.orgs.length > 0 && searchQuery ? results.orgs.length : undefined}
+                    />
+                    {/* Add Category Pills dynamically if needed */}
+                    {!searchQuery && categories.slice(0, 5).map(cat => (
+                        <button 
+                            key={cat.id}
+                            className="px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap bg-gray-100 text-gray-600 border border-transparent hover:bg-gray-200 transition-all"
+                        >
+                            {cat.title}
                         </button>
                     ))}
                 </div>
-            )}
+            </div>
         </div>
 
-        {/* CONTENT AREA */}
-        <div className="p-4 flex flex-col gap-8">
+        {/* 2. CONTENT AREA */}
+        <div className="p-4 flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
             
-            {/* --- ORGS TAB --- */}
-            {activeTab === 'ORGS' && (
-                <div className="grid grid-cols-1 gap-4">
-                    {(searchQuery || selectedSector ? displayContent.items : orgs).map((org: any) => (
-                        <div 
-                            key={org.id} 
-                            onClick={() => navigate(`/org/${org.id}`)}
-                            className="bg-gray-800 rounded-2xl p-4 flex items-center gap-4 border border-white/5 hover:border-accent cursor-pointer group transition-all"
-                        >
-                            <div className="w-16 h-16 rounded-xl bg-gray-700 overflow-hidden border border-gray-600 group-hover:border-accent">
-                                {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-full h-full p-4 text-gray-500" />}
+            {/* SEARCH EMPTY STATE (Discover Mode) */}
+            {!searchQuery && activeFilter === 'ALL' && (
+                <>
+                    {/* Hero Selection */}
+                    {smartFeed.length > 0 && (
+                        <div className="flex flex-col gap-4">
+                            <div className="flex items-center gap-2 px-1">
+                                <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                                <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Günün Önerisi</span>
                             </div>
-                            <div className="flex-1">
-                                <h3 className="font-bold text-lg text-white group-hover:text-accent transition-colors">{org.name}</h3>
-                                <div className="flex items-center gap-3 text-xs text-gray-400 mt-1">
-                                    <span className="flex items-center gap-1"><MapPin className="w-3 h-3" /> {org.location || '-'}</span>
-                                    <span className="flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded capitalize">{org.sector}</span>
-                                </div>
-                            </div>
-                            <ArrowRight className="w-5 h-5 text-gray-600 group-hover:text-accent" />
+                            <HeroCourseCard course={smartFeed[0]} />
                         </div>
-                    ))}
+                    )}
+
+                    {/* Trending Carousel */}
+                    {smartFeed.length > 1 && (
+                        <TopicSection 
+                            title="Popüler Eğitimler" 
+                            courses={smartFeed.slice(1, 6)} 
+                        />
+                    )}
+
+                    {/* Featured Organizations (Horizontal) */}
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between px-1">
+                            <h3 className="text-lg font-bold text-gray-900">Öne Çıkan Kurumlar</h3>
+                            <button onClick={() => setActiveFilter('ORGS')} className="text-xs font-bold text-primary hover:underline">Tümünü Gör</button>
+                        </div>
+                        <div className="flex overflow-x-auto no-scrollbar gap-3 pb-2 snap-x">
+                            {orgs.slice(0, 5).map(org => (
+                                <div 
+                                    key={org.id} 
+                                    onClick={() => navigate(`/org/${org.id}`)}
+                                    className="min-w-[260px] snap-start bg-white p-4 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+                                >
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden border border-gray-100">
+                                            {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-5 h-5 text-gray-400" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-bold text-gray-900 truncate">{org.name}</h4>
+                                            <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                                                <MapPin className="w-3 h-3" /> {org.location || 'Global'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs font-medium text-gray-500 bg-gray-50 p-2 rounded-lg group-hover:bg-primary/5 group-hover:text-primary transition-colors">
+                                        <span>{org.memberCount || 1} Üye</span>
+                                        <span className="w-1 h-1 rounded-full bg-gray-300" />
+                                        <span>{org.sector}</span>
+                                        <ArrowRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Discovery Grid */}
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 px-1 mb-4">Daha Fazla Keşfet</h3>
+                        <MasonryGrid courses={smartFeed.slice(6)} />
+                    </div>
+                </>
+            )}
+
+            {/* SEARCH RESULTS MODE */}
+            {(searchQuery || activeFilter !== 'ALL') && (
+                <div className="space-y-8">
+                    {!results.hasResults && searchQuery && (
+                        <div className="text-center py-20 opacity-50">
+                            <Search className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                            <p className="font-bold text-gray-500">Sonuç bulunamadı.</p>
+                        </div>
+                    )}
+
+                    {/* Organization Results */}
+                    {showOrgs && results.orgs.length > 0 && (
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">Kurumlar ({results.orgs.length})</h3>
+                            <div className="grid grid-cols-1 gap-3">
+                                {results.orgs.map(org => (
+                                    <div 
+                                        key={org.id} 
+                                        onClick={() => navigate(`/org/${org.id}`)}
+                                        className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm hover:border-primary/30 hover:shadow-md transition-all cursor-pointer flex items-center gap-4 group"
+                                    >
+                                        <div className="w-14 h-14 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+                                            {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-6 h-6 text-gray-300" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-bold text-gray-900 text-base mb-0.5 group-hover:text-primary transition-colors">{org.name}</h4>
+                                            <div className="flex items-center gap-3 text-xs text-gray-500">
+                                                <span className="flex items-center gap-1 bg-gray-100 px-2 py-0.5 rounded-md font-medium text-gray-700">
+                                                    {org.sector}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <MapPin className="w-3 h-3" /> {org.location || 'Konum Yok'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-primary -translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Course Results */}
+                    {showCourses && results.courses.length > 0 && (
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3 px-1">Eğitimler ({results.courses.length})</h3>
+                            <MasonryGrid courses={results.courses} />
+                        </div>
+                    )}
                 </div>
             )}
 
-            {/* --- LEARNING TAB --- */}
-            {activeTab === 'LEARNING' && (
-                <>
-                    {/* A. SEARCH/CATEGORY MODE */}
-                    {(displayContent.mode === 'search' || displayContent.mode === 'category') && (
-                        <div>
-                            <h3 className="text-gray-400 text-sm mb-4">
-                                {displayContent.items.length} sonuç bulundu
-                            </h3>
-                            <MasonryGrid courses={displayContent.items} />
-                        </div>
-                    )}
-
-                    {/* B. FEED MODE */}
-                    {displayContent.mode === 'feed' && (
-                        <>
-                            {feedLoading ? (
-                                <div className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin mx-auto text-accent" /></div>
-                            ) : (
-                                <>
-                                    {/* Verified Filter Indicator */}
-                                    {showVerifiedOnly && (
-                                        <div className="bg-blue-600/10 border border-blue-500/30 p-3 rounded-xl flex items-center gap-3 mb-4">
-                                            <CheckCircle2 className="w-5 h-5 text-blue-400" />
-                                            <span className="text-sm font-bold text-blue-200">Sadece Onaylı Uzman İçerikleri Gösteriliyor</span>
-                                        </div>
-                                    )}
-
-                                    {/* POOL A: PRIORITY (Hero) - First Item */}
-                                    {displayContent.items.length > 0 && (
-                                        <div className="flex flex-col gap-6">
-                                            <div className="flex items-center gap-2 px-2 opacity-80">
-                                                <Sparkles className="w-4 h-4 text-accent" />
-                                                <span className="text-xs font-bold uppercase tracking-widest text-accent">Senin İçin Seçildi</span>
-                                            </div>
-                                            <HeroCourseCard course={displayContent.items[0]} />
-                                        </div>
-                                    )}
-
-                                    {/* POOL B: TRENDING - Next 5 Items */}
-                                    {displayContent.items.length > 1 && (
-                                        <TopicSection 
-                                            title="Trend Olanlar" 
-                                            courses={displayContent.items.slice(1, 6)} 
-                                        />
-                                    )}
-
-                                    {/* POOL C: DISCOVERY - Rest */}
-                                    <div>
-                                        <h3 className="text-lg font-bold text-white px-2 mb-4">Ufkunu Genişlet</h3>
-                                        <MasonryGrid courses={displayContent.items.slice(6)} />
-                                    </div>
-                                </>
-                            )}
-                        </>
-                    )}
-                </>
-            )}
         </div>
     </div>
   );
 };
+
+// --- SUB COMPONENTS ---
+
+const FilterButton: React.FC<{ 
+    label: string, 
+    isActive: boolean, 
+    onClick: () => void,
+    count?: number
+}> = ({ label, isActive, onClick, count }) => (
+    <button 
+        onClick={onClick}
+        className={`px-5 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 border ${
+            isActive 
+            ? 'bg-gray-900 text-white border-gray-900 shadow-md' 
+            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+        }`}
+    >
+        {label}
+        {count !== undefined && (
+            <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                {count}
+            </span>
+        )}
+    </button>
+);
