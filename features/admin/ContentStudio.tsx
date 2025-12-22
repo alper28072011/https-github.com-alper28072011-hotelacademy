@@ -112,28 +112,49 @@ export const ContentStudio: React.FC = () => {
   const handlePublish = async () => {
       if (!courseData || !currentUser) return;
       setLoading(true);
-      const payload = {
-          ...courseData,
-          steps: courseData.cards,
-          channelId: currentOrganization?.channels?.[0]?.id, // Default to first channel
-          organizationId: currentOrganization?.id,
-          visibility: 'PRIVATE',
-          xpReward: 100,
-          duration: courseData.cards.length,
-          price: 0,
-          authorType: 'ORGANIZATION',
-          config: config
-      };
+      setLoadingText("İçerik kaydediliyor ve yayınlanıyor...");
 
-      if (courseData.id) {
-          // Update Mode
-          await updateCourse(courseData.id, payload);
-      } else {
-          // Create Mode
-          await publishContent(payload, currentUser);
+      try {
+          // Construct Payload
+          // Note: duration must be a number. AI sometimes returns string or undefined.
+          const finalDuration = typeof courseData.duration === 'number' ? courseData.duration : 5;
+
+          const payload = {
+              ...courseData,
+              duration: finalDuration,
+              steps: courseData.cards, // Map cards to steps
+              channelId: currentOrganization?.channels?.[0]?.id, // Default to first channel
+              organizationId: currentOrganization?.id,
+              visibility: 'PRIVATE',
+              xpReward: 100,
+              price: 0,
+              // IMPORTANT: Explicitly set owner info so it's not treated as a User post
+              authorType: 'ORGANIZATION',
+              ownerType: 'ORGANIZATION', 
+              config: config
+          };
+
+          let success = false;
+
+          if (courseData.id) {
+              // Update Mode
+              success = await updateCourse(courseData.id, payload);
+          } else {
+              // Create Mode
+              success = await publishContent(payload, currentUser);
+          }
+          
+          if (success) {
+              navigate('/admin/courses');
+          } else {
+              alert("Yayınlama işlemi başarısız oldu. Lütfen verilerinizi kontrol edip tekrar deneyin.");
+          }
+      } catch (error) {
+          console.error("Critical Publish Error:", error);
+          alert("Beklenmedik bir hata oluştu.");
+      } finally {
+          setLoading(false);
       }
-      
-      navigate('/admin/courses');
   };
 
   // --- RENDERERS ---
@@ -396,7 +417,7 @@ export const ContentStudio: React.FC = () => {
         {step < 4 && (
             <div className="bg-[#f7f7f7] border-b border-[#d8dfea] p-3 mb-4">
                 <h1 className="text-sm font-bold text-[#333]">İçerik Stüdyosu</h1>
-                <p className="text-[10px] text-gray-500">Yapay zeka destekli eğitim hazırlama aracı.</p>
+                <p className="text-sm text-gray-500">Yapay zeka destekli eğitim hazırlama aracı.</p>
             </div>
         )}
 
