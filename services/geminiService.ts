@@ -26,15 +26,15 @@ export const generateCareerPath = async (targetRole: string, language: string = 
         const schema: Schema = {
             type: Type.OBJECT,
             properties: {
-                title: { type: Type.STRING, description: "Fancy title for the career path" },
-                description: { type: Type.STRING },
+                title: { type: Type.STRING, description: "Professional title for the career path e.g. 'Front Office Manager Journey'" },
+                description: { type: Type.STRING, description: "A brief motivational description of this career path." },
                 courses: {
                     type: Type.ARRAY,
                     items: {
                         type: Type.OBJECT,
                         properties: {
-                            title: { type: Type.STRING },
-                            description: { type: Type.STRING }
+                            title: { type: Type.STRING, description: "Title of a required course in this path" },
+                            description: { type: Type.STRING, description: "Short description of what is learned in this course" }
                         }
                     }
                 }
@@ -43,9 +43,9 @@ export const generateCareerPath = async (targetRole: string, language: string = 
         };
 
         const prompt = `
-            Act as an expert Hotel Operations Consultant.
-            User wants to become: "${targetRole}".
-            Design a career path curriculum with 5-8 essential courses ranging from Beginner to Advanced.
+            Act as an expert Hotel HR Consultant.
+            User wants to build a career path for the role: "${targetRole}".
+            Design a professional curriculum with 5-6 essential courses needed to master this role.
             Output Language: ${language}.
         `;
 
@@ -63,6 +63,13 @@ export const generateCareerPath = async (targetRole: string, language: string = 
         console.error("Path Gen Error:", e);
         return { title: targetRole, description: 'Error generating path', courses: [] };
     }
+};
+
+/**
+ * AI Suggestion for UI Wizard (Does not create DB records, just returns JSON)
+ */
+export const suggestCareerPathStructure = async (role: string): Promise<any> => {
+    return generateCareerPath(role); // Re-use logic
 };
 
 /**
@@ -127,8 +134,7 @@ export const generateModuleContent = async (
 ): Promise<StoryCard[]> => {
     try {
         const ai = getAiClient();
-        const outputLanguages = ['en', 'tr']; // Default support
-
+        
         // Define Localized Schema
         const localizedStringSchema: Schema = { type: Type.OBJECT, properties: { en: { type: Type.STRING }, tr: { type: Type.STRING } }, required: ['tr'] };
 

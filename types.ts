@@ -362,16 +362,19 @@ export interface Issue {
     createdAt: number;
 }
 
+// UPDATED: Robust CareerPath Model
 export interface CareerPath {
     id: string;
     organizationId: string;
     title: string;
     description: string;
+    targetRole: string; // The goal e.g. "Front Office Manager"
     department: DepartmentType;
-    targetRole: string;
-    courseIds: string[];
-    aiPrompt?: string; // Original goal prompt
-    targetAudience?: string;
+    targetAudience?: string; // e.g. "New joiners"
+    courseIds: string[]; // Ordered list of course IDs
+    aiPrompt?: string; 
+    createdAt?: number;
+    updatedAt?: number;
 }
 
 export interface LearningJourney {
