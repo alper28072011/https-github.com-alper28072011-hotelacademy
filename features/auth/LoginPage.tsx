@@ -111,9 +111,9 @@ export const LoginPage: React.FC = () => {
           </div>
       </div>
 
-      {/* LEFT: FORM AREA - Updated for Vertical Centering */}
-      <div className="w-full md:w-1/2 p-8 md:p-12 lg:p-16 flex flex-col justify-center h-full">
-        <div className="max-w-sm mx-auto w-full flex flex-col justify-center h-full">
+      {/* LEFT: FORM AREA - Adjusted centering */}
+      <div className="w-full md:w-1/2 p-8 md:p-12 lg:p-16 flex flex-col justify-center relative">
+        <div className="max-w-sm mx-auto w-full">
             {/* Brand */}
             <div className="mb-10">
                 <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center mb-4">
