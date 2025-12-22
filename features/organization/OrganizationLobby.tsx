@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Building2, ArrowRight, Loader2, LogOut, MapPin, Briefcase, Clock, X } from 'lucide-react';
+import { Plus, Search, Building2, ArrowRight, Loader2, MapPin, Briefcase, Clock, X } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { createOrganization, searchOrganizations, getUserPendingRequests, cancelJoinRequest } from '../../services/db';
@@ -10,7 +10,7 @@ import { Organization, OrganizationSector, User, JoinRequest } from '../../types
 
 export const OrganizationLobby: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, logout, loginSuccess } = useAuthStore();
+  const { currentUser, loginSuccess } = useAuthStore();
   const { switchOrganization, fetchMemberships, myMemberships } = useOrganizationStore();
   const [activeTab, setActiveTab] = useState<'FIND' | 'CREATE'>('FIND');
   
@@ -212,10 +212,6 @@ export const OrganizationLobby: React.FC = () => {
                         </div>
                     </div>
                 </div>
-
-                <button onClick={logout} className="mt-4 flex items-center gap-2 text-red-500 text-sm font-bold hover:bg-red-50 p-3 rounded-xl transition-colors">
-                    <LogOut className="w-4 h-4" /> Çıkış Yap
-                </button>
             </div>
 
             {/* Main Area */}
