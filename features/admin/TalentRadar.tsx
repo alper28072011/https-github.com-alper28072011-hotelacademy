@@ -2,14 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { User, CareerPath, DepartmentType, Course } from '../../types';
 import { getUsersByDepartment, getCareerPaths, getCourses } from '../../services/db';
-import { Loader2, TrendingUp, AlertCircle, Award, Briefcase, CheckCircle2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 
 export const TalentRadar: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
-  const [paths, setPaths] = useState<CareerPath[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const { currentOrganization } = useOrganizationStore();
 
@@ -17,182 +14,61 @@ export const TalentRadar: React.FC = () => {
     const init = async () => {
         if (!currentOrganization) return;
         setLoading(true);
-        // Fetch all data
         const depts: DepartmentType[] = ['housekeeping', 'kitchen', 'front_office', 'management'];
         let allUsers: User[] = [];
         for (const d of depts) {
             const u = await getUsersByDepartment(d, currentOrganization.id);
             allUsers = [...allUsers, ...u];
         }
-        const [p, c] = await Promise.all([getCareerPaths(currentOrganization.id), getCourses(currentOrganization.id)]);
-        
         setUsers(allUsers);
-        setPaths(p);
-        setCourses(c);
         setLoading(false);
     };
     init();
   }, [currentOrganization]);
 
-  if (loading) return <div className="flex justify-center p-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>;
+  if (loading) return <div className="flex justify-center p-20"><Loader2 className="w-5 h-5 animate-spin text-[#3b5998]" /></div>;
 
-  // Analysis Logic
-  const readyForPromotion: any[] = [];
-  const needsAttention: any[] = [];
-  const deptScores: Record<string, { total: number, progress: number }> = {};
-  
-  // Mandatory Training Compliance Calc
-  let mandatoryTotal = 0;
-  let mandatoryCompleted = 0;
-  
-  // Filter: Only include PRIVATE courses or HIGH priority assigned ones for compliance.
-  // We ignore purely Public courses unless they were explicitly assigned (not fully tracked here yet)
-  const corporateCourses = courses.filter(c => c.visibility === 'PRIVATE' || c.priority === 'HIGH');
-  const corporateCourseIds = corporateCourses.map(c => c.id);
-
-  users.forEach(user => {
-      // Dept Score Calc
-      if (!deptScores[user.department]) deptScores[user.department] = { total: 0, progress: 0 };
-      deptScores[user.department].total += 1;
-      
-      // Promotion Logic
-      if (user.assignedPathId) {
-          const path = paths.find(p => p.id === user.assignedPathId);
-          if (path) {
-              const completedCount = user.completedCourses.filter(cId => path.courseIds.includes(cId)).length;
-              const totalCount = path.courseIds.length;
-              const percent = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-              
-              deptScores[user.department].progress += percent;
-
-              if (percent >= 90) {
-                  readyForPromotion.push({ user, path, percent });
-              } else if (percent > 0 && percent < 40) {
-                  needsAttention.push({ user, path, percent });
-              }
-          }
-      }
-
-      // Mandatory Compliance Logic
-      corporateCourseIds.forEach(mId => {
-          mandatoryTotal++;
-          if(user.completedCourses.includes(mId)) {
-              mandatoryCompleted++;
-          }
-      });
+  // Simple Mock Scores for Retro UI Demo
+  const deptScores: Record<string, number> = {};
+  users.forEach(u => {
+      if(!deptScores[u.department || 'other']) deptScores[u.department || 'other'] = 0;
+      deptScores[u.department || 'other'] += (u.xp || 0);
   });
 
-  const complianceRate = mandatoryTotal > 0 ? Math.round((mandatoryCompleted / mandatoryTotal) * 100) : 100;
-
   return (
-    <div className="flex flex-col gap-8 pb-10">
-       {/* Intro */}
-       <div>
-            <h1 className="text-2xl font-bold text-gray-800">Yetenek Radarı</h1>
-            <p className="text-gray-500">Ekip gelişim analitiği ve terfi önerileri (Sadece Kurumsal Eğitimler).</p>
+    <div className="space-y-4">
+       {/* Header */}
+       <div className="bg-[#6d84b4] border border-[#3b5998] text-white p-2 font-bold text-sm">
+           Departman Performans Raporu
        </div>
 
-       {/* Compliance Card (New) */}
-       <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center border-4 text-xl font-bold ${complianceRate > 80 ? 'border-green-500 text-green-600 bg-green-50' : 'border-orange-500 text-orange-600 bg-orange-50'}`}>
-                    %{complianceRate}
-                </div>
-                <div>
-                    <h3 className="font-bold text-lg text-gray-800">Zorunlu Eğitim Uyumu</h3>
-                    <p className="text-gray-500 text-sm">İşletme içi özel eğitimlerin tamamlanma oranı.</p>
-                </div>
-            </div>
-            <div className="hidden md:flex gap-4">
-                <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-800">{mandatoryCompleted}</div>
-                    <div className="text-xs text-gray-500 uppercase">Tamamlanan</div>
-                </div>
-                <div className="w-px bg-gray-200" />
-                <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-400">{mandatoryTotal}</div>
-                    <div className="text-xs text-gray-400 uppercase">Atanan</div>
-                </div>
-            </div>
-       </div>
-
-       {/* Top Cards */}
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           {/* Ready Card */}
-           <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-3xl border border-green-100 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-10"><Award className="w-24 h-24 text-green-600" /></div>
-                <h3 className="font-bold text-green-800 text-lg flex items-center gap-2 mb-4">
-                    <TrendingUp className="w-5 h-5" /> Terfiye Hazır ({readyForPromotion.length})
-                </h3>
-                <div className="flex flex-col gap-3 relative z-10">
-                    {readyForPromotion.length === 0 && <p className="text-sm text-green-700/60 italic">Henüz %90 üzeri tamamlayan yok.</p>}
-                    {readyForPromotion.map((item, idx) => (
-                        <div key={idx} className="bg-white p-3 rounded-xl shadow-sm flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs">
-                                {item.user.avatar}
-                            </div>
-                            <div className="flex-1">
-                                <div className="font-bold text-gray-800 text-sm">{item.user.name}</div>
-                                <div className="text-xs text-green-600 font-medium">Hedef: {item.path.targetRole}</div>
-                            </div>
-                            <div className="font-bold text-green-600 text-sm">%{Math.round(item.percent)}</div>
-                        </div>
-                    ))}
-                </div>
-           </div>
-
-           {/* Attention Card */}
-           <div className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-3xl border border-red-100 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-10"><AlertCircle className="w-24 h-24 text-red-600" /></div>
-                <h3 className="font-bold text-red-800 text-lg flex items-center gap-2 mb-4">
-                    <AlertCircle className="w-5 h-5" /> İlgi Bekleyenler ({needsAttention.length})
-                </h3>
-                <div className="flex flex-col gap-3 relative z-10">
-                    {needsAttention.length === 0 && <p className="text-sm text-red-700/60 italic">Herkes iyi durumda.</p>}
-                    {needsAttention.slice(0, 3).map((item, idx) => (
-                        <div key={idx} className="bg-white p-3 rounded-xl shadow-sm flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-700 font-bold text-xs">
-                                {item.user.avatar}
-                            </div>
-                            <div className="flex-1">
-                                <div className="font-bold text-gray-800 text-sm">{item.user.name}</div>
-                                <div className="text-xs text-red-500">İlerleme durdu</div>
-                            </div>
-                            <div className="font-bold text-red-500 text-sm">%{Math.round(item.percent)}</div>
-                        </div>
-                    ))}
-                    {needsAttention.length > 3 && <p className="text-xs text-center text-red-500 font-bold">+ {needsAttention.length - 3} kişi daha</p>}
-                </div>
-           </div>
-       </div>
-
-       {/* Dept Scores */}
-       <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-            <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2">
-                <Briefcase className="w-5 h-5 text-gray-500" /> Departman Yetkinlik Skorları
-            </h3>
-            <div className="space-y-6">
+       <div className="bg-white border border-[#d8dfea] p-4">
+            <h3 className="text-[11px] font-bold text-gray-500 uppercase mb-4">Genel Bakış</h3>
+            
+            <div className="space-y-4">
                 {Object.keys(deptScores).map(dept => {
-                    const data = deptScores[dept];
-                    const avg = data.total > 0 ? Math.round(data.progress / data.total) : 0;
+                    const score = deptScores[dept];
+                    const max = Math.max(...Object.values(deptScores)) || 1;
+                    const width = (score / max) * 100;
+
                     return (
-                        <div key={dept}>
-                            <div className="flex justify-between text-sm mb-2">
-                                <span className="font-bold text-gray-700 capitalize">{dept.replace('_', ' ')}</span>
-                                <span className="font-bold text-primary">{avg}% Eğitimli</span>
-                            </div>
-                            <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                                <motion.div 
-                                    initial={{ width: 0 }}
-                                    animate={{ width: `${avg}%` }}
-                                    transition={{ duration: 1 }}
-                                    className={`h-full rounded-full ${avg > 70 ? 'bg-green-500' : avg > 40 ? 'bg-yellow-500' : 'bg-red-400'}`}
+                        <div key={dept} className="flex items-center gap-4">
+                            <div className="w-32 text-right text-[11px] font-bold text-gray-600 capitalize">{dept.replace('_', ' ')}</div>
+                            <div className="flex-1 bg-[#f7f7f7] border border-[#ccc] h-4 relative">
+                                <div 
+                                    className="h-full bg-[#3b5998]" 
+                                    style={{ width: `${width}%` }}
                                 />
                             </div>
+                            <div className="w-12 text-[10px] text-gray-500">{score} XP</div>
                         </div>
                     );
                 })}
             </div>
+       </div>
+
+       <div className="bg-[#fff9d7] border border-[#e2c822] p-3 text-[11px] text-[#333]">
+           <span className="font-bold">İpucu:</span> En yüksek performansı gösteren departmanları ödüllendirmeyi unutmayın.
        </div>
     </div>
   );

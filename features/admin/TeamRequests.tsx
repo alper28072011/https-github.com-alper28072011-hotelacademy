@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, User as UserIcon, Loader2, Briefcase, Shield, MapPin, BadgeCheck } from 'lucide-react';
+import { Check, X, User as UserIcon, Loader2, Shield } from 'lucide-react';
 import { JoinRequest, User, PermissionType } from '../../types';
 import { getJoinRequests, approveJoinRequest, rejectJoinRequest } from '../../services/db';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -14,179 +14,149 @@ export const TeamRequests: React.FC = () => {
   const [requests, setRequests] = useState<(JoinRequest & { user?: User })[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Approval Modal State
+  // Approval State
   const [selectedRequest, setSelectedRequest] = useState<(JoinRequest & { user?: User }) | null>(null);
   const [roleTitle, setRoleTitle] = useState('');
   const [permissions, setPermissions] = useState<PermissionType[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const fetchRequests = async () => {
-      if (!currentOrganization || !currentUser) return;
-      setLoading(true);
-      
-      const canSeeAll = ['admin', 'manager', 'super_admin'].includes(currentUser.role);
-      const data = await getJoinRequests(currentOrganization.id, canSeeAll ? undefined : currentUser.department);
-      
-      setRequests(data);
-      setLoading(false);
-  };
-
   useEffect(() => {
+      const fetchRequests = async () => {
+          if (!currentOrganization || !currentUser) return;
+          setLoading(true);
+          const canSeeAll = ['admin', 'manager', 'super_admin'].includes(currentUser.role);
+          const data = await getJoinRequests(currentOrganization.id, canSeeAll ? undefined : currentUser.department);
+          setRequests(data);
+          setLoading(false);
+      };
       fetchRequests();
   }, [currentOrganization]);
-
-  const openApprovalModal = (req: JoinRequest & { user?: User }) => {
-      setSelectedRequest(req);
-      setRoleTitle(req.requestedRoleTitle || 'Staff');
-      setPermissions([]);
-  };
 
   const handleApprove = async () => {
       if (!selectedRequest) return;
       setIsProcessing(true);
-      
-      const success = await approveJoinRequest(
-          selectedRequest.id, 
-          selectedRequest,
-          roleTitle,
-          permissions
-      );
-
+      const success = await approveJoinRequest(selectedRequest.id, selectedRequest, roleTitle, permissions);
       if (success) {
           setRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
           setSelectedRequest(null);
-      } else {
-          alert("Onay işlemi sırasında hata oluştu. Pozisyon dolmuş olabilir.");
       }
       setIsProcessing(false);
   };
 
   const handleReject = async (id: string) => {
-      if (window.confirm("Bu isteği reddetmek istediğinize emin misiniz?")) {
+      if (confirm("Bu isteği reddetmek istediğinize emin misiniz?")) {
           const success = await rejectJoinRequest(id);
-          if (success) {
-              setRequests(prev => prev.filter(r => r.id !== id));
-          } else {
-              alert("İşlem başarısız.");
-          }
+          if (success) setRequests(prev => prev.filter(r => r.id !== id));
       }
   };
 
   const togglePermission = (perm: PermissionType) => {
-      if (permissions.includes(perm)) {
-          setPermissions(permissions.filter(p => p !== perm));
-      } else {
-          setPermissions([...permissions, perm]);
-      }
+      setPermissions(prev => prev.includes(perm) ? prev.filter(p => p !== perm) : [...prev, perm]);
   };
 
   return (
-    <div className="flex flex-col gap-6 pb-20 relative">
-        <div>
-            <h1 className="text-2xl font-bold text-gray-800">Katılım İstekleri</h1>
-            <p className="text-gray-500">Ekibe katılmak isteyen adayları yönet.</p>
+    <div className="space-y-4">
+        {/* Page Header Container */}
+        <div className="bg-[#f7f7f7] border-b border-[#d8dfea] p-3">
+            <h1 className="text-sm font-bold text-[#333]">Katılım İstekleri</h1>
+            <p className="text-[11px] text-gray-500">Ekibe katılmak isteyen {requests.length} aday var.</p>
         </div>
 
         {loading ? (
-            <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-primary" /></div>
+            <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-[#3b5998]" /></div>
         ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <AnimatePresence>
-                    {requests.map(req => (
-                        <motion.div 
-                            key={req.id}
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, x: -50 }}
-                            className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col gap-4"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-full bg-gray-100 border-2 border-white shadow-sm flex items-center justify-center overflow-hidden">
-                                    {req.user?.avatar && req.user.avatar.length > 4 ? <img src={req.user.avatar} className="w-full h-full object-cover" /> : <UserIcon className="w-6 h-6 text-gray-400" />}
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-gray-900 text-lg">{req.user?.name || "Bilinmeyen Kullanıcı"}</h3>
-                                    <div className="flex items-center gap-2 text-sm text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md w-max">
-                                        <Briefcase className="w-3.5 h-3.5" />
-                                        <span>{req.requestedRoleTitle || 'Personel'}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                    <span className="text-gray-400 block mb-1">Departman</span>
-                                    <span className="font-bold text-gray-700 uppercase">{req.targetDepartment || 'Genel'}</span>
-                                </div>
-                                <div className="bg-green-50 p-2 rounded-lg border border-green-100 flex flex-col justify-center">
-                                    <span className="text-green-600 font-bold flex items-center gap-1">
-                                        <BadgeCheck className="w-4 h-4" /> Kurallar
-                                    </span>
-                                    <span className="text-green-700">Kabul Edildi</span>
-                                </div>
-                            </div>
-
-                            {req.positionId && (
-                                <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-100">
-                                    <MapPin className="w-3 h-3" />
-                                    Bu kişi spesifik bir koltuğa başvurdu.
+            <div className="space-y-0">
+                {requests.map((req, idx) => (
+                    <div 
+                        key={req.id}
+                        className={`flex gap-3 p-3 bg-white ${idx !== requests.length - 1 ? 'border-b border-[#e9e9e9]' : ''}`}
+                    >
+                        {/* Avatar */}
+                        <div className="shrink-0 w-[50px] h-[50px] border border-[#d8dfea] p-0.5 bg-white">
+                            {req.user?.avatar && req.user.avatar.length > 4 ? (
+                                <img src={req.user.avatar} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full bg-[#f7f7f7] flex items-center justify-center text-gray-300">
+                                    <UserIcon className="w-6 h-6" />
                                 </div>
                             )}
+                        </div>
 
-                            <div className="flex gap-3 mt-2">
+                        {/* Content */}
+                        <div className="flex-1 flex flex-col md:flex-row justify-between gap-3">
+                            <div>
+                                <div className="text-[13px] font-bold text-[#3b5998] hover:underline cursor-pointer">
+                                    {req.user?.name || "İsimsiz Kullanıcı"}
+                                </div>
+                                <div className="text-[11px] text-gray-600 mt-0.5">
+                                    Talep: <span className="font-bold">{req.requestedRoleTitle || 'Personel'}</span>
+                                    <span className="mx-1">•</span>
+                                    {req.targetDepartment || 'Genel'}
+                                </div>
+                                <div className="text-[10px] text-gray-400 mt-1">
+                                    {new Date(req.createdAt).toLocaleDateString()} tarihinde başvurdu
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-2">
+                                <button 
+                                    onClick={() => { setSelectedRequest(req); setRoleTitle(req.requestedRoleTitle || ''); setPermissions([]); }}
+                                    className="bg-[#3b5998] hover:bg-[#2d4373] text-white px-3 py-1 text-[11px] font-bold border border-[#29447e] cursor-pointer"
+                                >
+                                    Onayla
+                                </button>
                                 <button 
                                     onClick={() => handleReject(req.id)}
-                                    className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-500 font-bold hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors flex items-center justify-center gap-2"
+                                    className="bg-[#f7f7f7] hover:bg-[#e9e9e9] text-[#333] px-3 py-1 text-[11px] font-bold border border-[#d8dfea] cursor-pointer"
                                 >
-                                    <X className="w-5 h-5" /> Reddet
-                                </button>
-                                <button 
-                                    onClick={() => openApprovalModal(req)}
-                                    className="flex-[2] py-3 rounded-xl bg-primary text-white font-bold hover:bg-primary-light shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
-                                >
-                                    <Check className="w-5 h-5" /> Onayla & Ata
+                                    Yoksay
                                 </button>
                             </div>
-                        </motion.div>
-                    ))}
-                </AnimatePresence>
+                        </div>
+                    </div>
+                ))}
                 
                 {requests.length === 0 && (
-                    <div className="col-span-full py-20 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-3xl">
-                        Bekleyen istek yok.
+                    <div className="p-10 text-center text-gray-500 text-xs bg-white border border-[#d8dfea]">
+                        Şu anda bekleyen katılım isteği bulunmamaktadır.
                     </div>
                 )}
             </div>
         )}
 
-        {/* APPROVAL MODAL */}
+        {/* RETRO MODAL */}
         <AnimatePresence>
             {selectedRequest && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <motion.div 
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl p-6"
+                        initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+                        className="bg-white w-full max-w-md border-[4px] border-[#555] shadow-xl"
                     >
-                        <h2 className="text-xl font-bold text-gray-800 mb-6">Onay Detayları</h2>
-                        
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Atanacak Ünvan / Statü</label>
-                                <input 
-                                    value={roleTitle}
-                                    onChange={e => setRoleTitle(e.target.value)}
-                                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 font-bold text-gray-800 focus:border-primary outline-none"
-                                />
-                                <p className="text-[10px] text-gray-400 mt-1">Bu ünvan kullanıcının profilinde bu organizasyon altında görünecek.</p>
+                        {/* Classic Modal Header */}
+                        <div className="bg-[#3b5998] text-white px-3 py-2 text-[13px] font-bold flex justify-between items-center">
+                            <span>İsteği Onayla</span>
+                            <button onClick={() => setSelectedRequest(null)} className="hover:bg-[#2d4373] px-1">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                            <div className="bg-[#fff9d7] border border-[#e2c822] p-2 text-[11px] text-[#333]">
+                                <span className="font-bold">{selectedRequest.user?.name}</span> adlı kullanıcıyı ekibinize eklemek üzeresiniz.
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2 flex items-center gap-2">
-                                    <Shield className="w-4 h-4" /> Ek Yetkiler (Opsiyonel)
-                                </label>
-                                <div className="grid grid-cols-1 gap-2">
+                                <label className="block text-[11px] font-bold text-gray-600 mb-1">Atanacak Ünvan:</label>
+                                <input 
+                                    value={roleTitle}
+                                    onChange={e => setRoleTitle(e.target.value)}
+                                    className="w-full border border-[#bdc7d8] p-1 text-sm focus:border-[#3b5998] outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-[11px] font-bold text-gray-600 mb-1">Ek İzinler:</label>
+                                <div className="border border-[#bdc7d8] p-2 h-32 overflow-y-auto bg-white">
                                     {[
                                         { id: 'CAN_CREATE_CONTENT', label: 'İçerik Üreticisi' },
                                         { id: 'CAN_MANAGE_TEAM', label: 'Takım Lideri' },
@@ -194,31 +164,29 @@ export const TeamRequests: React.FC = () => {
                                         <div 
                                             key={perm.id}
                                             onClick={() => togglePermission(perm.id)}
-                                            className={`p-3 rounded-xl border cursor-pointer flex items-center gap-3 ${permissions.includes(perm.id) ? 'border-primary bg-primary/5' : 'border-gray-200'}`}
+                                            className={`flex items-center gap-2 p-1 cursor-pointer hover:bg-[#eff0f5] ${permissions.includes(perm.id) ? 'bg-[#d8dfea]' : ''}`}
                                         >
-                                            <div className={`w-5 h-5 rounded flex items-center justify-center ${permissions.includes(perm.id) ? 'bg-primary text-white' : 'bg-gray-200'}`}>
-                                                <Check className="w-3 h-3" />
-                                            </div>
-                                            <span className="text-sm font-bold text-gray-700">{perm.label}</span>
+                                            <div className={`w-3 h-3 border border-gray-400 ${permissions.includes(perm.id) ? 'bg-[#3b5998] border-[#3b5998]' : 'bg-white'}`}></div>
+                                            <span className="text-[11px]">{perm.label}</span>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex gap-3 mt-8">
-                            <button 
-                                onClick={() => setSelectedRequest(null)}
-                                className="flex-1 py-3 text-gray-500 font-bold"
-                            >
-                                İptal
-                            </button>
+                        <div className="bg-[#f7f7f7] border-t border-[#ccc] p-3 flex justify-end gap-2">
                             <button 
                                 onClick={handleApprove}
                                 disabled={isProcessing}
-                                className="flex-[2] bg-primary text-white py-3 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2"
+                                className="bg-[#3b5998] text-white px-4 py-1 text-[11px] font-bold border border-[#29447e]"
                             >
-                                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Kabul Et'}
+                                {isProcessing ? 'İşleniyor...' : 'Kabul Et'}
+                            </button>
+                            <button 
+                                onClick={() => setSelectedRequest(null)}
+                                className="bg-white text-[#333] px-4 py-1 text-[11px] font-bold border border-[#999]"
+                            >
+                                İptal
                             </button>
                         </div>
                     </motion.div>
