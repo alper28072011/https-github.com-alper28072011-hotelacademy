@@ -132,10 +132,19 @@ export interface User {
   name: string;
   phoneNumber: string; 
   avatar: string; 
+  
+  // SOCIAL GRAPH UPDATE
+  // organizationId is REMOVED. Use currentOrganizationId for context only.
   currentOrganizationId: string | null; 
-  pageRoles: Record<string, PageRole>;
-  subscribedChannelIds: string[];
-  role: UserRole;
+  pageRoles: Record<string, PageRole>; // Map of PageID -> Role (Admin, Member)
+  
+  subscribedChannelIds: string[]; // List of channel IDs from ANY page
+  followersCount: number;
+  followingCount: number;
+  following?: string[]; // Array of User IDs and Page IDs
+  isPrivate: boolean; // Needs approval to follow?
+
+  role: UserRole; // Global Role (Platform Level)
   department?: DepartmentType | null; 
   positionId?: string | null; 
   roleTitle?: string;
@@ -156,13 +165,9 @@ export interface User {
   // NEW: Precise Progress Map
   progressMap?: Record<string, CourseProgress>;
 
-  followersCount?: number;
-  followingCount?: number;
-  isPrivate?: boolean;
   instagramHandle?: string;
   assignedPathId?: string;
   badges?: { type: KudosType; count: number }[];
-  following?: string[];
   isSuperAdmin?: boolean;
   
   preferences?: UserPreferences;

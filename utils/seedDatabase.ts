@@ -28,7 +28,8 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       creatorLevel: 'NOVICE',
       reputationPoints: 50,
       followersCount: 0,
-      followingCount: 0
+      followingCount: 0,
+      isPrivate: false
   },
   { 
       name: 'Fatma Demir', 
@@ -51,7 +52,8 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       pageRoles: { [SEED_ORG_ID]: 'MEMBER' },
       subscribedChannelIds: [],
       followersCount: 0,
-      followingCount: 0
+      followingCount: 0,
+      isPrivate: false
   },
   { 
       name: 'Mehmet Öztürk', 
@@ -74,7 +76,8 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       pageRoles: { [SEED_ORG_ID]: 'MEMBER' },
       subscribedChannelIds: [],
       followersCount: 0,
-      followingCount: 0
+      followingCount: 0,
+      isPrivate: false
   },
   { 
       name: 'Canan Kaya', 
@@ -98,7 +101,8 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       pageRoles: { [SEED_ORG_ID]: 'MEMBER' },
       subscribedChannelIds: [],
       followersCount: 0,
-      followingCount: 0
+      followingCount: 0,
+      isPrivate: false
   },
   { 
       name: 'System Admin', 
@@ -121,7 +125,8 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       pageRoles: { [SEED_ORG_ID]: 'ADMIN' },
       subscribedChannelIds: [],
       followersCount: 0,
-      followingCount: 0
+      followingCount: 0,
+      isPrivate: false
   },
 ];
 

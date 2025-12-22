@@ -101,7 +101,8 @@ export const registerUser = async (data: {
     followersCount: 0,
     followingCount: 0,
     pageRoles: {},
-    subscribedChannelIds: []
+    subscribedChannelIds: [],
+    isPrivate: false
   };
 
   await setDoc(doc(db, 'users', uid), newUser);
