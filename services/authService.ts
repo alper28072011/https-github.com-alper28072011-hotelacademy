@@ -29,6 +29,7 @@ export const checkUsernameAvailability = async (username: string): Promise<boole
 export const loginUser = async (identifier: string, password: string): Promise<User> => {
   let email = identifier.trim();
 
+  // 1. Resolve Username to Email if needed
   if (!email.includes('@')) {
     const usersRef = collection(db, 'users');
     const q = query(usersRef, where('username', '==', identifier.toLowerCase().trim()));
@@ -41,16 +42,62 @@ export const loginUser = async (identifier: string, password: string): Promise<U
     email = snapshot.docs[0].data().email;
   }
 
+  // 2. Attempt Authentication
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
   const uid = userCredential.user.uid;
 
+  // 3. Fetch User Profile
   const userDoc = await getDoc(doc(db, 'users', uid));
+  
+  // --- AUTO-HEAL MECHANISM (ZOMBIE ACCOUNT RECOVERY) ---
   if (!userDoc.exists()) {
-    throw new Error("Kullanici profili eksik.");
+    console.warn("User authenticated but profile missing. Initiating auto-recovery...");
+    
+    // Construct a fresh profile based on Auth data
+    const recoveredUser: Omit<User, 'id'> = {
+        email: userCredential.user.email || email,
+        username: (userCredential.user.email || email).split('@')[0] + Math.floor(Math.random() * 1000),
+        name: userCredential.user.displayName || 'Recovered User',
+        phoneNumber: '',
+        avatar: 'RU', // Recovered User initials
+        currentOrganizationId: null,
+        department: null,
+        role: 'staff',
+        status: 'ACTIVE',
+        xp: 0,
+        creatorLevel: 'NOVICE',
+        reputationPoints: 0,
+        joinDate: Date.now(),
+        organizationHistory: [],
+        completedCourses: [],
+        startedCourses: [],
+        savedCourses: [],
+        completedTasks: [],
+        followersCount: 0,
+        followingCount: 0,
+        followers: [],
+        following: [],
+        joinedPageIds: [],
+        followingUsers: [],
+        followingPages: [],
+        followedTags: [],
+        followedPageIds: [],
+        managedPageIds: [],
+        channelSubscriptions: [],
+        pageRoles: {},
+        isPrivate: false
+    };
+
+    // Save the recovered profile
+    await setDoc(doc(db, 'users', uid), recoveredUser);
+    
+    // Return with ID
+    return { id: uid, ...recoveredUser };
   }
 
   const userData = userDoc.data() as User;
 
+  // 4. Update Metadata
   updateDoc(doc(db, 'users', uid), {
     'metadata.lastLoginAt': Date.now(),
     'metadata.loginCount': increment(1)
