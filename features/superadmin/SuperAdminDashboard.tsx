@@ -114,7 +114,7 @@ export const SuperAdminDashboard: React.FC = () => {
       <div className="max-w-[980px] mx-auto pt-[54px] px-2">
           
           {/* 2. TABS (The Facebook 2008 Style) */}
-          <div className="flex items-end gap-1 mb-4 border-b border-[#899bc1] pl-2">
+          <div className="flex items-end gap-1 mb-4 border-b border-[#899bc1] pl-2 h-[32px]">
               {[
                   { id: 'OVERVIEW', label: 'Genel Bakış' },
                   { id: 'USERS', label: 'Kullanıcı Havuzu' },
@@ -124,10 +124,10 @@ export const SuperAdminDashboard: React.FC = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`px-4 py-1.5 text-xs font-bold border-t border-l border-r rounded-t-[4px] transition-colors relative top-[1px] ${
+                    className={`px-4 py-1.5 text-xs font-bold border-t border-l border-r rounded-t-[4px] cursor-pointer outline-none focus:outline-none ${
                         activeTab === tab.id 
-                        ? 'bg-[#eff0f5] border-[#899bc1] text-[#333] z-10' // Active: Matches background
-                        : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]' // Inactive
+                        ? 'bg-[#eff0f5] border-[#899bc1] text-[#333] mb-[-1px] pb-2 z-10' // Active: Overlaps border
+                        : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#e4eaf5] mb-0' // Inactive
                     }`}
                   >
                       {tab.label}
@@ -262,7 +262,7 @@ export const SuperAdminDashboard: React.FC = () => {
                   <div className="bg-white border border-[#d8dfea] p-4">
                       <h2 className="text-sm font-bold text-[#333] border-b border-[#d8dfea] pb-2 mb-4">Sistem Ayarları</h2>
 
-                      <div className="flex gap-4">
+                      <div className="flex gap-4 mb-6">
                           <div className="w-1/2">
                               <label className="text-xs font-bold text-gray-500 block mb-1">Giriş Ekranı Görseli</label>
                               <div className="flex items-center gap-2 mb-2">
@@ -274,15 +274,24 @@ export const SuperAdminDashboard: React.FC = () => {
                               </div>
                           </div>
                           
-                          <div className="w-1/2 flex flex-col justify-end">
-                              <button 
-                                onClick={handleSaveSettings}
-                                disabled={isSavingSettings}
-                                className="w-full bg-[#3b5998] hover:bg-[#2d4373] text-white py-2 font-bold text-xs border border-[#29447e]"
-                              >
-                                  {isSavingSettings ? 'Kaydediliyor...' : 'Ayarları Kaydet'}
-                              </button>
+                          <div className="w-1/2">
+                               <div className="bg-[#fff9d7] border border-[#e2c822] p-2 text-xs text-[#333]">
+                                  <span className="font-bold">Bilgi:</span> Buradan yüklenen görsel, tüm kullanıcıların giriş ekranında (Login Page) arka plan olarak görünecektir. 
+                                  Lütfen yüksek çözünürlüklü (1920x1080) bir görsel kullanın.
+                               </div>
                           </div>
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="border-t border-[#d8dfea] pt-4 flex justify-end">
+                          <button 
+                            onClick={handleSaveSettings}
+                            disabled={isSavingSettings}
+                            className="bg-[#3b5998] hover:bg-[#2d4373] text-white px-6 py-2 font-bold text-xs border border-[#29447e] shadow-sm flex items-center gap-2"
+                          >
+                              {isSavingSettings ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                              Ayarları Kaydet
+                          </button>
                       </div>
                   </div>
               )}
