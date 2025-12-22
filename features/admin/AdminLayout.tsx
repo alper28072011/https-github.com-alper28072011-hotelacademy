@@ -48,7 +48,7 @@ export const AdminLayout: React.FC = () => {
               {/* Logo Area */}
               <div className="flex items-center gap-2">
                   <div className="bg-white text-[#3b5998] font-bold px-1.5 py-0.5 text-lg leading-none rounded-sm">H</div>
-                  <span className="text-white font-bold text-lg tracking-tight hidden md:block">Admin</span>
+                  <span className="text-white font-bold text-lg tracking-tight hidden md:block">facebook<span className="opacity-50 font-normal"> admin</span></span>
               </div>
               
               {/* Mobile Menu Toggle */}
