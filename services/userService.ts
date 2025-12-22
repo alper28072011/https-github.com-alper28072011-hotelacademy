@@ -140,6 +140,7 @@ export const removeProfilePhoto = async (userId: string, oldUrl: string) => {
 /**
  * SELF DELETION PROTOCOL
  * Requires password for re-authentication to prevent "auth/requires-recent-login" error.
+ * Ensures both Firestore data AND Firebase Auth record are deleted.
  */
 export const deleteUserSmart = async (user: User, password?: string): Promise<{ success: boolean; error?: string }> => {
     const authUser = auth.currentUser;
@@ -163,8 +164,6 @@ export const deleteUserSmart = async (user: User, password?: string): Promise<{ 
         await reauthenticateWithCredential(authUser, credential);
 
         // 3. Clean up Firestore Data (Basic cleanup)
-        // Note: For a complete cleanup (posts, likes etc), we usually use a Cloud Function trigger.
-        // Here we do a basic profile wipe to allow re-registration.
         
         // Delete Avatar
         if (user.avatar && user.avatar.includes('firebasestorage')) {
@@ -186,6 +185,6 @@ export const deleteUserSmart = async (user: User, password?: string): Promise<{ 
         if (e.code === 'auth/requires-recent-login') {
             return { success: false, error: "Oturumunuz zaman aşımına uğradı. Lütfen çıkış yapıp tekrar girdikten sonra deneyin." };
         }
-        return { success: false, error: "Silme işlemi sırasında bir hata oluştu." };
+        return { success: false, error: "Silme işlemi sırasında bir hata oluştu: " + e.message };
     }
 };

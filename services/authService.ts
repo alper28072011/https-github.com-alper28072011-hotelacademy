@@ -50,6 +50,7 @@ export const loginUser = async (identifier: string, password: string): Promise<U
   const userDoc = await getDoc(doc(db, 'users', uid));
   
   // --- AUTO-HEAL MECHANISM (ZOMBIE ACCOUNT RECOVERY) ---
+  // Fixes the issue where a user exists in Auth but not in Firestore (e.g. after a bad delete)
   if (!userDoc.exists()) {
     console.warn("User authenticated but profile missing. Initiating auto-recovery...");
     
