@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, User as UserIcon, Loader2, Briefcase, Shield, MapPin } from 'lucide-react';
+import { Check, X, User as UserIcon, Loader2, Briefcase, Shield, MapPin, BadgeCheck } from 'lucide-react';
 import { JoinRequest, User, PermissionType } from '../../types';
 import { getJoinRequests, approveJoinRequest, rejectJoinRequest } from '../../services/db';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -53,7 +53,6 @@ export const TeamRequests: React.FC = () => {
       );
 
       if (success) {
-          alert("Başarıyla onaylandı ve atandı.");
           setRequests(prev => prev.filter(r => r.id !== selectedRequest.id));
           setSelectedRequest(null);
       } else {
@@ -107,22 +106,30 @@ export const TeamRequests: React.FC = () => {
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-gray-900 text-lg">{req.user?.name || "Bilinmeyen Kullanıcı"}</h3>
-                                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                                        <Briefcase className="w-4 h-4" />
-                                        <span>{req.requestedRoleTitle}</span>
+                                    <div className="flex items-center gap-2 text-sm text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md w-max">
+                                        <Briefcase className="w-3.5 h-3.5" />
+                                        <span>{req.requestedRoleTitle || 'Personel'}</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="bg-gray-50 p-3 rounded-xl flex justify-between items-center text-sm">
-                                <span className="text-gray-500">Departman:</span>
-                                <span className="font-bold text-primary uppercase">{req.targetDepartment}</span>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                    <span className="text-gray-400 block mb-1">Departman</span>
+                                    <span className="font-bold text-gray-700 uppercase">{req.targetDepartment || 'Genel'}</span>
+                                </div>
+                                <div className="bg-green-50 p-2 rounded-lg border border-green-100 flex flex-col justify-center">
+                                    <span className="text-green-600 font-bold flex items-center gap-1">
+                                        <BadgeCheck className="w-4 h-4" /> Kurallar
+                                    </span>
+                                    <span className="text-green-700">Kabul Edildi</span>
+                                </div>
                             </div>
 
                             {req.positionId && (
                                 <div className="flex items-center gap-2 text-xs text-blue-600 bg-blue-50 p-2 rounded-lg border border-blue-100">
                                     <MapPin className="w-3 h-3" />
-                                    Bu kişi spesifik bir koltuğa başvurdu. Onaylarsanız otomatik atanır.
+                                    Bu kişi spesifik bir koltuğa başvurdu.
                                 </div>
                             )}
 
@@ -137,7 +144,7 @@ export const TeamRequests: React.FC = () => {
                                     onClick={() => openApprovalModal(req)}
                                     className="flex-[2] py-3 rounded-xl bg-primary text-white font-bold hover:bg-primary-light shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
                                 >
-                                    <Check className="w-5 h-5" /> İncele & Onayla
+                                    <Check className="w-5 h-5" /> Onayla & Ata
                                 </button>
                             </div>
                         </motion.div>
@@ -166,12 +173,13 @@ export const TeamRequests: React.FC = () => {
                         
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Atanacak Ünvan</label>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Atanacak Ünvan / Statü</label>
                                 <input 
                                     value={roleTitle}
                                     onChange={e => setRoleTitle(e.target.value)}
                                     className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 font-bold text-gray-800 focus:border-primary outline-none"
                                 />
+                                <p className="text-[10px] text-gray-400 mt-1">Bu ünvan kullanıcının profilinde bu organizasyon altında görünecek.</p>
                             </div>
 
                             <div>

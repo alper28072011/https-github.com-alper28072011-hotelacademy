@@ -1,16 +1,18 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Building2, Save, Upload, Loader2, Palette,
-    Trash2, AlertTriangle, ArrowRight, LogOut, Crown, Network
+    Trash2, AlertTriangle, ArrowRight, LogOut, Crown,
+    UserPlus, ShieldCheck, Tag, Plus, X
 } from 'lucide-react';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { updateOrganization } from '../../services/db';
-import { requestOrganizationDeletion, getPotentialSuccessors, transferOwnership } from '../../services/organizationService';
+import { requestOrganizationDeletion, getPotentialSuccessors, transferOwnership, updateJoinConfig } from '../../services/organizationService';
 import { uploadFile } from '../../services/storage';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { OrganizationSector, OrganizationSize, User } from '../../types';
+import { OrganizationSector, OrganizationSize, User, JoinConfig } from '../../types';
 import confetti from 'canvas-confetti';
 
 export const OrganizationSettings: React.FC = () => {
@@ -19,7 +21,7 @@ export const OrganizationSettings: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  const [activeTab, setActiveTab] = useState<'BRAND' | 'DANGER'>('BRAND');
+  const [activeTab, setActiveTab] = useState<'BRAND' | 'ONBOARDING' | 'DANGER'>('BRAND');
   const [isSaving, setIsSaving] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
 
@@ -38,6 +40,14 @@ export const OrganizationSettings: React.FC = () => {
   const [sector, setSector] = useState<OrganizationSector>('other');
   const [size, setSize] = useState<OrganizationSize>('1-10');
 
+  // Form State - Onboarding
+  const [joinConfig, setJoinConfig] = useState<JoinConfig>({
+      rules: "Kurum kurallarına ve gizlilik politikalarına uymayı kabul ediyorum.",
+      requireApproval: true,
+      availableRoles: ["Personel", "Stajyer", "Öğrenci"]
+  });
+  const [newRoleInput, setNewRoleInput] = useState('');
+
   // Identify Role
   const isOwner = currentOrganization?.ownerId === currentUser?.id;
 
@@ -49,6 +59,9 @@ export const OrganizationSettings: React.FC = () => {
           setWebsite(currentOrganization.website || '');
           setSector(currentOrganization.sector || 'other');
           setSize(currentOrganization.size || '1-10');
+          if (currentOrganization.joinConfig) {
+              setJoinConfig(currentOrganization.joinConfig);
+          }
       }
   }, [currentOrganization]);
 
@@ -77,11 +90,15 @@ export const OrganizationSettings: React.FC = () => {
       };
 
       await updateOrganization(currentOrganization.id, updates);
+      
+      // Save Onboarding separately (optional, could be merged)
+      await updateJoinConfig(currentOrganization.id, joinConfig);
+
       await switchOrganization(currentOrganization.id);
       
       setIsSaving(false);
       if (showWelcome) setShowWelcome(false);
-      alert('Marka ayarları güncellendi.');
+      alert('Ayarlar başarıyla güncellendi.');
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,6 +109,24 @@ export const OrganizationSettings: React.FC = () => {
           await switchOrganization(currentOrganization.id);
           setIsSaving(false);
       }
+  };
+
+  // Onboarding Helpers
+  const addRole = () => {
+      if (newRoleInput && !joinConfig.availableRoles.includes(newRoleInput)) {
+          setJoinConfig({
+              ...joinConfig,
+              availableRoles: [...joinConfig.availableRoles, newRoleInput]
+          });
+          setNewRoleInput('');
+      }
+  };
+
+  const removeRole = (role: string) => {
+      setJoinConfig({
+          ...joinConfig,
+          availableRoles: joinConfig.availableRoles.filter(r => r !== role)
+      });
   };
 
   // --- DANGER ZONE ACTIONS ---
@@ -187,6 +222,9 @@ export const OrganizationSettings: React.FC = () => {
             <button onClick={() => setActiveTab('BRAND')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'BRAND' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
                 <Palette className="w-4 h-4" /> Marka & Profil
             </button>
+            <button onClick={() => setActiveTab('ONBOARDING')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'ONBOARDING' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
+                <UserPlus className="w-4 h-4" /> Katılım (Onboarding)
+            </button>
             {isOwner && (
                 <button onClick={() => { setActiveTab('DANGER'); loadSuccessors(); }} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'DANGER' ? 'bg-red-50 text-red-600 border border-red-100' : 'text-gray-500 hover:bg-gray-200'}`}>
                     <AlertTriangle className="w-4 h-4" /> Kritik Bölge
@@ -229,6 +267,62 @@ export const OrganizationSettings: React.FC = () => {
                         <div>
                             <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Hakkında</label>
                             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
+                        </div>
+                    </div>
+                )}
+
+                {/* ONBOARDING SETTINGS */}
+                {activeTab === 'ONBOARDING' && (
+                    <div className="space-y-8">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-800 mb-1">Katılım Kuralları & Şartları</h3>
+                            <p className="text-sm text-gray-500 mb-4">Yeni üyelerin "Katıl" butonuna bastığında göreceği metin.</p>
+                            <textarea 
+                                value={joinConfig.rules}
+                                onChange={e => setJoinConfig({...joinConfig, rules: e.target.value})}
+                                rows={4}
+                                placeholder="Örn: 1. Saygılı olun. 2. Gizliliğe önem verin..."
+                                className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-200 outline-none focus:border-primary resize-none"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                            <div>
+                                <h4 className="font-bold text-gray-800 text-sm">Yönetici Onayı Gerekli</h4>
+                                <p className="text-xs text-gray-500">Kapalı devre kalmak için açık tutun.</p>
+                            </div>
+                            <button 
+                                onClick={() => setJoinConfig({...joinConfig, requireApproval: !joinConfig.requireApproval})}
+                                className={`w-12 h-6 rounded-full p-1 transition-colors ${joinConfig.requireApproval ? 'bg-green-500' : 'bg-gray-300'}`}
+                            >
+                                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${joinConfig.requireApproval ? 'translate-x-6' : 'translate-x-0'}`} />
+                            </button>
+                        </div>
+
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-800 mb-1">Rol Seçenekleri</h3>
+                            <p className="text-sm text-gray-500 mb-4">Üyelerin kendileri için seçebileceği veya sizin atayabileceğiniz etiketler.</p>
+                            
+                            <div className="flex gap-2 mb-3">
+                                <input 
+                                    value={newRoleInput}
+                                    onChange={e => setNewRoleInput(e.target.value)}
+                                    placeholder="Rol ekle (Örn: Barmen)"
+                                    className="flex-1 p-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-primary"
+                                    onKeyDown={e => e.key === 'Enter' && addRole()}
+                                />
+                                <button onClick={addRole} className="bg-gray-100 hover:bg-gray-200 p-3 rounded-xl"><Plus className="w-5 h-5 text-gray-600" /></button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                                {joinConfig.availableRoles.map(role => (
+                                    <div key={role} className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-100 text-sm font-bold">
+                                        <Tag className="w-3 h-3" />
+                                        {role}
+                                        <button onClick={() => removeRole(role)} className="hover:text-red-500"><X className="w-3 h-3" /></button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}

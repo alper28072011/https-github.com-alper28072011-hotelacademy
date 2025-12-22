@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, 
-    ShieldCheck, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff, ArrowRight, Clock, Hash, Check, Lock
+    ShieldCheck, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff, ArrowRight, Clock, Hash, Check, Lock, FileText
 } from 'lucide-react';
 import { getOrganizationDetails, sendJoinRequest, getMyMemberships, switchUserActiveOrganization, getUserPendingRequests } from '../../services/db';
 import { updateUserSubscriptions } from '../../services/organizationService';
@@ -12,6 +12,8 @@ import { Organization, OrganizationSector, FollowStatus } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore'; 
 import { checkFollowStatus, followOrganizationSmart, unfollowUserSmart } from '../../services/socialService';
+import { addDoc, collection } from 'firebase/firestore'; 
+import { db } from '../../services/firebase';
 import confetti from 'canvas-confetti';
 
 export const OrganizationProfile: React.FC = () => {
@@ -31,8 +33,16 @@ export const OrganizationProfile: React.FC = () => {
   const [followStatus, setFollowStatus] = useState<FollowStatus>('NONE');
   const [isFollowLoading, setIsFollowLoading] = useState(false);
   
-  // Channel Tuner
+  // Modals
   const [showTuner, setShowTuner] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false); // Onboarding Modal
+  
+  // Onboarding State
+  const [agreedToRules, setAgreedToRules] = useState(false);
+  const [selectedRole, setSelectedRole] = useState('');
+  const [isJoinSubmitting, setIsJoinSubmitting] = useState(false);
+
+  // Channel Tuner
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [isSavingChannels, setIsSavingChannels] = useState(false);
 
@@ -44,8 +54,7 @@ export const OrganizationProfile: React.FC = () => {
         if (data) setOrg(data);
         
         if (currentUser) {
-            // 1. Check Membership (Are you STAFF?)
-            // We can check currentUser.joinedPageIds directly if updated, but safe to check DB memberships
+            // 1. Check Membership
             const memberships = await getMyMemberships(currentUser.id);
             if (memberships.some(m => m.organizationId === orgId)) setIsMember(true);
             
@@ -53,7 +62,7 @@ export const OrganizationProfile: React.FC = () => {
             const pending = await getUserPendingRequests(currentUser.id);
             if (pending.some(r => r.organizationId === orgId)) setHasPendingRequest(true);
 
-            // 3. Check Follow Status (Are you a FAN?)
+            // 3. Check Follow Status
             const status = await checkFollowStatus(currentUser.id, orgId);
             setFollowStatus(status);
             
@@ -69,17 +78,36 @@ export const OrganizationProfile: React.FC = () => {
 
   // --- ACTIONS ---
 
-  const handleJoinRequest = async () => {
+  const handleJoinClick = () => {
       if (!currentUser || !org) return;
-      if (window.confirm(`${org.name} ekibine katılmak için başvuru gönderilsin mi?`)) {
-          const result = await sendJoinRequest(currentUser.id, org.id);
-          if (result.success) {
-              setHasPendingRequest(true); 
-              confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-              alert("Katılım isteği gönderildi! Yönetici onayı bekleniyor.");
-          } else {
-              alert(result.message || "Başvuru yapılamadı.");
-          }
+      setShowJoinModal(true);
+  };
+
+  const submitJoinRequest = async () => {
+      if (!currentUser || !org || !selectedRole || !agreedToRules) return;
+      setIsJoinSubmitting(true);
+
+      try {
+          // Custom Implementation of sendJoinRequest to support extended payload
+          await addDoc(collection(db, 'requests'), { 
+              type: 'REQUEST_TO_JOIN', 
+              userId: currentUser.id, 
+              organizationId: org.id, 
+              status: 'PENDING', 
+              createdAt: Date.now(),
+              requestedRoleTitle: selectedRole,
+              agreedToRules: true,
+              targetDepartment: currentUser.department || 'housekeeping' // Fallback
+          });
+
+          setHasPendingRequest(true); 
+          setShowJoinModal(false);
+          confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+          alert("Katılım isteğiniz gönderildi! Yönetici onayı bekleniyor.");
+      } catch (e: any) {
+          alert("Başvuru yapılamadı.");
+      } finally {
+          setIsJoinSubmitting(false);
       }
   };
 
@@ -139,7 +167,15 @@ export const OrganizationProfile: React.FC = () => {
       }
   };
 
-  const canManage = currentUser && currentUser.pageRoles?.[orgId] === 'ADMIN';
+  // Safe accessor for object/string role
+  const getRole = (orgId: string) => {
+      if (!currentUser?.pageRoles) return 'GUEST';
+      const r = currentUser.pageRoles[orgId];
+      if (typeof r === 'string') return r;
+      return r?.role || 'GUEST';
+  };
+
+  const canManage = currentUser && getRole(orgId || '') === 'ADMIN';
 
   const getSectorIcon = (sector: OrganizationSector) => {
       switch(sector) {
@@ -248,7 +284,7 @@ export const OrganizationProfile: React.FC = () => {
                     </button>
                 ) : (
                     <button 
-                        onClick={handleJoinRequest}
+                        onClick={handleJoinClick}
                         className="flex-[2] bg-gray-900 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"
                     >
                         <UserPlus className="w-4 h-4" /> Ekibe Katıl
@@ -291,6 +327,87 @@ export const OrganizationProfile: React.FC = () => {
                 </button>
             )}
         </div>
+
+        {/* ONBOARDING MODAL */}
+        <AnimatePresence>
+            {showJoinModal && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowJoinModal(false)}
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                    />
+                    <motion.div 
+                        initial={{ y: 100, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 100, opacity: 0 }}
+                        className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden relative z-10 shadow-2xl flex flex-col max-h-[90vh]"
+                    >
+                        <div className="p-8 pb-4">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+                                    <FileText className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-gray-900 leading-none">Aramıza Katıl</h2>
+                                    <p className="text-xs text-gray-500 mt-1">{org.name} Topluluk Protokolü</p>
+                                </div>
+                            </div>
+
+                            {/* Rules */}
+                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 mb-6 text-sm text-gray-600 max-h-40 overflow-y-auto">
+                                <h4 className="font-bold text-gray-900 mb-2 text-xs uppercase">Kurallar & Şartlar</h4>
+                                <p className="leading-relaxed">
+                                    {org.joinConfig?.rules || "Topluluk kurallarına saygı gösteriniz."}
+                                </p>
+                            </div>
+
+                            {/* Agreement Checkbox */}
+                            <label className="flex items-start gap-3 p-3 rounded-xl hover:bg-gray-50 cursor-pointer border border-transparent hover:border-gray-200 transition-all mb-4">
+                                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 ${agreedToRules ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
+                                    {agreedToRules && <Check className="w-3 h-3 text-white" />}
+                                </div>
+                                <input type="checkbox" className="hidden" checked={agreedToRules} onChange={(e) => setAgreedToRules(e.target.checked)} />
+                                <span className="text-sm font-medium text-gray-700">Yukarıdaki kuralları okudum, anladım ve kabul ediyorum.</span>
+                            </label>
+
+                            {/* Role Selector */}
+                            <div className="mb-6">
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Hangi statü ile katılmak istiyorsun?</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(org.joinConfig?.availableRoles || ["Personel", "Stajyer"]).map(role => (
+                                        <button
+                                            key={role}
+                                            onClick={() => setSelectedRole(role)}
+                                            className={`py-3 px-2 rounded-xl text-sm font-bold border-2 transition-all ${
+                                                selectedRole === role 
+                                                ? 'border-primary bg-primary/5 text-primary' 
+                                                : 'border-gray-100 text-gray-500 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {role}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <button 
+                                onClick={submitJoinRequest}
+                                disabled={!agreedToRules || !selectedRole || isJoinSubmitting}
+                                className="w-full bg-primary text-white py-4 rounded-2xl font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:shadow-none"
+                            >
+                                {isJoinSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Başvuruyu Gönder'}
+                            </button>
+                        </div>
+                        <button onClick={() => setShowJoinModal(false)} className="py-4 text-center text-gray-400 font-bold text-sm hover:text-gray-600 bg-gray-50 border-t border-gray-100">
+                            Vazgeç
+                        </button>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
 
         {/* CHANNEL MODAL */}
         <AnimatePresence>

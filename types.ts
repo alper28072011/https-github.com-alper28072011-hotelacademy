@@ -1,5 +1,4 @@
 
-
 export type LanguageCode = 'en' | 'tr' | 'ru' | 'de' | 'id' | 'ar' | 'uk' | 'es' | 'fr';
 
 export interface LanguageDefinition {
@@ -82,9 +81,10 @@ export interface User {
   channelSubscriptions: string[]; // Specific Channel IDs I'm subscribed to (across all joined pages)
   
   // Manage Role per Page
-  pageRoles: Record<string, PageRole>; 
+  // Supports legacy string or new object format { role, title }
+  pageRoles: Record<string, PageRole | { role: PageRole; title: string }>; 
   
-  // --- LEGACY COMPATIBILITY (Deprecated but kept for migration safety) ---
+  // --- LEGACY COMPATIBILITY ---
   following?: string[]; 
   followedPageIds?: string[];
   subscribedChannelIds?: string[]; 
@@ -147,6 +147,12 @@ export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'educatio
 export type OrganizationSize = '1-10' | '11-50' | '51-200' | '201-500' | '500+';
 export type OrganizationStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PENDING_DELETION';
 
+export interface JoinConfig {
+    rules: string;
+    requireApproval: boolean;
+    availableRoles: string[]; // e.g. ["Staff", "Intern", "Guest"]
+}
+
 export interface Organization { 
   id: string; 
   name: string; 
@@ -176,6 +182,9 @@ export interface Organization {
   
   status: OrganizationStatus;
   deletionReason?: string;
+
+  // Onboarding Configuration
+  joinConfig?: JoinConfig;
 
   settings?: {
       allowStaffContentCreation?: boolean;
@@ -356,8 +365,12 @@ export interface JoinRequest {
   organizationId: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
+  
+  // Expanded for Onboarding Protocol
   targetDepartment?: DepartmentType;
-  requestedRoleTitle?: string;
+  requestedRoleTitle?: string; // e.g. "Front Office Intern"
+  agreedToRules?: boolean;
+  
   positionId?: string;
 }
 

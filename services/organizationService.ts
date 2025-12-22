@@ -8,10 +8,11 @@ import {
     query, 
     where, 
     getDocs,
-    deleteDoc
+    deleteDoc,
+    runTransaction
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Organization, Position, RolePermissions, OrgDepartmentDefinition, PositionPrototype, PageRole } from '../types';
+import { Organization, Position, RolePermissions, OrgDepartmentDefinition, PositionPrototype, PageRole, JoinConfig } from '../types';
 
 /**
  * Create a new Page (Organization).
@@ -30,8 +31,8 @@ export const createPage = async (
             location: 'Global',
             ownerId: userId,
             admins: [userId],
-            followers: [userId], // Creator is also a follower (social)
-            members: [userId],   // Creator is also a member (internal)
+            followers: [userId], 
+            members: [userId],   
             followersCount: 1,
             memberCount: 1,
             createdAt: Date.now(),
@@ -40,7 +41,11 @@ export const createPage = async (
             ],
             status: 'ACTIVE',
             organizationHistory: [], 
-            pageRoles: {},
+            joinConfig: {
+                rules: "Topluluğumuza hoş geldiniz. Saygılı ve profesyonel olmanızı bekliyoruz.",
+                requireApproval: true,
+                availableRoles: ["Personel", "Stajyer", "Misafir"]
+            }
         } as any;
 
         const docRef = await addDoc(collection(db, 'organizations'), newPage);
@@ -49,9 +54,11 @@ export const createPage = async (
         const userRef = doc(db, 'users', userId);
         await updateDoc(userRef, {
             managedPageIds: arrayUnion(docRef.id),
-            joinedPageIds: arrayUnion(docRef.id), // Official member
-            followingPages: arrayUnion(docRef.id), // Social follower
-            channelSubscriptions: arrayUnion(`ch_${Date.now()}_1`) // Auto-sub to general
+            joinedPageIds: arrayUnion(docRef.id), 
+            followingPages: arrayUnion(docRef.id),
+            // Owner gets ADMIN role + 'Kurucu' title
+            [`pageRoles.${docRef.id}`]: { role: 'ADMIN', title: 'Kurucu' },
+            channelSubscriptions: arrayUnion(`ch_${Date.now()}_1`)
         });
 
         return docRef.id;
@@ -61,10 +68,13 @@ export const createPage = async (
     }
 };
 
-/**
- * Update user's subscribed channels across all organizations.
- * This directly modifies the User's `channelSubscriptions` array.
- */
+export const updateJoinConfig = async (orgId: string, config: JoinConfig) => {
+    try {
+        await updateDoc(doc(db, 'organizations', orgId), { joinConfig: config });
+        return true;
+    } catch (e) { return false; }
+};
+
 export const updateUserSubscriptions = async (userId: string, channelIds: string[]) => {
     try {
         await updateDoc(doc(db, 'users', userId), { 
@@ -76,8 +86,6 @@ export const updateUserSubscriptions = async (userId: string, channelIds: string
         return false; 
     }
 };
-
-// ... [Existing Helper Functions Preserved] ...
 
 export const getUserManagedPages = async (userId: string): Promise<Organization[]> => {
     try {
@@ -177,6 +185,10 @@ export const getDescendantPositions = (rootId: string, allPositions: Position[])
 export const updateUserPageRole = async (orgId: string, userId: string, role: PageRole) => {
     try {
         const memId = `${userId}_${orgId}`;
+        // Also update User doc for quick access if structure allows
+        await updateDoc(doc(db, 'users', userId), {
+            [`pageRoles.${orgId}.role`]: role 
+        });
         await updateDoc(doc(db, 'memberships', memId), { role });
         return true;
     } catch(e) { return false; }
