@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Organization, Position, RolePermissions, OrgDepartmentDefinition, PositionPrototype, PageRole, JoinConfig } from '../types';
-import { deleteFolder, replaceFile } from './storage';
+import { deleteFolder, replaceFile, deleteFileByUrl } from './storage';
 import { StoragePaths } from '../utils/storagePaths';
 
 // ... (Existing exports like createPage, updateJoinConfig etc. preserved) ...
@@ -33,6 +33,7 @@ export const createPage = async (
             sector: sector as any,
             type: 'PUBLIC',
             logoUrl: '',
+            coverUrl: '', // Explicitly empty initially
             location: 'Global',
             ownerId: userId,
             admins: [userId],
@@ -93,6 +94,53 @@ export const updateOrganizationLogo = async (orgId: string, file: File): Promise
     } catch (e) {
         console.error("Logo update failed", e);
         return null;
+    }
+};
+
+/**
+ * Update Organization Cover Photo.
+ */
+export const updateOrganizationCover = async (orgId: string, file: File): Promise<string | null> => {
+    try {
+        const orgRef = doc(db, 'organizations', orgId);
+        const orgSnap = await getDoc(orgRef);
+        if (!orgSnap.exists()) return null;
+        
+        const orgData = orgSnap.data() as Organization;
+        const fileName = `${Date.now()}_cover.webp`;
+        const path = StoragePaths.orgCover(orgId, fileName);
+
+        // Use 'BANNER' optimization type for cover photos (wider aspect ratio logic)
+        const newUrl = await replaceFile(orgData.coverUrl, file, path, 'BANNER');
+
+        await updateDoc(orgRef, { coverUrl: newUrl });
+        return newUrl;
+    } catch (e) {
+        console.error("Cover update failed", e);
+        return null;
+    }
+};
+
+/**
+ * Remove Organization Cover Photo.
+ */
+export const removeOrganizationCover = async (orgId: string): Promise<boolean> => {
+    try {
+        const orgRef = doc(db, 'organizations', orgId);
+        const orgSnap = await getDoc(orgRef);
+        if (!orgSnap.exists()) return false;
+        
+        const orgData = orgSnap.data() as Organization;
+        
+        if (orgData.coverUrl) {
+            await deleteFileByUrl(orgData.coverUrl);
+        }
+
+        await updateDoc(orgRef, { coverUrl: '' });
+        return true;
+    } catch (e) {
+        console.error("Cover removal failed", e);
+        return false;
     }
 };
 

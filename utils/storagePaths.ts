@@ -20,6 +20,9 @@ export const StoragePaths = {
     // Branding: organizations/{orgId}/branding/logo_xyz.webp
     orgLogo: (orgId: string, fileName: string) => `organizations/${orgId}/branding/logo_${fileName}`,
     
+    // Cover: organizations/{orgId}/branding/cover_xyz.webp
+    orgCover: (orgId: string, fileName: string) => `organizations/${orgId}/branding/cover_${fileName}`,
+    
     // --- COURSES ---
     // Root folder: courses/{courseId}
     courseRoot: (courseId: string) => `courses/${courseId}`,

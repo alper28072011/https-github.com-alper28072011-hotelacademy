@@ -4,11 +4,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Building2, Save, Upload, Loader2, Palette,
     Trash2, AlertTriangle, ArrowRight, LogOut, Crown,
-    UserPlus, ShieldCheck, Tag, Plus, X
+    UserPlus, ShieldCheck, Tag, Plus, X, Image as ImageIcon
 } from 'lucide-react';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { updateOrganization } from '../../services/db';
-import { requestOrganizationDeletion, getPotentialSuccessors, transferOwnership, updateJoinConfig } from '../../services/organizationService';
+import { 
+    requestOrganizationDeletion, 
+    getPotentialSuccessors, 
+    transferOwnership, 
+    updateJoinConfig,
+    updateOrganizationCover,
+    removeOrganizationCover
+} from '../../services/organizationService';
 import { uploadFile } from '../../services/storage';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -23,6 +30,7 @@ export const OrganizationSettings: React.FC = () => {
   
   const [activeTab, setActiveTab] = useState<'BRAND' | 'ONBOARDING' | 'DANGER'>('BRAND');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
 
   // Danger Zone States
@@ -108,6 +116,34 @@ export const OrganizationSettings: React.FC = () => {
           await updateOrganization(currentOrganization.id, { logoUrl: url });
           await switchOrganization(currentOrganization.id);
           setIsSaving(false);
+      }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files?.[0] && currentOrganization) {
+          setIsUploadingCover(true);
+          try {
+              await updateOrganizationCover(currentOrganization.id, e.target.files[0]);
+              await switchOrganization(currentOrganization.id); // Refresh state
+          } catch (error) {
+              alert("Kapak fotoğrafı güncellenemedi.");
+          } finally {
+              setIsUploadingCover(false);
+          }
+      }
+  };
+
+  const handleRemoveCover = async () => {
+      if (currentOrganization && window.confirm("Kapak fotoğrafını kaldırmak istediğinize emin misiniz?")) {
+          setIsUploadingCover(true);
+          try {
+              await removeOrganizationCover(currentOrganization.id);
+              await switchOrganization(currentOrganization.id);
+          } catch (error) {
+              alert("İşlem başarısız.");
+          } finally {
+              setIsUploadingCover(false);
+          }
       }
   };
 
@@ -241,7 +277,54 @@ export const OrganizationSettings: React.FC = () => {
             >
                 {/* BRAND SETTINGS */}
                 {activeTab === 'BRAND' && (
-                    <div className="space-y-6">
+                    <div className="space-y-8">
+                        {/* Cover Photo Editor */}
+                        <div>
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                    <ImageIcon className="w-4 h-4 text-primary" /> Kapak Fotoğrafı
+                                </h3>
+                                {currentOrganization.coverUrl && (
+                                    <button 
+                                        onClick={handleRemoveCover}
+                                        disabled={isUploadingCover}
+                                        className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1"
+                                    >
+                                        <Trash2 className="w-3 h-3" /> Kaldır
+                                    </button>
+                                )}
+                            </div>
+                            
+                            <div className="relative w-full aspect-[3/1] md:aspect-[4/1] rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 overflow-hidden group hover:border-primary transition-colors">
+                                {currentOrganization.coverUrl ? (
+                                    <>
+                                        <img src={currentOrganization.coverUrl} className="w-full h-full object-cover" alt="Cover" />
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="bg-white text-gray-800 px-4 py-2 rounded-lg font-bold text-sm shadow-lg flex items-center gap-2 cursor-pointer">
+                                                <Upload className="w-4 h-4" />
+                                                Değiştir
+                                                <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleCoverUpload} />
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                                        <ImageIcon className="w-10 h-10 mb-2 opacity-30" />
+                                        <span className="text-sm font-bold">Kapak Fotoğrafı Ekle</span>
+                                        <span className="text-xs mt-1 opacity-70">En iyi sonuç için geniş görsel kullanın (1200x300)</span>
+                                        <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleCoverUpload} />
+                                    </div>
+                                )}
+                                {isUploadingCover && (
+                                    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10">
+                                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="h-px bg-gray-100" />
+
                         <div className="flex items-center gap-6">
                             <div className="relative group cursor-pointer w-24 h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-primary">
                                 {currentOrganization.logoUrl ? <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" /> : <Upload className="w-8 h-8 text-gray-400" />}
