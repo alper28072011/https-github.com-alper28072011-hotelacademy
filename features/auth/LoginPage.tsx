@@ -80,7 +80,7 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-5xl bg-white md:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative min-h-[600px]">
+    <div className="w-full max-w-5xl mx-auto bg-white md:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative min-h-[600px]">
       
       {/* MINIMAL LANG SELECTOR (Top Right) */}
       <div className="absolute top-6 right-6 z-20">

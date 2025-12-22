@@ -33,13 +33,13 @@ import { TalentRadar } from './features/admin/TalentRadar';
 import { SuperAdminDashboard } from './features/superadmin/SuperAdminDashboard';
 
 // --- PAGE TRANSITION WRAPPER ---
-const PageTransition: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+const PageTransition: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "w-full h-full" }) => (
     <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -10 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="w-full h-full"
+        className={className}
     >
         {children}
     </motion.div>
@@ -124,7 +124,7 @@ const AnimatedRoutes = () => {
                      path="/*" 
                      element={
                        <LoginLayout>
-                         <PageTransition><LoginPage /></PageTransition>
+                         <PageTransition className="w-full"><LoginPage /></PageTransition>
                        </LoginLayout>
                      } 
                    />
