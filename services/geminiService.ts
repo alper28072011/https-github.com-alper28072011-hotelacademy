@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { StoryCard, DifficultyLevel, CourseTone, PedagogyMode, LocalizedString, StoryCardType } from "../types";
+import { StoryCard, DifficultyLevel, CourseTone, PedagogyMode, LocalizedString, StoryCardType, ContentGenerationConfig, GeneratedModule } from "../types";
 
 interface GeneratedCourse {
   title: LocalizedString;
@@ -16,109 +16,25 @@ const cleanJsonResponse = (text: string): string => {
 
 /**
  * SEMANTIC SEARCH EXPANDER
- * Takes a raw user query and returns related tags/synonyms to broaden search.
  */
 export const expandSearchQuery = async (query: string): Promise<string[]> => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        
-        const schema: Schema = {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-        };
+        const schema: Schema = { type: Type.ARRAY, items: { type: Type.STRING } };
 
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `
-                You are a search engine optimizer for a Hotel Staff Training App.
-                User Query: "${query}"
-                
-                Task: Return a JSON array of 3-5 related keywords, synonyms, or category tags (in English or Turkish) that would match this query in a database of hotel operations courses and staff profiles.
-                
-                Example 1: Input "temizlik" -> Output ["housekeeping", "cleaning", "sanitation", "room-service"]
-                Example 2: Input "wine" -> Output ["f&b", "sommelier", "service", "beverage"]
-                Example 3: Input "resepsiyon" -> Output ["front-office", "guest-relations", "check-in"]
-            `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: schema,
-                temperature: 0.3
-            }
+            contents: `User Query: "${query}". Return 3-5 related synonyms/tags for hotel training. JSON Array.`,
+            config: { responseMimeType: "application/json", responseSchema: schema }
         });
 
         if (response.text) {
             const tags = JSON.parse(cleanJsonResponse(response.text));
-            // Ensure unique and lowercase
             return Array.from(new Set([query.toLowerCase(), ...tags.map((t: string) => t.toLowerCase())]));
         }
         return [query.toLowerCase()];
     } catch (e) {
-        console.warn("Gemini Search Expansion Failed, falling back to raw query:", e);
         return [query.toLowerCase()];
-    }
-};
-
-/**
- * GENERATE CARDS FROM RAW TEXT (For PDF/URL Injection)
- */
-export const generateCardsFromText = async (
-    text: string, 
-    count: number = 3
-): Promise<StoryCard[]> => {
-    try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        
-        const cardSchema: Schema = {
-            type: Type.OBJECT,
-            properties: {
-                id: { type: Type.STRING },
-                type: { type: Type.STRING, enum: ['INFO', 'QUIZ', 'POLL'] },
-                title: { type: Type.OBJECT, properties: { en: { type: Type.STRING } }, required: ['en'] },
-                content: { type: Type.OBJECT, properties: { en: { type: Type.STRING } }, required: ['en'] },
-                mediaPrompt: { type: Type.STRING },
-                duration: { type: Type.NUMBER },
-                // AI should tag the specific topic of this card
-                topics: { type: Type.ARRAY, items: { type: Type.STRING } }, 
-                interaction: {
-                    type: Type.OBJECT,
-                    properties: {
-                        question: { type: Type.OBJECT, properties: { en: { type: Type.STRING } } },
-                        options: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { en: { type: Type.STRING } } } },
-                        correctOptionIndex: { type: Type.NUMBER }
-                    }
-                }
-            },
-            required: ["title", "content", "type"]
-        };
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `
-                Create ${count} micro-learning cards based on this text.
-                Language: English (Master Copy).
-                Format: JSON Array.
-                Also extract 1-2 key 'topics' (e.g., 'fire-safety', 'greeting-guests') for each card for adaptive learning.
-                Text: "${text.substring(0, 5000)}"
-            `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: { type: Type.ARRAY, items: cardSchema }
-            }
-        });
-
-        if (response.text) {
-            const rawCards = JSON.parse(cleanJsonResponse(response.text));
-            return rawCards.map((c: any, i: number) => ({
-                ...c,
-                id: `ai-card-${Date.now()}-${i}`,
-                // Generic abstract background instead of the hardcoded luxury hotel
-                mediaUrl: `https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=800&q=80`
-            }));
-        }
-        return [];
-    } catch (e) {
-        console.error("Card Gen Error:", e);
-        return [];
     }
 };
 
@@ -132,80 +48,99 @@ export const translateContent = async (
 ): Promise<LocalizedString> => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const baseText = content[sourceLang];
-        
-        const effectiveSourceText = baseText || Object.values(content)[0];
-        if (!effectiveSourceText) return content;
+        const baseText = content[sourceLang] || Object.values(content)[0];
+        if (!baseText) return content;
 
         const realTargets = targetLangs.filter(l => l !== sourceLang);
         if (realTargets.length === 0) return content;
 
-        const schema: Schema = {
-            type: Type.OBJECT,
-            properties: {},
-            required: []
-        };
-        realTargets.forEach(l => {
-            if(schema.properties) schema.properties[l] = { type: Type.STRING };
-        });
+        const schema: Schema = { type: Type.OBJECT, properties: {}, required: [] };
+        realTargets.forEach(l => { if(schema.properties) schema.properties[l] = { type: Type.STRING }; });
 
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `
-                You are a professional translator.
-                Translate the following text from "${sourceLang}" to these languages: ${realTargets.join(', ')}.
-                Keep the tone consistent.
-                
-                Source Text: "${effectiveSourceText}"
-            `,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: schema
-            }
+            contents: `Translate "${baseText}" from ${sourceLang} to: ${realTargets.join(', ')}. Keep tone consistent.`,
+            config: { responseMimeType: "application/json", responseSchema: schema }
         });
 
         if (response.text) {
-            const translations = JSON.parse(cleanJsonResponse(response.text));
-            return { ...content, ...translations };
+            return { ...content, ...JSON.parse(cleanJsonResponse(response.text)) };
         }
         return content;
     } catch (e) {
-        console.error("Translation Error:", e);
         return content;
     }
 };
 
 /**
- * GENERATE MAGIC COURSE V2 (Multi-Language & Adaptive)
+ * NEW: GENERATE CURRICULUM (STEP 3)
+ * Plans the course structure before generating detailed slides.
+ */
+export const generateCurriculum = async (config: ContentGenerationConfig): Promise<GeneratedModule[]> => {
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        let pedagogyInstruction = "";
+        if (config.pedagogy === 'FEYNMAN') pedagogyInstruction = "Using the Feynman Technique, simplify complex concepts into analogies a 5-year-old would understand.";
+        if (config.pedagogy === 'ACTIVE_RECALL') pedagogyInstruction = "Focus on testing knowledge. Structure the modules to challenge the user's memory.";
+        if (config.pedagogy === 'SOCRATIC') pedagogyInstruction = "Teach through questions. Each module should explore a 'Why' or 'How'.";
+
+        const schema: Schema = {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    id: { type: Type.STRING },
+                    title: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    keyPoints: { type: Type.ARRAY, items: { type: Type.STRING } }
+                },
+                required: ["title", "description", "keyPoints"]
+            }
+        };
+
+        const prompt = `
+            ROLE: Expert Instructional Designer.
+            TASK: Design a ${config.length} curriculum outline (3-5 modules).
+            TOPIC/SOURCE: "${config.sourceContent.substring(0, 5000)}"
+            TARGET AUDIENCE: ${config.targetAudience}
+            TONE: ${config.tone}
+            METHODOLOGY: ${pedagogyInstruction}
+            LANGUAGE: ${config.language} (Output must be in this language)
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json", responseSchema: schema }
+        });
+
+        if (response.text) {
+            const modules = JSON.parse(cleanJsonResponse(response.text));
+            return modules.map((m: any, i: number) => ({ ...m, id: `mod_${Date.now()}_${i}` }));
+        }
+        return [];
+    } catch (e) {
+        console.error("Curriculum Gen Error:", e);
+        return [];
+    }
+};
+
+/**
+ * GENERATE MAGIC COURSE (STEP 4)
+ * Generates the full slide deck based on the approved curriculum or raw text.
  */
 export const generateMagicCourse = async (
-  sourceContent: string,
-  config: {
-    sourceLanguage: string;
-    targetLanguages: string[];
-    level: DifficultyLevel;
-    tone: CourseTone;
-    length: 'SHORT' | 'MEDIUM';
-    pedagogyMode: PedagogyMode;
-  }
+  config: ContentGenerationConfig,
+  curriculum?: GeneratedModule[] // Optional: If provided, guides the generation
 ): Promise<GeneratedCourse | null> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const cardCount = config.length === 'SHORT' ? 5 : 8;
-    
     const outputLanguages = Array.from(new Set(['en', ...config.targetLanguages]));
 
-    const localizedStringSchema: Schema = {
-        type: Type.OBJECT,
-        properties: {},
-        required: ['en']
-    };
-    
-    outputLanguages.forEach(lang => {
-        if(localizedStringSchema.properties) {
-            localizedStringSchema.properties[lang] = { type: Type.STRING };
-        }
-    });
+    // Define Localized Schema
+    const localizedStringSchema: Schema = { type: Type.OBJECT, properties: {}, required: ['en'] };
+    outputLanguages.forEach(lang => { if(localizedStringSchema.properties) localizedStringSchema.properties[lang] = { type: Type.STRING }; });
 
     const schema: Schema = {
       type: Type.OBJECT,
@@ -213,7 +148,7 @@ export const generateMagicCourse = async (
         title: localizedStringSchema,
         description: localizedStringSchema,
         tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-        topics: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Specific skills or topics this course teaches (e.g. 'wine-pairing', 'conflict-resolution')" },
+        topics: { type: Type.ARRAY, items: { type: Type.STRING } },
         cards: {
           type: Type.ARRAY,
           items: {
@@ -223,86 +158,65 @@ export const generateMagicCourse = async (
               type: { type: Type.STRING, enum: ['COVER', 'INFO', 'QUIZ', 'POLL', 'REWARD'] },
               title: localizedStringSchema,
               content: localizedStringSchema,
-              mediaPrompt: { type: Type.STRING, description: "Detailed English prompt for Unsplash" },
+              mediaPrompt: { type: Type.STRING },
               duration: { type: Type.NUMBER },
-              topics: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Topics specific to this card/question" },
+              topics: { type: Type.ARRAY, items: { type: Type.STRING } },
               interaction: {
                 type: Type.OBJECT,
                 properties: {
                   question: localizedStringSchema,
-                  options: { 
-                      type: Type.ARRAY, 
-                      items: localizedStringSchema 
-                  },
+                  options: { type: Type.ARRAY, items: localizedStringSchema },
                   correctOptionIndex: { type: Type.NUMBER },
                   explanation: localizedStringSchema
-                },
-                required: ["question", "options", "correctOptionIndex"]
+                }
               }
             },
-            required: ["id", "type", "title", "content", "mediaPrompt", "duration"]
+            required: ["type", "title", "content", "mediaPrompt"]
           }
         }
       },
-      required: ["title", "description", "cards", "tags", "topics"]
+      required: ["title", "cards"]
     };
 
     let pedagogyInstruction = "";
-    switch (config.pedagogyMode) {
-        case 'ACTIVE_RECALL': pedagogyInstruction = "Use 'Active Recall'. Every 2nd card MUST be a QUIZ."; break;
-        case 'SOCRATIC': pedagogyInstruction = "Use 'Socratic Method'. Ask rhetorical questions in INFO cards."; break;
-        case 'STORYTELLING': pedagogyInstruction = "Use a narrative arc. Introduce a character or scenario."; break;
-        default: pedagogyInstruction = "Use standard micro-learning best practices.";
+    switch (config.pedagogy) {
+        case 'FEYNMAN': pedagogyInstruction = "Apply Feynman Technique: Use simple analogies, avoid jargon. Explain it like the user is 5 years old. Focus on 'What', 'Why', 'How'."; break;
+        case 'ACTIVE_RECALL': pedagogyInstruction = "Apply Active Recall: Every 2nd slide MUST be a QUIZ type. Force the user to retrieve information immediately."; break;
+        case 'SOCRATIC': pedagogyInstruction = "Apply Socratic Method: Use questions in titles. Lead the user to the answer through reasoning."; break;
+        case 'CASE_STUDY': pedagogyInstruction = "Use a Story/Scenario. Introduce a character (e.g. 'John the Guest'). Solve their problem step-by-step."; break;
+        default: pedagogyInstruction = "Standard micro-learning. Concise and clear.";
     }
 
+    const contextStr = curriculum 
+        ? `Use this approved curriculum as the structure: ${JSON.stringify(curriculum)}`
+        : `Source Content: "${config.sourceContent.substring(0, 10000)}"`;
+
     const prompt = `
-      ROLE: Instructional Designer & Data Scientist.
-      
-      TASK: Create a micro-course based on the source text.
-      
-      INPUT LANGUAGE: ${config.sourceLanguage}
-      OUTPUT LANGUAGES: ${outputLanguages.join(', ')}.
-      
-      IMPORTANT: "en" (English) is the MASTER COPY. 
-      1. First, create the content in English.
-      2. Then, translate to: ${config.targetLanguages.join(', ')}.
-      
-      INTELLIGENCE:
-      - Identify 2-3 specific 'topics' (kebab-case) that represent the skills taught (e.g., 'upselling-techniques', 'room-service-etiquette').
-      - Add these to the course 'topics' field.
+      ROLE: Instructional Designer.
+      TASK: Create a micro-course.
+      INPUT LANGUAGE: ${config.language}
+      OUTPUT LANGUAGES: ${outputLanguages.join(', ')} (English 'en' is master).
       
       PEDAGOGY: ${pedagogyInstruction}
-      TONE: ${config.tone}.
-      LEVEL: ${config.level}.
-      LENGTH: ~${cardCount} cards.
+      TONE: ${config.tone}
+      AUDIENCE: ${config.targetAudience}
       
-      [SOURCE CONTENT]:
-      ${sourceContent.substring(0, 15000)}
+      ${contextStr}
     `;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
-        temperature: 0.4,
-        maxOutputTokens: 8192,
-      }
+      config: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.4 }
     });
 
-    const rawText = response.text;
-    if (rawText) {
-      const cleanedJson = cleanJsonResponse(rawText);
-      const data = JSON.parse(cleanedJson) as GeneratedCourse;
-      
+    if (response.text) {
+      const data = JSON.parse(cleanJsonResponse(response.text)) as GeneratedCourse;
       data.cards = data.cards.map((card, i) => ({
           ...card,
           id: `card-${Date.now()}-${i}`,
-          // Generic Abstract Gradient instead of specific Hotel
-          mediaUrl: `https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=800&auto=format&fit=crop`,
+          mediaUrl: `https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=800&auto=format&fit=crop`, // Placeholder
       }));
-      
       return data;
     }
     return null;
@@ -311,3 +225,6 @@ export const generateMagicCourse = async (
     return null;
   }
 };
+
+// Legacy support
+export const generateCardsFromText = async (text: string) => { return []; };

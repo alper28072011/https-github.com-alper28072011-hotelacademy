@@ -28,8 +28,32 @@ export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_
 export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
 export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN' | 'INSPIRATIONAL' | 'AUTHORITATIVE';
 export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VIDEO' | 'XP_REWARD';
-export type PedagogyMode = 'STANDARD' | 'ACTIVE_RECALL' | 'SOCRATIC' | 'CASE_STUDY' | 'STORYTELLING';
+
+// UPDATED: Advanced Pedagogy Methods
+export type PedagogyMode = 'STANDARD' | 'ACTIVE_RECALL' | 'SOCRATIC' | 'FEYNMAN' | 'CASE_STUDY';
+
 export type SourceType = 'TEXT' | 'PDF' | 'URL' | 'YOUTUBE' | 'MANUAL';
+
+// NEW: Content Generation Wizard Config
+export interface ContentGenerationConfig {
+  sourceType: 'TEXT_PROMPT' | 'PDF_UPLOAD' | 'WEB_URL';
+  sourceContent: string; // Prompt text, PDF extracted text, or URL
+  targetAudience: string; // e.g. "New Housekeeping Staff"
+  language: string; // Source language name e.g. "Turkish"
+  targetLanguages: string[]; // Codes e.g. ['tr', 'en']
+  difficulty: DifficultyLevel;
+  pedagogy: PedagogyMode;
+  tone: CourseTone;
+  length: 'SHORT' | 'MEDIUM';
+}
+
+// NEW: AI Generated Curriculum Module
+export interface GeneratedModule {
+  id: string;
+  title: string;
+  description: string;
+  keyPoints: string[];
+}
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
