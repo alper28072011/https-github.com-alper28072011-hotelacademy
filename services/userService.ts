@@ -16,7 +16,7 @@ import {
 import { db, auth } from './firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
 import { User, Organization } from '../types';
-import { deleteFileByUrl } from './storage';
+import { deleteFileByUrl, uploadFile } from './storage';
 
 /**
  * Follow a user.
@@ -112,8 +112,23 @@ export const updateUserPreferences = async (userId: string, data: any) => {
 };
 
 export const updateProfilePhoto = async (userId: string, file: File, oldUrl?: string) => {
-    // Placeholder for storage upload logic logic handled in component
-    return "https://via.placeholder.com/150"; 
+    try {
+        // 1. Upload new file using the storage service (includes compression)
+        const downloadURL = await uploadFile(file, `user_avatars/${userId}`, undefined, 'AVATAR');
+
+        // 2. Update Firestore User Document
+        await updateDoc(doc(db, 'users', userId), { avatar: downloadURL });
+
+        // 3. Clean up old file if it exists and is different
+        if (oldUrl && oldUrl !== downloadURL && oldUrl.includes('firebasestorage')) {
+            await deleteFileByUrl(oldUrl).catch(e => console.warn("Failed to delete old avatar", e));
+        }
+
+        return downloadURL;
+    } catch (e) {
+        console.error("Profile Photo Update Failed:", e);
+        throw e;
+    }
 };
 
 export const removeProfilePhoto = async (userId: string, oldUrl: string) => {
