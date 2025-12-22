@@ -111,7 +111,8 @@ export const generateCardsFromText = async (
             return rawCards.map((c: any, i: number) => ({
                 ...c,
                 id: `ai-card-${Date.now()}-${i}`,
-                mediaUrl: `https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800`
+                // Generic abstract background instead of the hardcoded luxury hotel
+                mediaUrl: `https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&w=800&q=80`
             }));
         }
         return [];
@@ -298,7 +299,8 @@ export const generateMagicCourse = async (
       data.cards = data.cards.map((card, i) => ({
           ...card,
           id: `card-${Date.now()}-${i}`,
-          mediaUrl: `https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800&auto=format&fit=crop`,
+          // Generic Abstract Gradient instead of specific Hotel
+          mediaUrl: `https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=800&auto=format&fit=crop`,
       }));
       
       return data;

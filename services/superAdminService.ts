@@ -39,12 +39,13 @@ export const getSystemSettings = async (): Promise<SystemSettings> => {
         if (snap.exists()) {
             return snap.data() as SystemSettings;
         }
+        // Updated Default to generic background
         return { 
-            loginScreenImage: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1200' 
+            loginScreenImage: 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&q=80&w=1200' 
         };
     } catch (e) {
         console.error("Get Settings Error:", e);
-        return { loginScreenImage: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1200' };
+        return { loginScreenImage: 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&q=80&w=1200' };
     }
 };
 

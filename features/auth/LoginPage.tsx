@@ -34,8 +34,9 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
 
-  // Default Image Fallback
-  const bgImage = systemSettings?.loginScreenImage || "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1200";
+  // FIXED: Removed hardcoded "Luxury Hotel" fallback to prevent flash of wrong content.
+  // We use systemSettings only. If null, we show a placeholder color.
+  const bgImage = systemSettings?.loginScreenImage;
 
   useEffect(() => { setError(null); }, [authMode]);
 
@@ -208,12 +209,14 @@ export const LoginPage: React.FC = () => {
 
       {/* RIGHT: IMAGE AREA (Soft Overlay) */}
       <div className="hidden md:block w-1/2 bg-gray-50 relative p-4">
-          <div className="w-full h-full rounded-3xl overflow-hidden relative shadow-inner">
-              <img 
-                src={bgImage} 
-                alt="Luxury Hotel" 
-                className="w-full h-full object-cover transition-opacity duration-700"
-              />
+          <div className="w-full h-full rounded-3xl overflow-hidden relative shadow-inner bg-gray-900">
+              {bgImage && (
+                  <img 
+                    src={bgImage} 
+                    alt="Login Cover" 
+                    className="w-full h-full object-cover transition-opacity duration-700 animate-in fade-in"
+                  />
+              )}
               {/* Soft Blue Overlay */}
               <div className="absolute inset-0 bg-primary/20 mix-blend-multiply" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
