@@ -15,11 +15,13 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       currentOrganizationId: null,
       pageRoles: {},
       subscribedChannelIds: [],
+      channelSubscriptions: [],
       department: 'housekeeping', 
       role: 'staff', 
       xp: 120, 
       completedCourses: ['401'], 
       startedCourses: [], 
+      savedCourses: [],
       completedTasks: [], 
       assignedPathId: 'path_hk_manager', 
       organizationHistory: [SEED_ORG_ID],
@@ -29,6 +31,10 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       reputationPoints: 50,
       followersCount: 0,
       followingCount: 0,
+      followers: [],
+      following: [],
+      followedPageIds: [],
+      managedPageIds: [],
       isPrivate: false
   },
   { 
@@ -42,6 +48,7 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       xp: 50, 
       completedCourses: [], 
       startedCourses: [], 
+      savedCourses: [],
       completedTasks: [], 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 10000000,
@@ -51,8 +58,13 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       currentOrganizationId: SEED_ORG_ID,
       pageRoles: { [SEED_ORG_ID]: 'MEMBER' },
       subscribedChannelIds: [],
+      channelSubscriptions: [],
       followersCount: 0,
       followingCount: 0,
+      followers: [],
+      following: [],
+      followedPageIds: [],
+      managedPageIds: [],
       isPrivate: false
   },
   { 
@@ -66,6 +78,7 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       xp: 300, 
       completedCourses: ['102'], 
       startedCourses: [], 
+      savedCourses: [],
       completedTasks: [], 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 20000000,
@@ -75,8 +88,13 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       currentOrganizationId: SEED_ORG_ID,
       pageRoles: { [SEED_ORG_ID]: 'MEMBER' },
       subscribedChannelIds: [],
+      channelSubscriptions: [],
       followersCount: 0,
       followingCount: 0,
+      followers: [],
+      following: [],
+      followedPageIds: [],
+      managedPageIds: [],
       isPrivate: false
   },
   { 
@@ -90,6 +108,7 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       xp: 450, 
       completedCourses: ['301', '101'], 
       startedCourses: [], 
+      savedCourses: [],
       completedTasks: [], 
       assignedPathId: 'path_fo_manager', 
       organizationHistory: [SEED_ORG_ID],
@@ -100,8 +119,13 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       currentOrganizationId: SEED_ORG_ID,
       pageRoles: { [SEED_ORG_ID]: 'MEMBER' },
       subscribedChannelIds: [],
+      channelSubscriptions: [],
       followersCount: 0,
       followingCount: 0,
+      followers: [],
+      following: [],
+      followedPageIds: [],
+      managedPageIds: [],
       isPrivate: false
   },
   { 
@@ -115,6 +139,7 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       xp: 9999, 
       completedCourses: [], 
       startedCourses: [], 
+      savedCourses: [],
       completedTasks: [], 
       organizationHistory: [SEED_ORG_ID],
       joinDate: Date.now() - 30000000,
@@ -124,8 +149,13 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       currentOrganizationId: SEED_ORG_ID,
       pageRoles: { [SEED_ORG_ID]: 'ADMIN' },
       subscribedChannelIds: [],
+      channelSubscriptions: [],
       followersCount: 0,
       followingCount: 0,
+      followers: [],
+      following: [],
+      followedPageIds: [],
+      managedPageIds: [],
       isPrivate: false
   },
 ];
@@ -174,7 +204,8 @@ const MOCK_COURSES: Course[] = [
       tier: 'OFFICIAL',
       verificationStatus: 'VERIFIED',
       qualityScore: 5,
-      priceType: 'FREE'
+      priceType: 'FREE',
+      createdAt: Date.now()
   },
   {
       id: '101',
@@ -200,7 +231,8 @@ const MOCK_COURSES: Course[] = [
       tier: 'OFFICIAL',
       verificationStatus: 'VERIFIED',
       qualityScore: 4.7,
-      priceType: 'FREE'
+      priceType: 'FREE',
+      createdAt: Date.now()
   },
   {
     id: '401',
@@ -226,7 +258,8 @@ const MOCK_COURSES: Course[] = [
     tier: 'OFFICIAL',
     verificationStatus: 'VERIFIED',
     qualityScore: 4.5,
-    priceType: 'FREE'
+    priceType: 'FREE',
+    createdAt: Date.now()
   }
 ];
 

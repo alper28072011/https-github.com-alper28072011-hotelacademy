@@ -72,7 +72,11 @@ export const useOrganizationStore = create<OrganizationState>()(
                 }
 
                 if (membership) {
-                    role = membership.role;
+                    // Map PageRole to UserRole if needed or keep UserRole for global context
+                    // For now, map simple admin to manager/admin
+                    if (membership.role === 'ADMIN') role = 'manager';
+                    else role = 'staff';
+                    
                     dept = membership.department;
                 }
             }

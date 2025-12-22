@@ -7,45 +7,42 @@ export interface LanguageDefinition {
   nativeName: string;
   flag: string;
   dir: 'ltr' | 'rtl';
-  isBase?: boolean; // English is base
+  isBase?: boolean; 
 }
 
-// --- CORE LOCALIZATION TYPE ---
 export type LocalizedString = Record<string, string>;
 
-// --- NEW ARCHITECTURE: ROLES ---
+// --- SOCIAL ROLES ---
 export type UserRole = 'user' | 'super_admin' | 'staff' | 'manager' | 'admin'; 
-
-// Page Level Roles (Organization Context)
-export type PageRole = 'ADMIN' | 'MODERATOR' | 'MEMBER';
+export type PageRole = 'ADMIN' | 'EDITOR' | 'MODERATOR' | 'MEMBER';
 
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
 
-export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management';
-
-// --- EDUCATION TYPES ---
+// --- CONTENT TYPES ---
 export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
 export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN' | 'INSPIRATIONAL' | 'AUTHORITATIVE';
 export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VIDEO' | 'XP_REWARD';
 export type PedagogyMode = 'STANDARD' | 'ACTIVE_RECALL' | 'SOCRATIC' | 'CASE_STUDY' | 'STORYTELLING';
-export type SourceType = 'TEXT' | 'PDF' | 'URL' | 'YOUTUBE';
+export type SourceType = 'TEXT' | 'PDF' | 'URL' | 'YOUTUBE' | 'MANUAL';
 
 export type AuthMode = 'LOGIN' | 'REGISTER';
 
-// --- SEARCH ENGINE TYPES ---
-export type SearchResultType = 'COURSE' | 'ORGANIZATION' | 'USER' | 'JOURNEY';
+// --- DEPARTMENTS ---
+export type DepartmentType = 'housekeeping' | 'kitchen' | 'front_office' | 'management' | 'f&b' | 'security' | 'sales' | 'hr';
+
+// --- SEARCH ---
+export type SearchResultType = 'COURSE' | 'PAGE' | 'USER' | 'JOURNEY' | 'ORGANIZATION';
 
 export interface SearchResult {
     type: SearchResultType;
     id: string;
-    title: string;       // Display Name / Title
-    subtitle?: string;   // Role / Category / Location
-    imageUrl?: string;   // Avatar / Thumbnail
+    title: string;       
+    subtitle?: string;   
+    imageUrl?: string;   
     relevanceScore: number; 
-    metadata?: any;      // Extra data like xpReward, memberCount
-    url: string;         // Navigation target
+    url: string;         
 }
 
 export interface SearchTrend {
@@ -54,19 +51,131 @@ export interface SearchTrend {
     lastSearchedAt: number;
 }
 
-// --- ADAPTIVE LEARNING & SKILLS ---
-export interface SkillMetric {
-    level: number; // 0 to 100
-    lastTestedAt: number;
-    failureCount: number;
-    successCount: number;
+// --- USER (SOCIAL AGENT) ---
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  name: string;
+  phoneNumber?: string; 
+  avatar: string; 
+  bio?: string;
+  instagramHandle?: string;
+  
+  // --- SOCIAL GRAPH FIELDS (NEW) ---
+  followers: string[]; // List of User IDs who follow me
+  following: string[]; // List of User IDs I follow
+  followersCount?: number;
+  followingCount?: number;
+  
+  followedPageIds: string[]; // List of Organization/Page IDs I follow
+  managedPageIds: string[]; // List of Page IDs I admin/moderate
+  
+  channelSubscriptions: string[]; // Deprecated in favor of subscribedChannelIds
+  subscribedChannelIds: string[]; // specific channel IDs
+  
+  isPrivate: boolean; // Do I require approval to be followed?
+  
+  // --- GAMIFICATION ---
+  xp: number;
+  creatorLevel: CreatorLevel;
+  reputationPoints: number;
+  badges?: { type: KudosType; count: number }[];
+  
+  // --- LEGACY / SYSTEM ---
+  role: UserRole; // Global platform role
+  status: UserStatus;
+  joinDate: number;
+  isSuperAdmin?: boolean;
+  
+  // --- LEARNING HISTORY ---
+  completedCourses: string[];
+  startedCourses: string[]; 
+  savedCourses: string[]; 
+  completedTasks: string[];
+  
+  preferences?: UserPreferences;
+  
+  // Privacy
+  privacySettings?: {
+    showInSearch: boolean;
+    allowTagging: boolean;
+    isPrivateAccount?: boolean;
+  };
+
+  // --- ORGANIZATION CONTEXT ---
+  currentOrganizationId?: string | null;
+  organizationHistory: string[];
+  department: DepartmentType | null;
+  pageRoles: Record<string, PageRole>; // Map orgId -> Role
+  
+  // --- CAREER ---
+  positionId?: string | null;
+  roleTitle?: string | null;
+  assignedPathId?: string | null;
+  
+  // --- PROGRESS MAP ---
+  progressMap?: Record<string, CourseProgress>;
 }
 
-export interface UserSkillProfile {
-    userId: string;
-    // Key is the topic ID (e.g., 'english-grammar', 'front-desk-checkin')
-    skills: Record<string, SkillMetric>; 
-    updatedAt: number;
+export interface UserPreferences {
+    appLanguage: LanguageCode;           
+    contentLanguages: LanguageCode[];    
+}
+
+export interface CourseProgress {
+    courseId: string;
+    status: 'IN_PROGRESS' | 'COMPLETED';
+    currentCardIndex: number;
+    totalCards: number;
+    lastAccessedAt: number;
+    completedAt?: number;
+}
+
+// --- ORGANIZATION ---
+export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
+export type OrganizationSize = '1-10' | '11-50' | '51-200' | '201-500' | '500+';
+export type OrganizationStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PENDING_DELETION';
+
+export interface Organization { 
+  id: string; 
+  name: string; 
+  code?: string;
+  type: 'PUBLIC' | 'PRIVATE'; 
+  sector: OrganizationSector; 
+  size?: OrganizationSize;
+  logoUrl: string; 
+  coverUrl?: string; 
+  location: string; 
+  description?: string; 
+  website?: string;
+  
+  ownerId: string; 
+  admins: string[]; 
+  
+  followers: string[]; 
+  
+  createdAt: number; 
+  channels: Channel[];
+  
+  // Stats
+  followersCount: number; 
+  memberCount?: number; 
+  
+  status: OrganizationStatus;
+  deletionReason?: string;
+
+  // Settings
+  settings?: {
+      allowStaffContentCreation?: boolean;
+      primaryColor?: string;
+  };
+
+  // Definitions
+  definitions?: {
+      departments: OrgDepartmentDefinition[];
+      positionPrototypes: PositionPrototype[];
+  };
 }
 
 export interface Channel {
@@ -74,343 +183,197 @@ export interface Channel {
   name: string;
   description?: string;
   icon?: string;
-  isPrivate: boolean;
-  managerIds: string[];
+  isPrivate: boolean; 
   createdAt: number;
+  managerIds?: string[];
 }
-
-export type ChannelStoryStatus = 'HAS_NEW' | 'IN_PROGRESS' | 'ALL_CAUGHT_UP' | 'EMPTY';
 
 export interface ChannelStoryData {
     channel: Channel;
-    status: ChannelStoryStatus;
+    status: 'HAS_NEW' | 'IN_PROGRESS' | 'ALL_CAUGHT_UP' | 'EMPTY';
     nextCourseId?: string;
-    progressPercent?: number;
+    progressPercent: number;
 }
 
-export interface AnalyticsEvent {
-  id?: string;
-  userId: string;
-  userRole?: string;
-  userName?: string;
-  pageId: string;
-  channelId?: string;
-  contentId: string;
-  cardId?: string;
-  type: 'VIEW' | 'COMPLETE' | 'QUIZ_ANSWER' | 'TIME_SPENT' | 'DROP_OFF';
-  
-  // Adaptive Learning Extensions
-  relatedTopics?: string[];
-  outcome?: 'SUCCESS' | 'FAILURE' | 'NEUTRAL';
-  
-  payload?: any;
-  timestamp: number;
-}
-
-export interface UserPreferences {
-    appLanguage: LanguageCode;           // UI Language (Single Source)
-    contentLanguages: LanguageCode[];    // PRIORITY LIST (e.g. ['tr', 'ru', 'en'])
-}
-
-// --- NEW: PROGRESS TRACKING ---
-export interface CourseProgress {
-  courseId: string;
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
-  completedAt?: number;
-  lastAccessedAt: number;
-  currentCardIndex: number; // Resume point
-  maxCardIndexReached: number;
-  totalCards: number;
-  score?: number; // Quiz score
-  isReviewMode?: boolean;
-}
-
-export interface User {
-  id: string;
-  email: string;
-  username: string;
-  name: string;
-  phoneNumber: string; 
-  avatar: string; 
-  
-  // SOCIAL GRAPH UPDATE
-  // organizationId is REMOVED. Use currentOrganizationId for context only.
-  currentOrganizationId: string | null; 
-  pageRoles: Record<string, PageRole>; // Map of PageID -> Role (Admin, Member)
-  
-  subscribedChannelIds: string[]; // List of channel IDs from ANY page
-  followersCount: number;
-  followingCount: number;
-  following?: string[]; // Array of User IDs and Page IDs
-  isPrivate: boolean; // Needs approval to follow?
-
-  role: UserRole; // Global Role (Platform Level)
-  department?: DepartmentType | null; 
-  positionId?: string | null; 
-  roleTitle?: string;
-  status: UserStatus;
-  xp: number;
-  creatorLevel: CreatorLevel;
-  reputationPoints: number;
-  bio?: string; 
-  joinDate?: number; 
-  organizationHistory: string[];
-  
-  // Legacy Arrays (Keep for simple queries)
-  completedCourses: string[];
-  startedCourses?: string[]; 
-  savedCourses?: string[]; 
-  completedTasks?: string[]; 
-  
-  // NEW: Precise Progress Map
-  progressMap?: Record<string, CourseProgress>;
-
-  instagramHandle?: string;
-  assignedPathId?: string;
-  badges?: { type: KudosType; count: number }[];
-  isSuperAdmin?: boolean;
-  
-  preferences?: UserPreferences;
-
-  privacySettings?: {
-    showInSearch: boolean;
-    allowTagging: boolean;
-    isPrivateAccount: boolean;
-  };
-}
-
-export interface ContentSource {
-    type: 'MANUAL' | 'AI_TEXT' | 'AI_PDF' | 'AI_URL';
-    metadata?: { 
-        originalUrl?: string; 
-        originalFileName?: string;
-        extractedTextSnippet?: string;
-    };
-}
-
-export type TranslationStatus = 'SYNCED' | 'STALE' | 'MISSING';
+// --- CONTENT & COURSE ---
+export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
+export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'UNDER_REVIEW';
+export type AuthorType = 'USER' | 'ORGANIZATION';
 
 export interface Course {
   id: string;
-  organizationId?: string; 
   authorType: AuthorType;
   authorId: string;
   authorName: string;
   authorAvatarUrl: string;
-  visibility: 'PRIVATE' | 'PUBLIC';
-  categoryId: string;
-  channelId?: string; 
-
-  // Localized Fields (English is Base)
+  
+  // Context
+  organizationId?: string; 
+  channelId?: string;      
+  categoryId?: string;
+  
+  visibility: 'PUBLIC' | 'PRIVATE' | 'FOLLOWERS_ONLY';
+  
   title: LocalizedString; 
   description: LocalizedString;
   coverQuote?: LocalizedString;
-
   thumbnailUrl: string;
+  
   duration: number;
   xpReward: number;
-  createdAt?: number;
+  createdAt: number;
+  
   steps: StoryCard[]; 
+  tags?: string[]; 
+  topics?: string[];
   
-  // Tagging & Intelligence
-  tags?: string[]; // General search tags (e.g. #summer, #vip)
-  topics?: string[]; // Skill-based topics (e.g. 'wine-service', 'fire-safety')
-
-  priority?: 'HIGH' | 'NORMAL';
-  config?: CourseConfig;
-  price: number;
-  priceType: 'FREE' | 'PAID';
-  isFeatured?: boolean;
-  assignmentType?: 'GLOBAL' | 'OPTIONAL' | 'DEPARTMENT';
-  targetDepartments?: string[];
-  studentCount?: number;
-  isNew?: boolean;
-  popularityScore?: number;
-  verificationStatus?: VerificationStatus;
-  flagCount?: number;
-  tier?: ContentTier;
-  qualityScore?: number;
-  deepDiveResource?: {
-    title: string;
-    url: string;
-    type: string;
-  };
-  
-  // Scalable Counters
+  // Metrics
   likesCount?: number;
   completesCount?: number;
+  popularityScore?: number;
+  rating?: number;
   
-  // NEW: Translation Management
+  // Config
+  priority?: 'HIGH' | 'NORMAL';
+  isNew?: boolean;
+  isFeatured?: boolean;
+  
+  price: number;
+  priceType?: 'FREE' | 'PAID';
+
+  // Smart Fields
+  assignmentType?: 'GLOBAL' | 'DEPARTMENT' | 'OPTIONAL';
+  targetDepartments?: DepartmentType[];
+  
+  tier?: ContentTier;
+  verificationStatus?: VerificationStatus;
+  qualityScore?: number;
+  flagCount?: number;
+  
+  config?: any;
   translationStatus?: Record<string, TranslationStatus>;
 }
 
-export interface CourseConfig {
-  level: DifficultyLevel;
-  tone: CourseTone;
-  pedagogyMode: PedagogyMode; 
-  sourceType: SourceType;     
-  targetLanguages: string[];  
-  autoPlay: boolean;
-  slideDuration: number;
-}
+export type TranslationStatus = 'SYNCED' | 'STALE' | 'MISSING';
 
 export interface StoryCard {
   id: string;
   type: StoryCardType;
-  // Localized Content
   title: LocalizedString;
   content: LocalizedString;
-  
   mediaUrl: string;
-  mediaPrompt?: string; 
+  mediaPrompt?: string;
   duration: number; 
+  topics?: string[];
   interaction?: {
     question: LocalizedString;
-    options: LocalizedString[]; // Array of localized strings
-    correctAnswer: string; // Identifier or key, not display text
+    options: LocalizedString[];
+    correctAnswer?: string; // Legacy support
     correctOptionIndex?: number;
     explanation?: LocalizedString;
   };
-  
-  // Adaptive Learning per Card
-  topics?: string[]; // Specific topics this card/question tests
-
-  source?: ContentSource;
+  source?: { type: SourceType; url?: string };
 }
-
-// --- NEW: LEARNING JOURNEY (SERIES) ---
-export interface LearningJourney {
-    id: string;
-    organizationId: string;
-    title: LocalizedString;
-    description: LocalizedString;
-    channelId?: string;
-    coverUrl: string;
-    courseIds: string[]; // Ordered list of Course IDs
-    isPublished: boolean;
-    createdAt: number;
-    tags: string[];
-}
-
-export type AuthorType = 'USER' | 'ORGANIZATION';
-export type ReviewTag = 'ACCURATE' | 'ENGAGING' | 'MISLEADING' | 'OUTDATED';
-export type VerificationStatus = 'VERIFIED' | 'PENDING' | 'UNDER_REVIEW';
-export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
-
-export interface Category { id: string; title: string; icon: string; color: string; }
-export interface CareerPath { id: string; organizationId: string; title: string; description: string; targetRole: string; department: string; courseIds: string[]; }
 
 export interface FeedPost { 
     id: string; 
-    organizationId: string; 
     authorType: AuthorType; 
     authorId: string; 
     authorName: string; 
     authorAvatar: string; 
+    
+    // Context
+    organizationId?: string; 
+    
     type: 'image' | 'video' | 'kudos' | 'course'; 
     mediaUrl?: string; 
     caption: string; 
     
-    // Scalable Counters
-    likesCount: number; 
+    likesCount: number;
     commentsCount: number;
-    
     createdAt: number; 
-    // removed likedBy array for scalability, handled via subcollection check
+    
     kudosData?: { badgeType: KudosType; recipientId: string; recipientName: string; }; 
-    channelId?: string; 
+    
+    likes?: Record<string, any>;
 }
 
+// --- TASKS & ISSUES ---
 export interface Task {
-  id: string;
-  organizationId: string;
-  department: string;
-  title: string;
-  xpReward: number;
-  type: 'checklist' | 'photo';
+    id: string;
+    organizationId: string;
+    department: DepartmentType;
+    title: string;
+    xpReward: number;
+    type: 'checklist' | 'photo';
 }
 
 export type IssueType = 'maintenance' | 'housekeeping' | 'security';
 
 export interface Issue {
-  organizationId: string;
-  userId: string;
-  userName: string;
-  department: string | null;
-  type: IssueType;
-  location: string;
-  photoUrl?: string;
-  status: 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
-  createdAt: number;
+    organizationId: string;
+    userId: string;
+    userName: string;
+    department: DepartmentType | null;
+    type: IssueType;
+    location: string;
+    photoUrl?: string;
+    status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+    createdAt: number;
 }
 
+// --- CAREER & LEARNING ---
+export interface CareerPath {
+    id: string;
+    organizationId: string;
+    title: string;
+    description: string;
+    department: DepartmentType;
+    targetRole: string;
+    courseIds: string[];
+}
+
+export interface LearningJourney {
+    id: string;
+    title: string;
+    courses: string[];
+}
+
+export interface Membership {
+    id: string;
+    userId: string;
+    organizationId: string;
+    role: PageRole;
+    department: DepartmentType;
+    status: 'ACTIVE' | 'INACTIVE';
+    joinedAt: number;
+}
+
+// --- REQUESTS ---
 export interface JoinRequest {
   id: string;
-  type: 'REQUEST_TO_JOIN';
+  type: 'REQUEST_TO_JOIN' | 'REQUEST_TO_JOIN_PAGE';
   userId: string;
   organizationId: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
+  
+  targetDepartment?: DepartmentType;
   requestedRoleTitle?: string;
-  targetDepartment?: string;
   positionId?: string;
 }
 
-export type OrganizationStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING_DELETION' | 'ARCHIVED';
+// --- UTILS ---
+export interface Category { id: string; title: string; icon: string; color: string; }
 
-export interface Organization { 
-  id: string; 
-  name: string; 
-  sector: OrganizationSector; 
-  logoUrl: string; 
-  coverUrl?: string; 
-  location: string; 
-  ownerId: string; 
-  code: string; 
-  createdAt: number; 
-  settings: { allowStaffContentCreation: boolean; primaryColor: string; }; 
-  followersCount: number; 
-  memberCount: number; 
-  website?: string; 
-  description?: string; 
-  size?: OrganizationSize; 
-  status: OrganizationStatus; 
-  deletionReason?: string; 
-  channels: Channel[];
-  definitions?: {
-      departments: OrgDepartmentDefinition[];
-      positionPrototypes: PositionPrototype[];
-  };
-}
-
-export type OrganizationSector = 'tourism' | 'technology' | 'health' | 'education' | 'retail' | 'finance' | 'other';
-export type OrganizationSectorExtended = OrganizationSector;
-export type OrganizationSize = '1-10' | '11-50' | '50-200' | '200+';
-export interface Membership { id: string; userId: string; organizationId: string; role: PageRole; status: 'ACTIVE' | 'SUSPENDED'; joinedAt: number; department?: DepartmentType; }
-export type FollowStatus = 'NONE' | 'FOLLOWING' | 'PENDING';
-export interface Relationship { followerId: string; followingId: string; status: 'PENDING' | 'ACCEPTED'; createdAt: number; }
-
-export type ContentTargetingScope = 'NONE' | 'BELOW_HIERARCHY' | 'ENTIRE_ORG' | 'OWN_DEPT';
-
-export interface RolePermissions {
-    adminAccess: boolean;
-    manageStructure: boolean;
-    manageStaff: boolean;
-    viewAnalytics: boolean;
-    canCreateContent: boolean;
-    contentTargeting: ContentTargetingScope | string;
-    canPostFeed: boolean;
-    canApproveRequests: boolean;
-    [key: string]: boolean | string;
-}
-
+// --- ORGANIZATION STRUCTURE (NEW) ---
 export interface Position {
     id: string;
     title: string;
     departmentId: string;
     parentId: string | null;
-    occupantId?: string | null;
-    level?: number;
+    occupantId: string | null;
+    level: number;
     permissions?: RolePermissions;
 }
 
@@ -429,8 +392,58 @@ export interface PositionPrototype {
     permissions?: RolePermissions;
 }
 
-export type PermissionType = 'CAN_CREATE_CONTENT' | 'CAN_MANAGE_TEAM';
-/* 
- Future Optimization:
- export interface UserFeed { userId: string; feedItems: string[]; lastUpdated: number; } 
-*/
+export type ContentTargetingScope = 'NONE' | 'BELOW_HIERARCHY' | 'OWN_DEPT' | 'ENTIRE_ORG';
+
+export interface RolePermissions {
+    adminAccess: boolean;
+    manageStructure: boolean;
+    manageStaff: boolean;
+    viewAnalytics: boolean;
+    canCreateContent: boolean;
+    contentTargeting: ContentTargetingScope | string;
+    canPostFeed: boolean;
+    canApproveRequests: boolean;
+}
+
+export type PermissionType = keyof RolePermissions;
+
+// --- SOCIAL ---
+export type FollowStatus = 'NONE' | 'PENDING' | 'FOLLOWING';
+
+export interface Relationship {
+    followerId: string;
+    followingId: string;
+    status: 'PENDING' | 'ACCEPTED';
+    createdAt: number;
+}
+
+// --- ANALYTICS & METRICS ---
+export interface AnalyticsEvent {
+    id?: string;
+    userId: string;
+    userName: string;
+    userRole: string;
+    pageId: string;
+    channelId?: string;
+    contentId: string;
+    type: 'VIEW' | 'COMPLETE' | 'QUIZ_ANSWER';
+    payload?: any;
+    timestamp: number;
+    relatedTopics?: string[];
+    outcome?: 'SUCCESS' | 'FAILURE';
+}
+
+export interface SkillMetric {
+    level: number;
+    lastTestedAt: number;
+    failureCount: number;
+    successCount: number;
+}
+
+export interface UserSkillProfile {
+    userId: string;
+    skills: Record<string, SkillMetric>;
+    updatedAt: number;
+}
+
+export type ReviewTag = 'ACCURATE' | 'ENGAGING' | 'MISLEADING' | 'OUTDATED';

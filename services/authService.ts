@@ -100,8 +100,13 @@ export const registerUser = async (data: {
     completedTasks: [],
     followersCount: 0,
     followingCount: 0,
-    pageRoles: {},
+    followers: [],
+    following: [],
+    followedPageIds: [],
+    managedPageIds: [],
+    channelSubscriptions: [],
     subscribedChannelIds: [],
+    pageRoles: {},
     isPrivate: false
   };
 

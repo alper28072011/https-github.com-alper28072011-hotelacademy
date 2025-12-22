@@ -12,14 +12,13 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
 
-  // Actions
   setAuthMode: (mode: AuthMode) => void;
   setLoading: (loading: boolean) => void;
   setError: (msg: string | null) => void;
   loginSuccess: (user: User) => void;
   logout: () => void;
   refreshProfile: () => Promise<void>;
-  updateCurrentUser: (updates: Partial<User>) => void; // New Action
+  updateCurrentUser: (updates: Partial<User>) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -36,9 +35,19 @@ export const useAuthStore = create<AuthState>()(
       setError: (error) => set({ error, isLoading: false }),
 
       loginSuccess: (user) => {
+        // Ensure social fields exist if they come undefined from legacy DB
+        const sanitizedUser: User = {
+            ...user,
+            followers: user.followers || [],
+            following: user.following || [],
+            followedPageIds: user.followedPageIds || [],
+            channelSubscriptions: user.channelSubscriptions || [],
+            managedPageIds: user.managedPageIds || []
+        };
+        
         set({ 
           isAuthenticated: true, 
-          currentUser: user,
+          currentUser: sanitizedUser,
           isLoading: false,
           error: null,
         });
@@ -69,11 +78,10 @@ export const useAuthStore = create<AuthState>()(
       refreshProfile: async () => {
           const { currentUser } = get();
           if (!currentUser) return;
-          
           try {
               const refreshedUser = await getUserById(currentUser.id);
               if (refreshedUser) {
-                  set({ currentUser: refreshedUser });
+                  get().loginSuccess(refreshedUser);
               }
           } catch (e) {
               console.error("Auto-refresh profile failed:", e);
@@ -81,7 +89,7 @@ export const useAuthStore = create<AuthState>()(
       }
     }),
     {
-      name: 'hotel-academy-auth-v4',
+      name: 'hotel-academy-auth-v5', // Bump version to clear old cache
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ 
         isAuthenticated: state.isAuthenticated, 

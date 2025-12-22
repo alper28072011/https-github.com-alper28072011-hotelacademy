@@ -1,303 +1,164 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
-    Grid, FileText, Bookmark, Download, 
-    Star, Users, Heart, Zap, Award, Youtube, Play, CheckCircle2
+    Grid, Bookmark, Building2, 
+    Plus, ExternalLink
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { useProfileStore } from '../../stores/useProfileStore';
-import { useContentStore } from '../../stores/useContentStore';
-import { EditProfileModal } from './components/EditProfileModal';
 import { ProfileHeader } from './components/ProfileHeader';
-import { Course, KudosType, FeedPost } from '../../types';
-import { getInstructorCourses, getUserPosts } from '../../services/db';
-import { getLocalizedContent } from '../../i18n/config';
+import { Organization, FeedPost } from '../../types';
+import { getUserManagedPages } from '../../services/organizationService';
+import { getFollowedPages } from '../../services/userService';
+import { getUserPosts } from '../../services/db';
 
 export const ProfilePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser } = useAuthStore();
-  const { userProfile, initializeListeners } = useProfileStore();
-  const { courses } = useContentStore(); 
-
+  
   // UI State
-  const [activeTab, setActiveTab] = useState<'collection' | 'posts' | 'certificates' | 'saved' | 'channel'>('collection');
-  const [learningTab, setLearningTab] = useState<'ONGOING' | 'COMPLETED'>('ONGOING');
+  const [activeTab, setActiveTab] = useState<'POSTS' | 'PAGES' | 'SAVED'>('POSTS');
   const [isEditing, setIsEditing] = useState(false);
   
   // Data State
-  const [myCreatedCourses, setMyCreatedCourses] = useState<Course[]>([]);
+  const [managedPages, setManagedPages] = useState<Organization[]>([]);
+  const [followedPages, setFollowedPages] = useState<Organization[]>([]);
   const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
-  const [postCount, setPostCount] = useState(0);
-
-  // Active User Data
-  const activeUser = userProfile || currentUser;
-
-  // Listen for real-time updates (Only if Org Exists)
-  useEffect(() => {
-    if (currentUser && currentUser.currentOrganizationId && currentUser.department) {
-      const cleanup = initializeListeners(currentUser.id, currentUser.department, currentUser.currentOrganizationId);
-      return cleanup;
-    }
-  }, [currentUser, initializeListeners]);
 
   useEffect(() => {
       if (currentUser) {
-          getInstructorCourses(currentUser.id).then(setMyCreatedCourses);
-          getUserPosts(currentUser.id).then(posts => {
-              setMyPosts(posts);
-              setPostCount(posts.length);
-          });
+          // Fetch Managed Pages
+          getUserManagedPages(currentUser.id).then(setManagedPages);
+          // Fetch Followed Pages
+          getFollowedPages(currentUser.id).then(setFollowedPages);
+          // Fetch Posts
+          getUserPosts(currentUser.id).then(setMyPosts);
       }
   }, [currentUser]);
 
-  if (!activeUser) return null;
-
-  // --- DATA PREPARATION ---
-  
-  // 1. Certificates (Completed)
-  const myCertificates = courses.filter(c => {
-      // Check legacy array or new progress map status
-      const p = activeUser.progressMap?.[c.id];
-      return activeUser.completedCourses.includes(c.id) || p?.status === 'COMPLETED';
-  });
-
-  // 2. Ongoing (In Progress)
-  const myOngoing = courses.filter(c => {
-      const p = activeUser.progressMap?.[c.id];
-      return p?.status === 'IN_PROGRESS' && !activeUser.completedCourses.includes(c.id);
-  });
-
-  const mySaved = (activeUser.savedCourses || [])
-      .map(id => courses.find(c => c.id === id))
-      .filter((c): c is Course => !!c);
-
-  const badgeConfig: Record<KudosType, { icon: any, color: string, bg: string, label: string }> = {
-      'STAR_PERFORMER': { icon: Star, color: 'text-yellow-500', bg: 'bg-yellow-50', label: 'Yıldız Performans' },
-      'TEAM_PLAYER': { icon: Users, color: 'text-blue-500', bg: 'bg-blue-50', label: 'Takım Oyuncusu' },
-      'GUEST_HERO': { icon: Heart, color: 'text-red-500', bg: 'bg-red-50', label: 'Misafir Kahramanı' },
-      'FAST_LEARNER': { icon: Zap, color: 'text-purple-500', bg: 'bg-purple-50', label: 'Hızlı Öğrenen' },
-  };
+  if (!currentUser) return null;
 
   return (
     <div className="min-h-screen bg-white pb-24 pt-4">
         
-        {/* SHARED HEADER COMPONENT (Without Settings Button) */}
+        {/* HEADER: Social Stats */}
         <ProfileHeader 
-            user={activeUser}
+            user={currentUser}
             isOwnProfile={true}
             onEditClick={() => setIsEditing(true)}
-            followersCount={activeUser.followersCount}
-            followingCount={activeUser.followingCount}
-            postCount={postCount}
+            followersCount={currentUser.followers?.length || 0}
+            followingCount={currentUser.following?.length || 0}
+            postCount={myPosts.length}
         />
 
-        {/* TABS (STICKY) */}
-        <div className="sticky top-[60px] bg-white z-30 border-b border-gray-200 flex overflow-x-auto no-scrollbar">
+        {/* TABS */}
+        <div className="sticky top-[60px] bg-white z-30 border-b border-gray-200 flex justify-around">
             <button 
-                onClick={() => setActiveTab('collection')}
-                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'collection' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
-            >
-                <Award className="w-6 h-6" />
-            </button>
-            <button 
-                onClick={() => setActiveTab('certificates')}
-                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'certificates' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
-            >
-                <FileText className="w-6 h-6" />
-            </button>
-            <button 
-                onClick={() => setActiveTab('posts')}
-                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'posts' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
+                onClick={() => setActiveTab('POSTS')}
+                className={`py-3 px-4 border-b-2 transition-all ${activeTab === 'POSTS' ? 'border-black text-black' : 'border-transparent text-gray-400'}`}
             >
                 <Grid className="w-6 h-6" />
             </button>
             <button 
-                onClick={() => setActiveTab('channel')}
-                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'channel' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
+                onClick={() => setActiveTab('PAGES')}
+                className={`py-3 px-4 border-b-2 transition-all ${activeTab === 'PAGES' ? 'border-black text-black' : 'border-transparent text-gray-400'}`}
             >
-                <Youtube className="w-6 h-6" />
+                <Building2 className="w-6 h-6" />
             </button>
             <button 
-                onClick={() => setActiveTab('saved')}
-                className={`flex-1 flex justify-center py-3 border-b-2 min-w-[80px] transition-all ${activeTab === 'saved' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400'}`}
+                onClick={() => setActiveTab('SAVED')}
+                className={`py-3 px-4 border-b-2 transition-all ${activeTab === 'SAVED' ? 'border-black text-black' : 'border-transparent text-gray-400'}`}
             >
                 <Bookmark className="w-6 h-6" />
             </button>
         </div>
 
-        {/* CONTENT AREA */}
-        <div className="min-h-[300px]">
-            {activeTab === 'collection' && (
-                <div className="grid grid-cols-3 gap-1 p-1">
-                    <div className="aspect-square bg-gray-50 flex flex-col items-center justify-center p-2 border border-gray-100">
-                        <Award className="w-8 h-8 text-blue-400 mb-2" />
-                        <span className="text-[10px] font-bold text-center text-gray-600">İlk Adım</span>
-                    </div>
-                    {activeUser.badges?.map((badge, idx) => {
-                        const config = badgeConfig[badge.type];
-                        if (!config) return null;
-                        const BIcon = config.icon;
-                        return (
-                            <div key={idx} className={`aspect-square ${config.bg} flex flex-col items-center justify-center p-2 relative group cursor-pointer`}>
-                                <BIcon className={`w-8 h-8 ${config.color} mb-2`} />
-                                <span className="text-[10px] font-bold text-center text-gray-700 leading-none">{config.label}</span>
-                                {badge.count > 1 && (
-                                    <div className="absolute top-1 right-1 bg-white text-gray-900 text-[9px] font-bold px-1.5 rounded-full shadow-sm border border-gray-100">x{badge.count}</div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* CERTIFICATES / LEARNING HUB */}
-            {activeTab === 'certificates' && (
-                <div className="flex flex-col">
-                    <div className="flex p-2 bg-gray-50 m-4 rounded-xl">
-                        <button 
-                            onClick={() => setLearningTab('ONGOING')} 
-                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${learningTab === 'ONGOING' ? 'bg-white shadow text-primary' : 'text-gray-500'}`}
-                        >
-                            Devam Eden ({myOngoing.length})
-                        </button>
-                        <button 
-                            onClick={() => setLearningTab('COMPLETED')} 
-                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${learningTab === 'COMPLETED' ? 'bg-white shadow text-primary' : 'text-gray-500'}`}
-                        >
-                            Tamamlanan ({myCertificates.length})
-                        </button>
-                    </div>
-
-                    {learningTab === 'ONGOING' && (
-                        <div className="flex flex-col gap-4 px-4 pb-4">
-                            {myOngoing.map(course => {
-                                const p = activeUser.progressMap?.[course.id];
-                                const percent = p ? Math.round((p.currentCardIndex / p.totalCards) * 100) : 0;
-                                return (
-                                    <div key={course.id} className="flex gap-4 p-4 border border-gray-100 rounded-2xl shadow-sm bg-white" onClick={() => navigate(`/course/${course.id}/play`)}>
-                                        <div className="w-20 h-20 bg-gray-100 rounded-xl overflow-hidden shrink-0 relative">
-                                            <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
-                                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                                <Play className="w-8 h-8 text-white fill-white" />
-                                            </div>
-                                        </div>
-                                        <div className="flex-1 flex flex-col justify-center">
-                                            <h4 className="font-bold text-gray-900 text-sm line-clamp-1">{getLocalizedContent(course.title)}</h4>
-                                            <div className="w-full h-2 bg-gray-100 rounded-full mt-3 overflow-hidden">
-                                                <div className="h-full bg-accent" style={{ width: `${percent}%` }} />
-                                            </div>
-                                            <p className="text-xs text-gray-500 mt-1">%{percent} Tamamlandı</p>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            {myOngoing.length === 0 && <div className="text-center py-10 text-gray-400">Devam eden eğitiminiz yok.</div>}
-                        </div>
-                    )}
-
-                    {learningTab === 'COMPLETED' && (
-                        <div className="flex flex-col">
-                            {myCertificates.map(course => (
-                                <div key={course.id} className="flex items-center gap-4 p-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/course/${course.id}/play`)}>
-                                    <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center shrink-0 text-green-600">
-                                        <CheckCircle2 className="w-6 h-6" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="font-bold text-gray-900 text-sm truncate">{getLocalizedContent(course.title)}</h4>
-                                        <p className="text-xs text-green-600 font-medium">Sertifika Hazır</p>
-                                    </div>
-                                    <button className="p-2 text-gray-400 hover:text-primary"><Download className="w-5 h-5" /></button>
-                                </div>
-                            ))}
-                            {myCertificates.length === 0 && <div className="text-center py-10 text-gray-400">Henüz tamamlanan kurs yok.</div>}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {activeTab === 'posts' && (
-                <div className="grid grid-cols-3 gap-0.5 mt-0.5">
+        {/* CONTENT */}
+        <div className="p-4 min-h-[300px]">
+            
+            {/* TAB: POSTS */}
+            {activeTab === 'POSTS' && (
+                <div className="grid grid-cols-3 gap-1">
                     {myPosts.map(post => (
-                        <div key={post.id} className="aspect-square bg-gray-200 relative group overflow-hidden cursor-pointer">
-                            {post.type === 'video' ? (
-                                <video src={post.mediaUrl} className="w-full h-full object-cover" />
-                            ) : (
-                                <img src={post.mediaUrl || 'https://via.placeholder.com/150'} className="w-full h-full object-cover" />
-                            )}
-                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <div className="flex items-center gap-1 text-white font-bold">
-                                    <Heart className="w-5 h-5 fill-white" /> {post.likes}
-                                </div>
-                            </div>
+                        <div key={post.id} className="aspect-square bg-gray-200 relative">
+                            <img src={post.mediaUrl} className="w-full h-full object-cover" />
                         </div>
                     ))}
-                    {myPosts.length === 0 && (
-                        <div className="col-span-3 py-12 text-center text-gray-400 text-sm flex flex-col items-center">
-                            <Grid className="w-10 h-10 mb-2 opacity-30" />
-                            Henüz gönderi yok.
+                    {myPosts.length === 0 && <div className="col-span-3 text-center py-10 text-gray-400">Henüz gönderi yok.</div>}
+                </div>
+            )}
+
+            {/* TAB: PAGES & COMMUNITIES */}
+            {activeTab === 'PAGES' && (
+                <div className="space-y-6">
+                    {/* Create New */}
+                    <button 
+                        onClick={() => navigate('/lobby')}
+                        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-bold flex items-center justify-center gap-2 hover:bg-gray-50"
+                    >
+                        <Plus className="w-5 h-5" /> Yeni Sayfa Oluştur
+                    </button>
+
+                    {/* Managed Pages */}
+                    {managedPages.length > 0 && (
+                        <div>
+                            <h3 className="font-bold text-gray-900 mb-3">Yönettiğim Sayfalar</h3>
+                            <div className="space-y-3">
+                                {managedPages.map(page => (
+                                    <div key={page.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-white rounded-lg border flex items-center justify-center font-bold text-gray-500">
+                                                {page.logoUrl ? <img src={page.logoUrl} className="w-full h-full object-cover rounded-lg"/> : page.name[0]}
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-sm text-gray-900">{page.name}</div>
+                                                <div className="text-xs text-gray-500">{page.followersCount} Takipçi</div>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={() => navigate(`/admin`)} // Should set context first
+                                            className="px-4 py-2 bg-black text-white text-xs font-bold rounded-lg"
+                                        >
+                                            Yönet
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Followed Pages */}
+                    {followedPages.length > 0 && (
+                        <div>
+                            <h3 className="font-bold text-gray-900 mb-3">Takip Ettiklerim</h3>
+                            <div className="space-y-3">
+                                {followedPages.map(page => (
+                                    <div key={page.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 shadow-sm" onClick={() => navigate(`/org/${page.id}`)}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center font-bold text-gray-500">
+                                                {page.name[0]}
+                                            </div>
+                                            <div className="font-bold text-sm text-gray-900">{page.name}</div>
+                                        </div>
+                                        <ExternalLink className="w-4 h-4 text-gray-400" />
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
             )}
 
-            {activeTab === 'channel' && (
-                <div className="grid grid-cols-2 gap-2 p-2">
-                    {myCreatedCourses.map(course => (
-                        <div key={course.id} className="bg-gray-50 rounded-xl overflow-hidden shadow-sm border border-gray-100" onClick={() => navigate(`/course/${course.id}`)}>
-                            <div className="aspect-video bg-gray-200">
-                                <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
-                            </div>
-                            <div className="p-3">
-                                <h4 className="font-bold text-gray-800 text-sm line-clamp-1">{getLocalizedContent(course.title)}</h4>
-                                <div className="flex justify-between items-center mt-2">
-                                    <span className="text-[10px] text-gray-500">{course.studentCount || 0} Öğrenci</span>
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${course.visibility === 'PUBLIC' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
-                                        {course.visibility === 'PUBLIC' ? 'Public' : 'Private'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                    {myCreatedCourses.length === 0 && (
-                        <div className="col-span-2 py-10 text-center text-gray-400 flex flex-col items-center">
-                            <Youtube className="w-10 h-10 mb-2 opacity-50" />
-                            <p>Henüz kendi kanalında içerik üretmedin.</p>
-                            <button 
-                                onClick={() => navigate('/admin/content')}
-                                className="mt-4 bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg"
-                            >
-                                İlk Kursunu Oluştur
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {activeTab === 'saved' && (
-                <div className="grid grid-cols-3 gap-1 p-1">
-                    {mySaved.map(course => (
-                        <div key={course.id} className="aspect-[3/4] bg-gray-100 relative group cursor-pointer overflow-hidden">
-                            <img src={course.thumbnailUrl} className="w-full h-full object-cover" />
-                        </div>
-                    ))}
+            {/* TAB: SAVED */}
+            {activeTab === 'SAVED' && (
+                <div className="text-center py-20 text-gray-400">
+                    <Bookmark className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                    Kaydedilen içerik yok.
                 </div>
             )}
         </div>
-
-        {/* EDIT MODAL */}
-        <AnimatePresence>
-            {isEditing && (
-                <EditProfileModal 
-                    user={activeUser} 
-                    onClose={() => setIsEditing(false)} 
-                />
-            )}
-        </AnimatePresence>
-
     </div>
   );
 };
