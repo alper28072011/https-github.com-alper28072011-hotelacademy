@@ -13,10 +13,11 @@ import {
     writeBatch,
     QueryDocumentSnapshot,
     DocumentData,
-    getDoc
+    getDoc,
+    deleteField
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, UserStatus, Organization, OrganizationStatus } from '../types';
+import { User, UserStatus, Organization, OrganizationStatus, FeedPost } from '../types';
 import { deleteCourseFully } from './courseService';
 import { deleteFileByUrl } from './storage';
 
@@ -42,17 +43,25 @@ export const setOrganizationStatus = async (orgId: string, status: OrganizationS
 };
 
 /**
- * THE JUDGE'S GAVEL: Full Deletion Protocol
- * 1. Deletes Org Logo.
- * 2. Deletes ALL Courses + Media Files.
- * 3. Deletes ALL Posts + Media Files.
- * 4. Detaches ALL users (Batch).
- * 5. Deletes all related collections.
- * 6. Deletes the Organization document.
+ * Helper: Deletes all documents in a query batch-wise.
+ */
+const deleteQueryBatch = async (querySnapshot: any) => {
+    const chunks = chunkArray(querySnapshot.docs, 400);
+    for (const chunk of chunks) {
+        const batch = writeBatch(db);
+        chunk.forEach((d: any) => batch.delete(d.ref));
+        await batch.commit();
+    }
+};
+
+/**
+ * THE JUDGE'S GAVEL: Full Deletion Protocol (Hard Delete)
+ * Ensures NO crumbs remain.
  */
 export const executeOrganizationDeathSentence = async (orgId: string): Promise<boolean> => {
+    console.log(`[DEATH SENTENCE] Executing for Org: ${orgId}`);
     try {
-        // 0. Get Org Data for Logo
+        // 0. Get Org Data for Logo/Cover deletion
         const orgRef = doc(db, 'organizations', orgId);
         const orgSnap = await getDoc(orgRef);
         if (orgSnap.exists()) {
@@ -61,11 +70,11 @@ export const executeOrganizationDeathSentence = async (orgId: string): Promise<b
             if (orgData.coverUrl) await deleteFileByUrl(orgData.coverUrl);
         }
 
-        // 1. DELETE COURSES & FILES
+        // 1. DELETE COURSES & FILES (Heavy Operation)
         const coursesQ = query(collection(db, 'courses'), where('organizationId', '==', orgId));
         const coursesSnap = await getDocs(coursesQ);
-        // Execute in parallel chunks of 10 to prevent overwhelming
-        const courseChunks = chunkArray(coursesSnap.docs, 10);
+        // Execute in parallel chunks of 5 to prevent network bottleneck
+        const courseChunks = chunkArray(coursesSnap.docs, 5);
         for (const chunk of courseChunks) {
             await Promise.all(chunk.map((doc: QueryDocumentSnapshot<DocumentData>) => deleteCourseFully(doc.id)));
         }
@@ -76,51 +85,197 @@ export const executeOrganizationDeathSentence = async (orgId: string): Promise<b
         for (const postDoc of postsSnap.docs) {
             const post = postDoc.data();
             if (post.mediaUrl) await deleteFileByUrl(post.mediaUrl);
+            
+            // Delete post likes subcollection manually (Client-side limitation)
+            const likesSnap = await getDocs(collection(db, `posts/${postDoc.id}/likes`));
+            await deleteQueryBatch(likesSnap);
+            
             await deleteDoc(postDoc.ref);
         }
 
-        // 3. DETACH USERS (BATCHED)
-        const memQ = query(collection(db, 'memberships'), where('organizationId', '==', orgId));
-        const memSnap = await getDocs(memQ);
-        
-        const membershipChunks = chunkArray(memSnap.docs, 400); // Firestore batch limit is 500
-        
-        for (const chunk of membershipChunks) {
-            const batch = writeBatch(db);
-            chunk.forEach((memDoc: QueryDocumentSnapshot<DocumentData>) => {
-                const data = memDoc.data();
-                batch.delete(memDoc.ref); // Delete Membership
-                
-                const userRef = doc(db, 'users', data.userId);
-                batch.update(userRef, { 
-                    currentOrganizationId: null,
-                    role: 'staff',
-                    positionId: null,
-                    roleTitle: null,
-                    department: null,
-                    assignedPathId: null
-                });
-            });
-            await batch.commit();
-        }
+        // 3. DELETE SUB-COLLECTIONS (Analytics, etc.)
+        // Firestore doesn't delete subcollections automatically. We must query them.
+        const analyticsSnap = await getDocs(collection(db, `organizations/${orgId}/analytics`));
+        await deleteQueryBatch(analyticsSnap);
 
-        // 4. CASCADE DELETE OTHER COLLECTIONS
-        const batch = writeBatch(db);
-        const collectionsToDelete = ['tasks', 'positions', 'requests', 'issues', 'careerPaths'];
+        // 4. DELETE OPERATIONAL DATA (Tasks, Issues, etc.) + Images
+        // Issues
+        const issuesQ = query(collection(db, 'issues'), where('organizationId', '==', orgId));
+        const issuesSnap = await getDocs(issuesQ);
+        for (const d of issuesSnap.docs) {
+            const data = d.data();
+            if (data.photoUrl) await deleteFileByUrl(data.photoUrl); // Clean Storage
+            await deleteDoc(d.ref);
+        }
         
+        // Tasks (Templates)
+        const tasksQ = query(collection(db, 'tasks'), where('organizationId', '==', orgId));
+        const tasksSnap = await getDocs(tasksQ);
+        await deleteQueryBatch(tasksSnap); // Tasks usually don't have images in template definition
+
+        // Other Collections
+        const collectionsToDelete = ['positions', 'requests', 'careerPaths'];
         for (const colName of collectionsToDelete) {
             const q = query(collection(db, colName), where('organizationId', '==', orgId));
             const snap = await getDocs(q);
-            snap.docs.forEach(d => batch.delete(d.ref));
+            await deleteQueryBatch(snap);
+        }
+
+        // 5. DETACH USERS (MEMBERSHIPS & ROLES)
+        const memQ = query(collection(db, 'memberships'), where('organizationId', '==', orgId));
+        const memSnap = await getDocs(memQ);
+        await deleteQueryBatch(memSnap);
+
+        // 6. CLEAN UP USER REFERENCES (The "Crumbs")
+        // We need to remove this OrgID from any user's:
+        // - organizationHistory
+        // - followedPageIds
+        // - managedPageIds
+        // - pageRoles map
+        // - currentOrganizationId (if active)
+
+        // Strategy: Query users who have this ID in arrays
+        const affectedUsersQueries = [
+            query(usersRef, where('organizationHistory', 'array-contains', orgId)),
+            query(usersRef, where('followedPageIds', 'array-contains', orgId)),
+            query(usersRef, where('managedPageIds', 'array-contains', orgId)),
+            query(usersRef, where('currentOrganizationId', '==', orgId))
+        ];
+
+        // Process in parallel
+        const results = await Promise.all(affectedUsersQueries.map(q => getDocs(q)));
+        const usersToUpdate = new Map<string, any>(); // Map to dedup updates
+
+        results.forEach(snap => {
+            snap.docs.forEach(doc => {
+                usersToUpdate.set(doc.id, doc.data());
+            });
+        });
+
+        // Batch Update Users
+        const userIds = Array.from(usersToUpdate.keys());
+        const userChunks = chunkArray(userIds, 400);
+
+        for (const chunk of userChunks) {
+            const batch = writeBatch(db);
+            for (const uid of chunk) {
+                const userData = usersToUpdate.get(uid);
+                const ref = doc(db, 'users', uid);
+                
+                const updates: any = {};
+
+                if (userData.currentOrganizationId === orgId) {
+                    updates.currentOrganizationId = null;
+                    updates.department = null;
+                    updates.role = 'staff'; // Reset to default
+                    updates.roleTitle = null;
+                    updates.positionId = null;
+                    updates.assignedPathId = null;
+                }
+
+                if (userData.organizationHistory?.includes(orgId)) {
+                    updates.organizationHistory = userData.organizationHistory.filter((id: string) => id !== orgId);
+                }
+                
+                if (userData.followedPageIds?.includes(orgId)) {
+                    updates.followedPageIds = userData.followedPageIds.filter((id: string) => id !== orgId);
+                }
+
+                if (userData.managedPageIds?.includes(orgId)) {
+                    updates.managedPageIds = userData.managedPageIds.filter((id: string) => id !== orgId);
+                }
+
+                // Remove key from map (Firestore dot notation delete)
+                if (userData.pageRoles && userData.pageRoles[orgId]) {
+                    updates[`pageRoles.${orgId}`] = deleteField();
+                }
+
+                // Only update if there are changes
+                if (Object.keys(updates).length > 0) {
+                    batch.update(ref, updates);
+                }
+            }
+            await batch.commit();
         }
         
-        // 5. DELETE ORGANIZATION DOC
-        batch.delete(orgRef);
-        await batch.commit();
+        // 7. FINALLY: DELETE ORGANIZATION DOC
+        await deleteDoc(orgRef);
 
+        console.log(`[DEATH SENTENCE] Complete. Org ${orgId} erased.`);
         return true;
     } catch (error) {
-        console.error("Death Sentence Failed:", error);
+        console.error("[DEATH SENTENCE] Failed:", error);
+        return false;
+    }
+};
+
+/**
+ * DELETE USER COMPLETE
+ * Removes user account AND all content they created (Posts, Courses, etc.)
+ */
+export const deleteUserComplete = async (userId: string): Promise<boolean> => {
+    console.log(`[USER WIPE] Executing for User: ${userId}`);
+    try {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        
+        // 0. Delete Avatar
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            if (userData.avatar && userData.avatar.includes('firebasestorage')) {
+                await deleteFileByUrl(userData.avatar);
+            }
+        }
+
+        // 1. DELETE USER'S POSTS
+        const postsQ = query(collection(db, 'posts'), where('authorId', '==', userId));
+        const postsSnap = await getDocs(postsQ);
+        for (const postDoc of postsSnap.docs) {
+            const post = postDoc.data();
+            if (post.mediaUrl) await deleteFileByUrl(post.mediaUrl);
+            
+            // Delete likes subcollection
+            const likesSnap = await getDocs(collection(db, `posts/${postDoc.id}/likes`));
+            await deleteQueryBatch(likesSnap);
+
+            await deleteDoc(postDoc.ref);
+        }
+
+        // 2. DELETE USER'S COURSES (If any)
+        const coursesQ = query(collection(db, 'courses'), where('authorId', '==', userId));
+        const coursesSnap = await getDocs(coursesQ);
+        for (const cDoc of coursesSnap.docs) {
+            await deleteCourseFully(cDoc.id);
+        }
+
+        // 3. DELETE MEMBERSHIPS
+        const memQ = query(collection(db, 'memberships'), where('userId', '==', userId));
+        const memSnap = await getDocs(memQ);
+        await deleteQueryBatch(memSnap);
+
+        // 4. DELETE RELATIONSHIPS (Followers/Following)
+        const relQ1 = query(collection(db, 'relationships'), where('followerId', '==', userId));
+        const relQ2 = query(collection(db, 'relationships'), where('followingId', '==', userId));
+        const [snap1, snap2] = await Promise.all([getDocs(relQ1), getDocs(relQ2)]);
+        await deleteQueryBatch(snap1);
+        await deleteQueryBatch(snap2);
+
+        // 5. REMOVE FROM ORG STRUCTURES (OccupantId in Positions)
+        const posQ = query(collection(db, 'positions'), where('occupantId', '==', userId));
+        const posSnap = await getDocs(posQ);
+        const batch = writeBatch(db);
+        posSnap.docs.forEach(d => {
+            batch.update(d.ref, { occupantId: null });
+        });
+        await batch.commit();
+
+        // 6. DELETE USER DOC
+        await deleteDoc(userRef);
+
+        console.log(`[USER WIPE] Complete. User ${userId} erased.`);
+        return true;
+    } catch (error) {
+        console.error("[USER WIPE] Error:", error);
         return false;
     }
 };
@@ -201,23 +356,7 @@ export const updateUserStatus = async (userId: string, status: UserStatus): Prom
     }
 };
 
-export const deleteUserComplete = async (userId: string): Promise<boolean> => {
-    try {
-        await deleteDoc(doc(db, 'users', userId));
-        const batch = writeBatch(db);
-        const memQ = query(collection(db, 'memberships'), where('userId', '==', userId));
-        const memSnap = await getDocs(memQ);
-        memSnap.docs.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-        
-        return true;
-    } catch (error) {
-        console.error("SuperAdmin: DeleteUser Error", error);
-        return false;
-    }
-};
-
-// Re-export for compatibility if needed, though executeOrganizationDeathSentence is better named
+// Re-export for compatibility
 export const deleteOrganizationFully = executeOrganizationDeathSentence;
 export const transferOwnership = async (orgId: string, newOwnerId: string): Promise<boolean> => {
     try {
