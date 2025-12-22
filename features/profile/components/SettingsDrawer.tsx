@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, LogOut, Trash2, AlertTriangle, Loader2, Building2, Eye, Languages } from 'lucide-react';
+import { X, LogOut, Trash2, AlertTriangle, Loader2, Building2, Eye, Languages, Lock } from 'lucide-react';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { deleteUserSmart } from '../../../services/userService';
 import { updateUserProfile } from '../../../services/db';
@@ -17,6 +17,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
   // Danger Zone State
   const [deleteStep, setDeleteStep] = useState(0); 
   const [confirmText, setConfirmText] = useState('');
+  const [password, setPassword] = useState(''); // New Password State
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -35,18 +36,23 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
 
   const handleDeleteAccount = async () => {
       if (confirmText !== 'SIL' || !currentUser) return;
+      if (!password) {
+          setErrorMsg("Onaylamak için şifrenizi girmelisiniz.");
+          return;
+      }
+
       setIsDeleting(true);
       setErrorMsg(null);
 
-      const result = await deleteUserSmart(currentUser);
+      // Pass password to service for re-authentication
+      const result = await deleteUserSmart(currentUser, password);
 
       if (result.success) {
           logout();
           window.location.reload();
       } else {
           setErrorMsg(result.error || "Silme işlemi başarısız.");
-          setDeleteStep(0); 
-          setConfirmText('');
+          // Don't reset step so they can see the error
       }
       setIsDeleting(false);
   };
@@ -73,7 +79,7 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
 
             <div className="flex-1 overflow-y-auto p-6 space-y-10 custom-scrollbar">
                 
-                {/* 1. Language Section (NEW) */}
+                {/* 1. Language Section */}
                 <section>
                     <LanguagePreferences />
                 </section>
@@ -118,27 +124,49 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({ onClose }) => {
                         ) : (
                             <div className="bg-red-50 border border-red-200 p-4 rounded-xl animate-in fade-in zoom-in">
                                 <p className="text-xs text-red-800 font-medium mb-3 leading-relaxed">
-                                    Verileriniz kalıcı olarak silinecek. Onaylamak için <b>SIL</b> yazın.
+                                    Hesabınızı ve tüm verilerinizi kalıcı olarak silmek üzeresiniz. 
                                 </p>
-                                <input 
-                                    value={confirmText}
-                                    onChange={e => setConfirmText(e.target.value.toUpperCase())}
-                                    placeholder="SIL"
-                                    className="w-full p-2 border border-red-200 rounded-lg text-sm mb-3 focus:outline-none focus:border-red-500"
-                                />
+                                
+                                <div className="space-y-2 mb-3">
+                                    {/* Confirmation Text */}
+                                    <div>
+                                        <label className="text-[10px] font-bold text-red-400 uppercase">Onay Kodu</label>
+                                        <input 
+                                            value={confirmText}
+                                            onChange={e => setConfirmText(e.target.value.toUpperCase())}
+                                            placeholder="SIL"
+                                            className="w-full p-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:border-red-500 bg-white"
+                                        />
+                                    </div>
+
+                                    {/* Password Input (Required for Firebase Security) */}
+                                    <div>
+                                        <label className="text-[10px] font-bold text-red-400 uppercase flex items-center gap-1">
+                                            <Lock className="w-3 h-3" /> Şifreniz
+                                        </label>
+                                        <input 
+                                            type="password"
+                                            value={password}
+                                            onChange={e => setPassword(e.target.value)}
+                                            placeholder="Güvenlik için şifrenizi girin"
+                                            className="w-full p-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:border-red-500 bg-white"
+                                        />
+                                    </div>
+                                </div>
+
                                 <div className="flex gap-2">
                                     <button 
-                                        onClick={() => { setDeleteStep(0); setConfirmText(''); setErrorMsg(null); }}
+                                        onClick={() => { setDeleteStep(0); setConfirmText(''); setPassword(''); setErrorMsg(null); }}
                                         className="flex-1 py-2 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-600"
                                     >
                                         İptal
                                     </button>
                                     <button 
                                         onClick={handleDeleteAccount}
-                                        disabled={confirmText !== 'SIL' || isDeleting}
-                                        className="flex-1 py-2 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50 flex justify-center"
+                                        disabled={confirmText !== 'SIL' || !password || isDeleting}
+                                        className="flex-1 py-2 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50 flex justify-center items-center gap-2"
                                     >
-                                        {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Hesabı Sil'}
+                                        {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Kalıcı Olarak Sil'}
                                     </button>
                                 </div>
                             </div>

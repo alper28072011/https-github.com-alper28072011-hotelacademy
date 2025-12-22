@@ -10,10 +10,13 @@ import {
     query, 
     where, 
     getDocs,
-    deleteDoc
+    deleteDoc,
+    writeBatch
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
+import { EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
 import { User, Organization } from '../types';
+import { deleteFileByUrl } from './storage';
 
 /**
  * Follow a user.
@@ -87,8 +90,6 @@ export const getFollowedPages = async (userId: string): Promise<Organization[]> 
         if (pageIds.length === 0) return [];
 
         // Firestore 'in' query supports max 10 items. 
-        // For production, we would need to batch this or duplicate data.
-        // For now, we'll fetch the first 10.
         const safeIds = pageIds.slice(0, 10);
         
         const q = query(collection(db, 'organizations'), where('__name__', 'in', safeIds));
@@ -111,16 +112,27 @@ export const updateUserPreferences = async (userId: string, data: any) => {
 };
 
 export const updateProfilePhoto = async (userId: string, file: File, oldUrl?: string) => {
-    // Placeholder for storage upload logic
+    // Placeholder for storage upload logic logic handled in component
     return "https://via.placeholder.com/150"; 
 };
 
 export const removeProfilePhoto = async (userId: string, oldUrl: string) => {
+    if (oldUrl) await deleteFileByUrl(oldUrl);
     await updateDoc(doc(db, 'users', userId), { avatar: '' });
     return true;
 };
 
-export const deleteUserSmart = async (user: User): Promise<{ success: boolean; error?: string }> => {
+/**
+ * SELF DELETION PROTOCOL
+ * Requires password for re-authentication to prevent "auth/requires-recent-login" error.
+ */
+export const deleteUserSmart = async (user: User, password?: string): Promise<{ success: boolean; error?: string }> => {
+    const authUser = auth.currentUser;
+    
+    if (!authUser || !password) {
+        return { success: false, error: "Güvenlik onayı için şifre gereklidir." };
+    }
+
     // 1. Check if they own an organization
     const orgsRef = collection(db, 'organizations');
     const q = query(orgsRef, where('ownerId', '==', user.id));
@@ -130,16 +142,35 @@ export const deleteUserSmart = async (user: User): Promise<{ success: boolean; e
     }
 
     try {
-        // Delete user doc
-        await deleteDoc(doc(db, 'users', user.id));
-        // Delete auth user (requires recent login usually, might fail if stale)
-        const authUser = auth.currentUser;
-        if (authUser) {
-            await authUser.delete();
+        // 2. Re-authenticate User (CRITICAL STEP)
+        // This generates a fresh token required for deletion
+        const credential = EmailAuthProvider.credential(authUser.email!, password);
+        await reauthenticateWithCredential(authUser, credential);
+
+        // 3. Clean up Firestore Data (Basic cleanup)
+        // Note: For a complete cleanup (posts, likes etc), we usually use a Cloud Function trigger.
+        // Here we do a basic profile wipe to allow re-registration.
+        
+        // Delete Avatar
+        if (user.avatar && user.avatar.includes('firebasestorage')) {
+            await deleteFileByUrl(user.avatar);
         }
+
+        // Delete User Document
+        await deleteDoc(doc(db, 'users', user.id));
+
+        // 4. Delete Auth User (The one causing "email-already-in-use")
+        await deleteUser(authUser);
+
         return { success: true };
     } catch (e: any) {
         console.error("Delete User Error:", e);
-        return { success: false, error: e.message || "Silme işlemi başarısız." };
+        if (e.code === 'auth/wrong-password') {
+            return { success: false, error: "Girdiğiniz şifre hatalı." };
+        }
+        if (e.code === 'auth/requires-recent-login') {
+            return { success: false, error: "Oturumunuz zaman aşımına uğradı. Lütfen çıkış yapıp tekrar girdikten sonra deneyin." };
+        }
+        return { success: false, error: "Silme işlemi sırasında bir hata oluştu." };
     }
 };
