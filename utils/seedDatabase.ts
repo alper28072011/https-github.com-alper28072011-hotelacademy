@@ -211,6 +211,7 @@ const MOCK_COURSES: Course[] = [
       tags: ['#YeniBaşlayan', '#Kültür'],
       popularityScore: 100,
       isNew: true,
+      modules: [],
       steps: [
           { 
             id: 's1', 
@@ -247,6 +248,7 @@ const MOCK_COURSES: Course[] = [
       priority: 'NORMAL',
       tags: ['#İletişim', '#Kriz'],
       popularityScore: 88,
+      modules: [],
       steps: [],
       tier: 'OFFICIAL',
       verificationStatus: 'VERIFIED',
@@ -274,6 +276,7 @@ const MOCK_COURSES: Course[] = [
     priority: 'HIGH',
     tags: ['#Düzen', '#Standart'],
     popularityScore: 70,
+    modules: [],
     steps: [],
     tier: 'OFFICIAL',
     verificationStatus: 'VERIFIED',

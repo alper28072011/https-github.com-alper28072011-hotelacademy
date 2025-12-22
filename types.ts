@@ -36,15 +36,21 @@ export type SourceType = 'TEXT' | 'PDF' | 'URL' | 'YOUTUBE' | 'MANUAL';
 
 // NEW: Content Generation Wizard Config
 export interface ContentGenerationConfig {
-  sourceType: 'TEXT_PROMPT' | 'PDF_UPLOAD' | 'WEB_URL';
-  sourceContent: string; // Prompt text, PDF extracted text, or URL
-  targetAudience: string; // e.g. "New Housekeeping Staff"
-  language: string; // Source language name e.g. "Turkish"
-  targetLanguages: string[]; // Codes e.g. ['tr', 'en']
+  sourceType: 'TEXT_PROMPT' | 'PDF_UPLOAD' | 'WEB_URL' | 'HIERARCHY_CONTEXT'; // Added HIERARCHY_CONTEXT
+  sourceContent: string; 
+  targetAudience: string; 
+  language: string; 
+  targetLanguages: string[]; 
   difficulty: DifficultyLevel;
   pedagogy: PedagogyMode;
   tone: CourseTone;
   length: 'SHORT' | 'MEDIUM';
+  // Context for Hierarchical Generation
+  hierarchyContext?: {
+      careerGoal?: string;
+      courseTitle?: string;
+      moduleTitle?: string;
+  }
 }
 
 // NEW: AI Generated Curriculum Module
@@ -88,44 +94,36 @@ export interface User {
   bio?: string;
   instagramHandle?: string;
   
-  // --- LAYER 1: SOCIAL GRAPH (Public Interest) ---
-  followingUsers: string[]; // User IDs I follow
-  followingPages: string[]; // Page IDs I follow (for public content)
-  followedTags: string[];   // Interest tags (e.g. #housekeeping, #wine)
+  followingUsers: string[]; 
+  followingPages: string[]; 
+  followedTags: string[];   
   
-  followers: string[]; // Users who follow me
+  followers: string[]; 
   followersCount: number;
   followingCount: number;
   
   isPrivate: boolean; 
   
-  // --- LAYER 2: CORPORATE GRAPH (Workspaces) ---
-  joinedPageIds: string[]; // Page IDs where I am a MEMBER/STAFF
-  managedPageIds: string[]; // Page IDs where I am an ADMIN/CREATOR
-  channelSubscriptions: string[]; // Specific Channel IDs I'm subscribed to (across all joined pages)
+  joinedPageIds: string[]; 
+  managedPageIds: string[]; 
+  channelSubscriptions: string[]; 
   
-  // Manage Role per Page
-  // Supports legacy string or new object format { role, title }
   pageRoles: Record<string, PageRole | { role: PageRole; title: string }>; 
   
-  // --- LEGACY COMPATIBILITY ---
   following?: string[]; 
   followedPageIds?: string[];
   subscribedChannelIds?: string[]; 
   
-  // --- GAMIFICATION ---
   xp: number;
   creatorLevel: CreatorLevel;
   reputationPoints: number;
   badges?: { type: KudosType; count: number }[];
   
-  // --- SYSTEM ---
   role: UserRole; 
   status: UserStatus;
   joinDate: number;
   isSuperAdmin?: boolean;
   
-  // --- LEARNING HISTORY ---
   completedCourses: string[];
   startedCourses: string[]; 
   savedCourses: string[]; 
@@ -139,12 +137,10 @@ export interface User {
     isPrivateAccount?: boolean;
   };
 
-  // --- ACTIVE CONTEXT ---
   currentOrganizationId?: string | null;
   organizationHistory: string[];
   department: DepartmentType | null;
   
-  // --- CAREER ---
   positionId?: string | null;
   roleTitle?: string | null;
   assignedPathId?: string | null;
@@ -159,6 +155,7 @@ export interface UserPreferences {
 
 export interface CourseProgress {
     courseId: string;
+    moduleId?: string; // New: Track progress per module
     status: 'IN_PROGRESS' | 'COMPLETED';
     currentCardIndex: number;
     totalCards: number;
@@ -174,7 +171,7 @@ export type OrganizationStatus = 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PENDING_
 export interface JoinConfig {
     rules: string;
     requireApproval: boolean;
-    availableRoles: string[]; // e.g. ["Staff", "Intern", "Guest"]
+    availableRoles: string[];
 }
 
 export interface Organization { 
@@ -193,21 +190,18 @@ export interface Organization {
   ownerId: string; 
   admins: string[]; 
   
-  // --- CONNECTIONS ---
-  followers: string[]; // Social Fans (see public posts)
-  members: string[];   // Staff/Students (see internal posts/channels)
+  followers: string[]; 
+  members: string[];   
   
   createdAt: number; 
   channels: Channel[];
   
-  // Stats
   followersCount: number; 
   memberCount: number; 
   
   status: OrganizationStatus;
   deletionReason?: string;
 
-  // Onboarding Configuration
   joinConfig?: JoinConfig;
 
   settings?: {
@@ -238,10 +232,19 @@ export interface ChannelStoryData {
     progressPercent: number;
 }
 
-// --- CONTENT & COURSE ---
+// --- CONTENT & COURSE (HIERARCHICAL REFACTOR) ---
 export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'UNDER_REVIEW';
 export type AuthorType = 'USER' | 'ORGANIZATION';
+
+export interface CourseModule {
+    id: string;
+    title: LocalizedString; // Syllabus Title
+    description?: LocalizedString;
+    status: 'DRAFT' | 'PUBLISHED';
+    cards?: StoryCard[]; // Content lives here
+    learningMethod?: PedagogyMode;
+}
 
 export interface Course {
   id: string;
@@ -261,21 +264,24 @@ export interface Course {
   coverQuote?: LocalizedString;
   thumbnailUrl: string;
   
+  // Hierarchy
+  careerPathIds?: string[]; 
+  modules: CourseModule[]; // New: The Syllabus
+  
+  // Flattened for compatibility, represents total of all modules
+  steps: StoryCard[]; 
   duration: number;
   xpReward: number;
-  createdAt: number;
   
-  steps: StoryCard[]; 
   tags?: string[]; 
   topics?: string[];
   
-  // Metrics
+  createdAt: number;
   likesCount?: number;
   completesCount?: number;
   popularityScore?: number;
   rating?: number;
   
-  // Config
   priority?: 'HIGH' | 'NORMAL';
   isNew?: boolean;
   isFeatured?: boolean;
@@ -364,6 +370,8 @@ export interface CareerPath {
     department: DepartmentType;
     targetRole: string;
     courseIds: string[];
+    aiPrompt?: string; // Original goal prompt
+    targetAudience?: string;
 }
 
 export interface LearningJourney {
@@ -389,12 +397,9 @@ export interface JoinRequest {
   organizationId: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   createdAt: number;
-  
-  // Expanded for Onboarding Protocol
   targetDepartment?: DepartmentType;
-  requestedRoleTitle?: string; // e.g. "Front Office Intern"
+  requestedRoleTitle?: string;
   agreedToRules?: boolean;
-  
   positionId?: string;
 }
 
