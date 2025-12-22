@@ -4,6 +4,14 @@ import { db } from './firebase';
 import { AnalyticsEvent, SkillMetric } from '../types';
 
 /**
+ * Helper to remove undefined keys which Firestore rejects.
+ * Using JSON stringify/parse is a safe way to strip undefineds for this data structure.
+ */
+const sanitizeEventData = (data: any) => {
+    return JSON.parse(JSON.stringify(data));
+};
+
+/**
  * LOGS A LEARNING EVENT
  * Writes to a sub-collection for better scalability and querying scope.
  * Path: organizations/{orgId}/analytics/{autoId}
@@ -17,8 +25,11 @@ export const logEvent = async (event: Omit<AnalyticsEvent, 'id' | 'timestamp'>) 
 
         const path = `organizations/${event.pageId}/analytics`;
         
+        // Ensure no 'undefined' values are passed to Firestore
+        const cleanEvent = sanitizeEventData(event);
+
         await addDoc(collection(db, path), {
-            ...event,
+            ...cleanEvent,
             timestamp: Date.now(), 
             serverCreatedAt: serverTimestamp()
         });
