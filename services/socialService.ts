@@ -1,10 +1,10 @@
 
 import { 
     doc, runTransaction, collection, query, where, getDocs, 
-    serverTimestamp, limit, increment, writeBatch, getDoc, setDoc, deleteDoc
+    increment, writeBatch, getDoc, arrayUnion, arrayRemove, updateDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { FollowStatus, Relationship, User, FeedPost } from '../types';
+import { FollowStatus, Relationship, User } from '../types';
 
 const relationshipsRef = collection(db, 'relationships');
 
@@ -31,10 +31,28 @@ export const checkFollowStatus = async (currentUserId: string, targetId: string)
 };
 
 /**
- * Polymorphic Follow Function (SCALABLE VERSION)
- * Updates:
- * 1. Relationships collection (Source of Truth)
- * 2. Atomic Counters (followingCount, followersCount)
+ * Toggle following a hashtag (Interest).
+ */
+export const toggleTagFollow = async (userId: string, tag: string, isFollowing: boolean): Promise<boolean> => {
+    try {
+        const userRef = doc(db, 'users', userId);
+        const cleanTag = tag.toLowerCase().trim().replace('#', '');
+        
+        await updateDoc(userRef, {
+            followedTags: isFollowing ? arrayUnion(cleanTag) : arrayRemove(cleanTag)
+        });
+        return true;
+    } catch (e) {
+        console.error("Tag Follow Error:", e);
+        return false;
+    }
+};
+
+/**
+ * Polymorphic Follow Function (Updated for New Architecture)
+ * 
+ * If targetType is USER -> Updates `followingUsers` on current user.
+ * If targetType is ORGANIZATION -> Updates `followingPages` on current user.
  */
 export const followEntity = async (
     currentUserId: string, 
@@ -45,7 +63,7 @@ export const followEntity = async (
         const result = await runTransaction(db, async (transaction) => {
             let isPrivate = false;
 
-            // 1. Get Target Data (Optimized Read)
+            // 1. Get Target Data
             const targetCollection = targetType === 'USER' ? 'users' : 'organizations';
             const targetRef = doc(db, targetCollection, targetId);
             const targetSnap = await transaction.get(targetRef);
@@ -66,7 +84,7 @@ export const followEntity = async (
             const existingSnap = await getDocs(q); 
             if (!existingSnap.empty) return { status: existingSnap.docs[0].data().status as FollowStatus, success: false };
 
-            // 3. Create Relationship
+            // 3. Create Relationship Doc (Source of Truth)
             const relStatus = isPrivate ? 'PENDING' : 'ACCEPTED';
             const newRelRef = doc(collection(db, 'relationships'));
             
@@ -77,17 +95,24 @@ export const followEntity = async (
                 createdAt: Date.now()
             });
 
-            // 4. ATOMIC INCREMENTS (No Array Manipulation)
+            // 4. Update Denormalized Arrays (For Feed Performance)
             if (relStatus === 'ACCEPTED') {
                 const currentUserRef = doc(db, 'users', currentUserId);
                 
-                // Increment 'followingCount' on me
-                transaction.update(currentUserRef, { 
-                    followingCount: increment(1)
-                });
+                if (targetType === 'USER') {
+                    transaction.update(currentUserRef, { 
+                        followingUsers: arrayUnion(targetId),
+                        followingCount: increment(1)
+                    });
+                } else {
+                    transaction.update(currentUserRef, { 
+                        followingPages: arrayUnion(targetId),
+                        followingCount: increment(1)
+                    });
+                }
 
-                // Increment 'followersCount' on target
                 transaction.update(targetRef, { 
+                    followers: arrayUnion(currentUserId),
                     followersCount: increment(1) 
                 });
             }
@@ -103,7 +128,7 @@ export const followEntity = async (
 };
 
 /**
- * Polymorphic Unfollow Function (SCALABLE VERSION)
+ * Polymorphic Unfollow Function
  */
 export const unfollowEntity = async (
     currentUserId: string, 
@@ -123,15 +148,26 @@ export const unfollowEntity = async (
             // 1. Delete Relationship Doc
             transaction.delete(snapshot.docs[0].ref);
 
-            // 2. Atomic Decrements
+            // 2. Remove from Denormalized Arrays
             const currentUserRef = doc(db, 'users', currentUserId);
-            transaction.update(currentUserRef, { 
-                followingCount: increment(-1)
-            });
+            
+            if (targetType === 'USER') {
+                transaction.update(currentUserRef, { 
+                    followingUsers: arrayRemove(targetId),
+                    followingCount: increment(-1)
+                });
+            } else {
+                transaction.update(currentUserRef, { 
+                    followingPages: arrayRemove(targetId),
+                    followingCount: increment(-1)
+                });
+            }
 
             const targetCollection = targetType === 'USER' ? 'users' : 'organizations';
             const targetRef = doc(db, targetCollection, targetId);
+            
             transaction.update(targetRef, { 
+                followers: arrayRemove(currentUserId),
                 followersCount: increment(-1) 
             });
         });
@@ -142,7 +178,7 @@ export const unfollowEntity = async (
     }
 };
 
-// Legacy Wrapper support
+// Legacy Wrappers
 export const followUserSmart = async (currentUserId: string, targetUserId: string) => {
     return followEntity(currentUserId, targetUserId, 'USER');
 };
@@ -157,20 +193,17 @@ export const followOrganizationSmart = async (currentUserId: string, orgId: stri
 
 /**
  * SCALABLE POST LIKE SYSTEM (Sub-collection Pattern)
- * Avoids 1MB limit on main document
  */
 export const togglePostLikeScalable = async (postId: string, userId: string, isLiked: boolean) => {
     try {
         const batch = writeBatch(db);
         const postRef = doc(db, 'posts', postId);
-        const likeRef = doc(db, 'posts', postId, 'likes', userId); // Consistent ID for idempotency
+        const likeRef = doc(db, 'posts', postId, 'likes', userId);
 
         if (isLiked) {
-            // Add Like
             batch.set(likeRef, { userId, createdAt: Date.now() });
             batch.update(postRef, { likesCount: increment(1) });
         } else {
-            // Remove Like
             batch.delete(likeRef);
             batch.update(postRef, { likesCount: increment(-1) });
         }
@@ -183,9 +216,6 @@ export const togglePostLikeScalable = async (postId: string, userId: string, isL
     }
 };
 
-/**
- * Checks if user liked a post (using subcollection)
- */
 export const hasUserLikedPost = async (postId: string, userId: string): Promise<boolean> => {
     try {
         const likeRef = doc(db, 'posts', postId, 'likes', userId);

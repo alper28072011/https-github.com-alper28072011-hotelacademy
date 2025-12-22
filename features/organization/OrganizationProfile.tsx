@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     ArrowLeft, MapPin, Globe, Loader2, CheckCircle2, UserPlus, 
-    ShieldCheck, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff, ArrowRight, Clock, Hash, Check
+    ShieldCheck, Bell, Briefcase, GraduationCap, Laptop, Heart, ShoppingBag, Landmark, BellOff, ArrowRight, Clock, Hash, Check, Lock
 } from 'lucide-react';
 import { getOrganizationDetails, sendJoinRequest, getMyMemberships, switchUserActiveOrganization, getUserPendingRequests } from '../../services/db';
 import { updateUserSubscriptions } from '../../services/organizationService';
@@ -17,17 +17,21 @@ import confetti from 'canvas-confetti';
 export const OrganizationProfile: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
-  const { currentUser, updateCurrentUser } = useAuthStore(); // Added updateCurrentUser
+  const { currentUser, updateCurrentUser } = useAuthStore();
   const { switchOrganization } = useOrganizationStore(); 
   
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Membership States (Corporate)
   const [isMember, setIsMember] = useState(false);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
+  
+  // Follow States (Social)
   const [followStatus, setFollowStatus] = useState<FollowStatus>('NONE');
   const [isFollowLoading, setIsFollowLoading] = useState(false);
   
-  // Channel Tuner State
+  // Channel Tuner
   const [showTuner, setShowTuner] = useState(false);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [isSavingChannels, setIsSavingChannels] = useState(false);
@@ -40,43 +44,46 @@ export const OrganizationProfile: React.FC = () => {
         if (data) setOrg(data);
         
         if (currentUser) {
-            // Check Membership
+            // 1. Check Membership (Are you STAFF?)
+            // We can check currentUser.joinedPageIds directly if updated, but safe to check DB memberships
             const memberships = await getMyMemberships(currentUser.id);
             if (memberships.some(m => m.organizationId === orgId)) setIsMember(true);
             
-            // Check Pending Requests
+            // 2. Check Pending Requests
             const pending = await getUserPendingRequests(currentUser.id);
             if (pending.some(r => r.organizationId === orgId)) setHasPendingRequest(true);
 
-            // Check follow status
+            // 3. Check Follow Status (Are you a FAN?)
             const status = await checkFollowStatus(currentUser.id, orgId);
             setFollowStatus(status);
             
-            // Pre-select user's current channels
-            if (currentUser.subscribedChannelIds) {
-                setSelectedChannels(currentUser.subscribedChannelIds);
+            // 4. Pre-select subscribed channels
+            if (currentUser.channelSubscriptions) {
+                setSelectedChannels(currentUser.channelSubscriptions);
             }
         }
         setLoading(false);
     };
     init();
-  }, [orgId, currentUser?.id]); // Optimized dependency
+  }, [orgId, currentUser?.id]);
 
-  const handleJoin = async () => {
+  // --- ACTIONS ---
+
+  const handleJoinRequest = async () => {
       if (!currentUser || !org) return;
-      
-      const result = await sendJoinRequest(currentUser.id, org.id);
-      
-      if (result.success) {
-          setHasPendingRequest(true); 
-          confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-          alert("Katılım isteği gönderildi! Yönetici onayı bekleniyor.");
-      } else {
-          alert(result.message || "Başvuru yapılamadı.");
+      if (window.confirm(`${org.name} ekibine katılmak için başvuru gönderilsin mi?`)) {
+          const result = await sendJoinRequest(currentUser.id, org.id);
+          if (result.success) {
+              setHasPendingRequest(true); 
+              confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+              alert("Katılım isteği gönderildi! Yönetici onayı bekleniyor.");
+          } else {
+              alert(result.message || "Başvuru yapılamadı.");
+          }
       }
   };
 
-  const handleFollow = async () => {
+  const handleFollowToggle = async () => {
       if (!currentUser || !org || isFollowLoading) return;
       setIsFollowLoading(true);
 
@@ -95,7 +102,7 @@ export const OrganizationProfile: React.FC = () => {
       setIsFollowLoading(false);
   };
 
-  const handleGoToPanel = async () => {
+  const handleEnterWorkspace = async () => {
       if (!currentUser || !org) return;
       if (currentUser.currentOrganizationId === org.id) {
           navigate('/');
@@ -106,7 +113,7 @@ export const OrganizationProfile: React.FC = () => {
           navigate('/');
           window.location.reload(); 
       } else {
-          alert("Panele geçiş yapılamadı.");
+          alert("Çalışma alanına geçiş yapılamadı.");
       }
   };
 
@@ -121,21 +128,14 @@ export const OrganizationProfile: React.FC = () => {
   const saveChannels = async () => {
       if (!currentUser) return;
       setIsSavingChannels(true);
-      
-      // 1. Update Database
       const success = await updateUserSubscriptions(currentUser.id, selectedChannels);
-      
       setIsSavingChannels(false);
+      
       if (success) {
-          // 2. CRITICAL FIX: Update Local Store Immediately
-          // This forces StoryRail and Dashboard to re-render with new channels
-          updateCurrentUser({ subscribedChannelIds: selectedChannels });
-
+          updateCurrentUser({ channelSubscriptions: selectedChannels });
           setShowTuner(false);
           alert("Kanal tercihlerin güncellendi!");
-          handleGoToPanel(); // Auto enter to dashboard to see changes
-      } else {
-          alert("Güncelleme başarısız oldu.");
+          handleEnterWorkspace();
       }
   };
 
@@ -157,8 +157,8 @@ export const OrganizationProfile: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white pb-24 relative">
-        {/* HERO SECTION */}
-        <div className="relative h-80 w-full">
+        {/* HERO */}
+        <div className="relative h-72 w-full">
             <img 
                 src={org.coverUrl || 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200'} 
                 className="w-full h-full object-cover"
@@ -174,31 +174,24 @@ export const OrganizationProfile: React.FC = () => {
             </button>
         </div>
 
-        {/* OWNER DASHBOARD PANEL */}
+        {/* OWNER PANEL */}
         {canManage && (
             <div className="px-6 -mt-10 relative z-20 mb-6">
-                <div className="bg-gray-900 text-white rounded-2xl p-4 shadow-2xl border border-gray-700">
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <ShieldCheck className="w-4 h-4 text-accent" />
-                                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-300">Yönetim Paneli</h3>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={() => navigate('/admin')}
-                            className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
-                        >
-                            Yönet
-                        </button>
+                <div className="bg-gray-900 text-white rounded-2xl p-4 shadow-2xl border border-gray-700 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-accent" />
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-gray-300">Yönetim Paneli</h3>
                     </div>
+                    <button onClick={() => navigate('/admin')} className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+                        Yönet
+                    </button>
                 </div>
             </div>
         )}
 
         {/* PROFILE INFO */}
         <div className={`px-6 relative z-10 ${canManage ? '' : '-mt-16'}`}>
-            <div className="w-32 h-32 rounded-3xl bg-white p-1 shadow-2xl mb-4">
+            <div className="w-28 h-28 rounded-3xl bg-white p-1 shadow-2xl mb-4">
                 <div className="w-full h-full rounded-2xl overflow-hidden bg-gray-100 flex items-center justify-center border border-gray-200">
                     {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <span className="text-4xl font-bold text-gray-400">{org.name[0]}</span>}
                 </div>
@@ -206,82 +199,100 @@ export const OrganizationProfile: React.FC = () => {
 
             <div className="mb-6">
                 <h1 className="text-3xl font-bold text-gray-900 leading-tight mb-2">{org.name}</h1>
-                
                 <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-xs font-bold mb-3 uppercase tracking-wide">
                     {getSectorIcon(org.sector)}
                     {org.sector}
                 </div>
-
-                <div className="flex flex-wrap gap-4 text-sm text-gray-600 font-medium">
-                    {org.location && <div className="flex items-center gap-1"><MapPin className="w-4 h-4 text-accent" /> {org.location}</div>}
-                    {org.website && <div className="flex items-center gap-1"><Globe className="w-4 h-4 text-blue-500" /> {org.website}</div>}
-                </div>
-                <div className="flex gap-6 mt-4 pb-4 border-b border-gray-100">
-                    <div className="text-center">
-                        <div className="font-bold text-lg text-gray-900">{org.followersCount || 0}</div>
-                        <div className="text-xs text-gray-500">Takipçi</div>
+                
+                {/* Stats Row */}
+                <div className="flex gap-6 mt-2 text-sm text-gray-600">
+                    <div>
+                        <span className="font-bold text-gray-900 mr-1">{org.followersCount || 0}</span>
+                        Takipçi
                     </div>
-                    <div className="text-center">
-                        <div className="font-bold text-lg text-gray-900">{org.memberCount || 0}</div>
-                        <div className="text-xs text-gray-500">Üye</div>
+                    <div>
+                        <span className="font-bold text-gray-900 mr-1">{org.memberCount || 0}</span>
+                        Personel
                     </div>
                 </div>
             </div>
 
-            <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 mb-8">
+            {/* ACTION BUTTONS (Split Logic) */}
+            <div className="flex gap-3 mb-8">
+                {/* 1. SOCIAL FOLLOW BUTTON */}
+                <button 
+                    onClick={handleFollowToggle}
+                    disabled={isFollowLoading}
+                    className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
+                        followStatus === 'FOLLOWING' 
+                        ? 'bg-gray-100 text-gray-800 border border-gray-200' 
+                        : 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                    }`}
+                >
+                    {isFollowLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 
+                     followStatus === 'FOLLOWING' ? <><BellOff className="w-4 h-4" /> Takibi Bırak</> : 
+                     <><Bell className="w-4 h-4" /> Takip Et</>}
+                </button>
+
+                {/* 2. CORPORATE JOIN BUTTON */}
+                {isMember ? (
+                    <button 
+                        onClick={handleEnterWorkspace}
+                        className="flex-[2] bg-green-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-green-200"
+                    >
+                        <Briefcase className="w-4 h-4" /> Çalışma Alanı
+                    </button>
+                ) : hasPendingRequest ? (
+                    <button disabled className="flex-[2] bg-orange-100 text-orange-600 border border-orange-200 py-3 rounded-xl font-bold flex items-center justify-center gap-2 cursor-default">
+                        <Clock className="w-4 h-4" /> İstek Gönderildi
+                    </button>
+                ) : (
+                    <button 
+                        onClick={handleJoinRequest}
+                        className="flex-[2] bg-gray-900 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"
+                    >
+                        <UserPlus className="w-4 h-4" /> Ekibe Katıl
+                    </button>
+                )}
+            </div>
+
+            {/* ABOUT */}
+            <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
                 <h3 className="font-bold text-gray-900 mb-2">Hakkımızda</h3>
                 <p className="text-gray-600 leading-relaxed text-sm">
                     {org.description || "Topluluğumuza hoş geldiniz."}
                 </p>
+                {org.website && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 flex items-center gap-2 text-sm font-bold text-blue-600">
+                        <Globe className="w-4 h-4" />
+                        <a href={org.website.startsWith('http') ? org.website : `https://${org.website}`} target="_blank" rel="noreferrer" className="hover:underline">
+                            Web Sitesi
+                        </a>
+                    </div>
+                )}
             </div>
-        </div>
 
-        {/* STICKY ACTIONS */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 z-30 shadow-[0_-5px_20px_-5px_rgba(0,0,0,0.1)]">
-            {isMember ? (
-                <div className="flex gap-2">
-                    <button 
-                        onClick={() => setShowTuner(true)}
-                        className="flex-1 bg-gray-100 text-gray-800 font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-colors"
-                    >
-                        <Hash className="w-5 h-5" /> Kanalları Seç
-                    </button>
-                    <button 
-                        onClick={handleGoToPanel}
-                        className="flex-[2] bg-green-600 text-white font-bold text-lg py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform"
-                    >
-                        <CheckCircle2 className="w-6 h-6" />
-                        Giriş Yap
-                    </button>
-                </div>
-            ) : hasPendingRequest ? (
-                <div className="w-full bg-orange-100 text-orange-600 font-bold text-lg py-4 rounded-2xl shadow-none border border-orange-200 flex items-center justify-center gap-2 cursor-default">
-                    <Clock className="w-6 h-6" />
-                    İstek Gönderildi
-                </div>
-            ) : (
-                <div className="flex gap-3">
-                    <button 
-                        onClick={handleFollow}
-                        disabled={isFollowLoading}
-                        className={`flex-1 font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 transition-all ${followStatus === 'FOLLOWING' ? 'bg-gray-100 text-gray-800' : 'bg-blue-600 text-white'}`}
-                    >
-                        {isFollowLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 
-                         followStatus === 'FOLLOWING' ? <><BellOff className="w-5 h-5" /> Takiptesin</> : 
-                         <><Bell className="w-5 h-5" /> Takip Et</>}
-                    </button>
-                    <button 
-                        onClick={handleJoin}
-                        className="flex-1 bg-primary text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2"
-                    >
-                        <UserPlus className="w-5 h-5" />
-                        Katıl
-                    </button>
-                </div>
+            {/* CHANNEL TUNER (For Members) */}
+            {isMember && (
+                <button 
+                    onClick={() => setShowTuner(true)}
+                    className="w-full mt-4 p-4 bg-white border border-gray-200 rounded-2xl flex items-center justify-between group hover:border-accent transition-colors shadow-sm"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-100 rounded-lg group-hover:bg-accent group-hover:text-primary transition-colors">
+                            <Hash className="w-5 h-5 text-gray-500" />
+                        </div>
+                        <div className="text-left">
+                            <div className="font-bold text-gray-900 text-sm">Kanal Ayarları</div>
+                            <div className="text-xs text-gray-500">Bildirimleri yönet</div>
+                        </div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-gray-400" />
+                </button>
             )}
         </div>
 
-        {/* CHANNEL TUNER MODAL */}
+        {/* CHANNEL MODAL */}
         <AnimatePresence>
             {showTuner && (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
@@ -299,10 +310,10 @@ export const OrganizationProfile: React.FC = () => {
                         className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden relative z-10 shadow-2xl flex flex-col max-h-[85vh]"
                     >
                         <div className="p-8">
-                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Akışını Özelleştir</h2>
-                            <p className="text-gray-500 mb-6 text-sm">Hangi konularla ilgileniyorsun?</p>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Kanalları Düzenle</h2>
+                            <p className="text-gray-500 mb-6 text-sm">Hangi departmanlardan bildirim almak istersin?</p>
 
-                            <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto pr-2">
+                            <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                                 {org.channels?.map(channel => (
                                     <button 
                                         key={channel.id}
@@ -311,7 +322,7 @@ export const OrganizationProfile: React.FC = () => {
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${selectedChannels.includes(channel.id) ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>
-                                                <Hash className="w-4 h-4" />
+                                                {channel.isPrivate ? <Lock className="w-4 h-4" /> : <Hash className="w-4 h-4" />}
                                             </div>
                                             <div>
                                                 <span className="font-bold text-gray-800 block">{channel.name}</span>
@@ -330,7 +341,7 @@ export const OrganizationProfile: React.FC = () => {
                                     disabled={isSavingChannels}
                                     className="flex-[2] bg-primary text-white py-4 rounded-2xl font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
                                 >
-                                    {isSavingChannels ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Kaydet'}
+                                    {isSavingChannels ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Kaydet & Gir'}
                                 </button>
                             </div>
                         </div>
