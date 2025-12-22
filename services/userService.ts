@@ -16,12 +16,11 @@ import {
 import { db, auth } from './firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
 import { User, Organization } from '../types';
-import { deleteFileByUrl, uploadFile } from './storage';
+import { deleteFileByUrl, uploadFile, replaceFile, deleteFolder } from './storage';
+import { StoragePaths } from '../utils/storagePaths';
 
 /**
  * Follow a user.
- * Adds targetId to current's 'following' array.
- * Adds currentId to target's 'followers' array.
  */
 export const followUser = async (currentUserId: string, targetUserId: string): Promise<boolean> => {
     try {
@@ -89,7 +88,6 @@ export const getFollowedPages = async (userId: string): Promise<Organization[]> 
 
         if (pageIds.length === 0) return [];
 
-        // Firestore 'in' query supports max 10 items. 
         const safeIds = pageIds.slice(0, 10);
         
         const q = query(collection(db, 'organizations'), where('__name__', 'in', safeIds));
@@ -111,18 +109,20 @@ export const updateUserPreferences = async (userId: string, data: any) => {
     }
 };
 
+/**
+ * Updates profile photo with clean replacement logic.
+ */
 export const updateProfilePhoto = async (userId: string, file: File, oldUrl?: string) => {
     try {
-        // 1. Upload new file using the storage service (includes compression)
-        const downloadURL = await uploadFile(file, `user_avatars/${userId}`, undefined, 'AVATAR');
+        // Construct standard path: users/{uid}/avatar/timestamp_filename
+        const fileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+        const storagePath = StoragePaths.userAvatar(userId, fileName);
 
-        // 2. Update Firestore User Document
+        // Atomic replace
+        const downloadURL = await replaceFile(oldUrl, file, storagePath, 'AVATAR');
+
+        // Update DB
         await updateDoc(doc(db, 'users', userId), { avatar: downloadURL });
-
-        // 3. Clean up old file if it exists and is different
-        if (oldUrl && oldUrl !== downloadURL && oldUrl.includes('firebasestorage')) {
-            await deleteFileByUrl(oldUrl).catch(e => console.warn("Failed to delete old avatar", e));
-        }
 
         return downloadURL;
     } catch (e) {
@@ -139,8 +139,8 @@ export const removeProfilePhoto = async (userId: string, oldUrl: string) => {
 
 /**
  * SELF DELETION PROTOCOL
- * Requires password for re-authentication to prevent "auth/requires-recent-login" error.
- * Ensures both Firestore data AND Firebase Auth record are deleted.
+ * Requires password for re-authentication.
+ * Cleans up ALL user files in storage.
  */
 export const deleteUserSmart = async (user: User, password?: string): Promise<{ success: boolean; error?: string }> => {
     const authUser = auth.currentUser;
@@ -149,7 +149,6 @@ export const deleteUserSmart = async (user: User, password?: string): Promise<{ 
         return { success: false, error: "Güvenlik onayı için şifre gereklidir." };
     }
 
-    // 1. Check if they own an organization
     const orgsRef = collection(db, 'organizations');
     const q = query(orgsRef, where('ownerId', '==', user.id));
     const snap = await getDocs(q);
@@ -158,22 +157,18 @@ export const deleteUserSmart = async (user: User, password?: string): Promise<{ 
     }
 
     try {
-        // 2. Re-authenticate User (CRITICAL STEP)
-        // This generates a fresh token required for deletion
+        // 1. Re-authenticate
         const credential = EmailAuthProvider.credential(authUser.email!, password);
         await reauthenticateWithCredential(authUser, credential);
 
-        // 3. Clean up Firestore Data (Basic cleanup)
-        
-        // Delete Avatar
-        if (user.avatar && user.avatar.includes('firebasestorage')) {
-            await deleteFileByUrl(user.avatar);
-        }
+        // 2. Clean up Storage (The Whole User Folder)
+        // This removes avatar, and any other files stored under users/{uid}/...
+        await deleteFolder(StoragePaths.userRoot(user.id));
 
-        // Delete User Document
+        // 3. Delete Firestore Doc
         await deleteDoc(doc(db, 'users', user.id));
 
-        // 4. Delete Auth User (The one causing "email-already-in-use")
+        // 4. Delete Auth
         await deleteUser(authUser);
 
         return { success: true };

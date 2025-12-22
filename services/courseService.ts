@@ -24,17 +24,14 @@ import {
     StoryCard
 } from '../types';
 import { getOrganizationDetails } from './db';
-import { deleteFileByUrl } from './storage';
+import { deleteFolder } from './storage';
+import { StoragePaths } from '../utils/storagePaths';
 import { getPersonalizedRecommendations } from './recommendationService';
 
-// Helper to remove undefined values which Firestore rejects
 const sanitizeData = (data: any): any => {
     return JSON.parse(JSON.stringify(data));
 };
 
-/**
- * Creates a new course with logic based on User Level.
- */
 export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'verificationStatus' | 'qualityScore' | 'flagCount' | 'authorType' | 'authorName' | 'authorAvatarUrl'> & { ownerType?: string }, user: User): Promise<boolean> => {
     try {
         let tier: ContentTier = 'COMMUNITY';
@@ -84,9 +81,7 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
             authorAvatarUrl
         };
 
-        const cleanData = sanitizeData(finalData);
-
-        await addDoc(collection(db, 'courses'), cleanData);
+        await addDoc(collection(db, 'courses'), sanitizeData(finalData));
         
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
@@ -100,9 +95,6 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
     }
 };
 
-/**
- * Handles Course Review & Economy Logic
- */
 export const submitReview = async (
     courseId: string, 
     reviewerId: string, 
@@ -119,7 +111,6 @@ export const submitReview = async (
             
             if (course.authorType === 'USER') {
                 const authorRef = doc(db, 'users', course.authorId);
-                
                 let reputationDelta = 0;
                 let xpDelta = 0;
 
@@ -163,26 +154,17 @@ export const submitReview = async (
     }
 };
 
-/**
- * INTELLIGENT FEED ALGORITHM
- * Combines general "Verified" content with "Personalized Recommendations"
- */
 export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promise<Course[]> => {
     try {
         const coursesRef = collection(db, 'courses');
         let courses: Course[] = [];
 
-        // 1. Fetch Personalized Recs (If Org user)
         if (user.currentOrganizationId) {
             const { courses: recCourses } = await getPersonalizedRecommendations(user.id, user.currentOrganizationId);
-            
-            // Mark them as "Recommended" (Client-side flag if needed, or just prepend)
-            // Ideally we filter out completed ones in the service, but let's double check
             const newRecs = recCourses.filter(c => !user.completedCourses.includes(c.id));
             courses = [...newRecs]; 
         }
 
-        // 2. Fetch General Feed
         let q;
         if (showVerifiedOnly) {
             q = query(
@@ -202,7 +184,6 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
         const snapshot = await getDocs(q);
         const generalCourses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Course));
         
-        // Merge and Deduplicate
         const idSet = new Set(courses.map(c => c.id));
         generalCourses.forEach(c => {
             if (!idSet.has(c.id)) {
@@ -210,9 +191,6 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
             }
         });
 
-        // Sort: Recommended first, then by Date
-        // If it's a recommendation (in top N), keep it. Otherwise sort by date.
-        // Simple sort for now: Date descending.
         return courses.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     } catch (error) {
         console.error("Smart Feed Error:", error);
@@ -220,29 +198,20 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
     }
 };
 
+/**
+ * Completely wipes a course and its storage folder.
+ */
 export const deleteCourseFully = async (courseId: string): Promise<boolean> => {
     try {
         const courseRef = doc(db, 'courses', courseId);
-        const courseSnap = await getDoc(courseRef);
         
-        if (!courseSnap.exists()) return true; 
-        
-        const course = courseSnap.data() as Course;
+        // 1. Wipe the entire storage folder for this course
+        // This handles thumbnail, step media, pdfs, etc.
+        await deleteFolder(StoragePaths.courseRoot(courseId));
 
-        try {
-            const filesToDelete: Promise<void>[] = [];
-            if (course.thumbnailUrl) filesToDelete.push(deleteFileByUrl(course.thumbnailUrl));
-            if (course.steps && course.steps.length > 0) {
-                course.steps.forEach((step: StoryCard) => {
-                    if (step.mediaUrl) filesToDelete.push(deleteFileByUrl(step.mediaUrl));
-                });
-            }
-            if (filesToDelete.length > 0) await Promise.allSettled(filesToDelete);
-        } catch (fileErr) {
-            console.warn("Media deletion partial failure", fileErr);
-        }
-
+        // 2. Delete Firestore Document
         await deleteDoc(courseRef);
+        
         return true;
     } catch (error) {
         console.error("Course Full Delete Failed:", error);

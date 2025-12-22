@@ -9,10 +9,15 @@ import {
     where, 
     getDocs,
     deleteDoc,
-    runTransaction
+    runTransaction,
+    getDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Organization, Position, RolePermissions, OrgDepartmentDefinition, PositionPrototype, PageRole, JoinConfig } from '../types';
+import { deleteFolder, replaceFile } from './storage';
+import { StoragePaths } from '../utils/storagePaths';
+
+// ... (Existing exports like createPage, updateJoinConfig etc. preserved) ...
 
 /**
  * Create a new Page (Organization).
@@ -50,13 +55,11 @@ export const createPage = async (
 
         const docRef = await addDoc(collection(db, 'organizations'), newPage);
 
-        // Update User
         const userRef = doc(db, 'users', userId);
         await updateDoc(userRef, {
             managedPageIds: arrayUnion(docRef.id),
             joinedPageIds: arrayUnion(docRef.id), 
             followingPages: arrayUnion(docRef.id),
-            // Owner gets ADMIN role + 'Kurucu' title
             [`pageRoles.${docRef.id}`]: { role: 'ADMIN', title: 'Kurucu' },
             channelSubscriptions: arrayUnion(`ch_${Date.now()}_1`)
         });
@@ -66,6 +69,39 @@ export const createPage = async (
         console.error("Create Page Error:", e);
         return null;
     }
+};
+
+/**
+ * Update Organization Logo with automated cleanup.
+ */
+export const updateOrganizationLogo = async (orgId: string, file: File): Promise<string | null> => {
+    try {
+        const orgRef = doc(db, 'organizations', orgId);
+        const orgSnap = await getDoc(orgRef);
+        if (!orgSnap.exists()) return null;
+        
+        const orgData = orgSnap.data() as Organization;
+        const fileName = `${Date.now()}_logo.webp`;
+        const path = StoragePaths.orgLogo(orgId, fileName);
+
+        // Replace old logo, upload new, get URL
+        const newUrl = await replaceFile(orgData.logoUrl, file, path, 'AVATAR');
+
+        // Update DB
+        await updateDoc(orgRef, { logoUrl: newUrl });
+        return newUrl;
+    } catch (e) {
+        console.error("Logo update failed", e);
+        return null;
+    }
+};
+
+/**
+ * Hard Delete Organization Assets (Storage Cleanup).
+ * To be used by SuperAdmin or Full Deletion logic.
+ */
+export const deleteOrganizationAssets = async (orgId: string) => {
+    await deleteFolder(StoragePaths.orgRoot(orgId));
 };
 
 export const updateJoinConfig = async (orgId: string, config: JoinConfig) => {
@@ -81,10 +117,7 @@ export const updateUserSubscriptions = async (userId: string, channelIds: string
             channelSubscriptions: channelIds 
         });
         return true;
-    } catch (e) { 
-        console.error("Update Subs Error", e);
-        return false; 
-    }
+    } catch (e) { return false; }
 };
 
 export const getUserManagedPages = async (userId: string): Promise<Organization[]> => {
@@ -92,9 +125,7 @@ export const getUserManagedPages = async (userId: string): Promise<Organization[
         const q = query(collection(db, 'organizations'), where('admins', 'array-contains', userId));
         const snapshot = await getDocs(q);
         return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Organization));
-    } catch (e) {
-        return [];
-    }
+    } catch (e) { return []; }
 };
 
 export const createChannel = async (orgId: string, name: string, description: string, isPrivate: boolean) => {
@@ -112,14 +143,10 @@ export const createChannel = async (orgId: string, name: string, description: st
             channels: arrayUnion(newChannel)
         });
         return true;
-    } catch(e) {
-        return false;
-    }
+    } catch(e) { return false; }
 };
 
-export const deleteChannel = async (orgId: string, chId: string) => {
-    return true; // Stub
-};
+export const deleteChannel = async (orgId: string, chId: string) => { return true; };
 
 export const requestOrganizationDeletion = async (orgId: string, reason: string) => {
     try {
@@ -128,13 +155,8 @@ export const requestOrganizationDeletion = async (orgId: string, reason: string)
     } catch(e) { return false; }
 };
 
-export const getPotentialSuccessors = async (orgId: string, currentOwnerId: string) => {
-    return [];
-};
-
-export const transferOwnership = async (orgId: string, newOwnerId: string, oldOwnerId: string) => {
-    return true;
-};
+export const getPotentialSuccessors = async (orgId: string, currentOwnerId: string) => { return []; };
+export const transferOwnership = async (orgId: string, newOwnerId: string, oldOwnerId: string) => { return true; };
 
 // --- ORG STRUCTURE & POSITIONS ---
 
@@ -159,11 +181,7 @@ export const createPosition = async (position: Omit<Position, 'id'>) => {
     } catch(e) { return false; }
 };
 
-export const saveOrganizationDefinitions = async (
-    orgId: string, 
-    departments: OrgDepartmentDefinition[], 
-    prototypes: PositionPrototype[]
-) => {
+export const saveOrganizationDefinitions = async (orgId: string, departments: OrgDepartmentDefinition[], prototypes: PositionPrototype[]) => {
     try {
         await updateDoc(doc(db, 'organizations', orgId), {
             'definitions.departments': departments,
@@ -185,10 +203,7 @@ export const getDescendantPositions = (rootId: string, allPositions: Position[])
 export const updateUserPageRole = async (orgId: string, userId: string, role: PageRole) => {
     try {
         const memId = `${userId}_${orgId}`;
-        // Also update User doc for quick access if structure allows
-        await updateDoc(doc(db, 'users', userId), {
-            [`pageRoles.${orgId}.role`]: role 
-        });
+        await updateDoc(doc(db, 'users', userId), { [`pageRoles.${orgId}.role`]: role });
         await updateDoc(doc(db, 'memberships', memId), { role });
         return true;
     } catch(e) { return false; }

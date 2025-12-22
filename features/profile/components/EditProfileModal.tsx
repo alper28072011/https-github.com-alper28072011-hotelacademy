@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { X, Camera, Save, Loader2, User, Phone, Instagram, Check } from 'lucide-react';
 import { User as UserType } from '../../../types';
 import { updateUserProfile } from '../../../services/db';
-import { uploadFile } from '../../../services/storage';
+import { updateProfilePhoto } from '../../../services/userService';
 
 interface EditProfileModalProps {
   user: UserType;
@@ -14,7 +14,7 @@ interface EditProfileModalProps {
 export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose }) => {
   const [name, setName] = useState(user.name);
   const [bio, setBio] = useState(user.bio || '');
-  const [phone, setPhone] = useState(user.phoneNumber || ''); // Phone should be readonly usually in Edit, requires verification flow to change
+  const [phone, setPhone] = useState(user.phoneNumber || ''); 
   const [instagram, setInstagram] = useState(user.instagramHandle || '');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState(user.avatar);
@@ -31,17 +31,22 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClos
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      // 1. Handle Photo Update using Service (Handles delete/replace logic)
       let photoUrl = user.avatar;
-      
       if (avatarFile) {
-        photoUrl = await uploadFile(avatarFile, 'user_avatars');
+        photoUrl = await updateProfilePhoto(user.id, avatarFile, user.avatar);
       }
 
+      // 2. Handle Text Data Update
       await updateUserProfile(user.id, {
         name,
         bio,
         instagramHandle: instagram,
-        avatar: photoUrl
+        // photoUrl is updated inside updateProfilePhoto directly to DB, 
+        // but we might need to ensure consistency if this fails.
+        // updateProfilePhoto returns the new URL, so we can sync if needed,
+        // but usually updateProfilePhoto writes to 'avatar' field.
+        // We'll update other fields here.
       });
 
       onClose();
