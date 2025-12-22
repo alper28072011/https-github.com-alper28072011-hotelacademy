@@ -6,6 +6,7 @@ import {
     Grid, Bookmark, Building2, 
     Plus, ExternalLink, Hash, X, Briefcase
 } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { ProfileHeader } from './components/ProfileHeader';
 import { Organization, FeedPost } from '../../types';
@@ -13,6 +14,7 @@ import { getUserManagedPages } from '../../services/organizationService';
 import { getFollowedPages } from '../../services/userService';
 import { getUserPosts } from '../../services/db';
 import { toggleTagFollow } from '../../services/socialService';
+import { EditProfileModal } from './components/EditProfileModal';
 
 export const ProfilePage: React.FC = () => {
   const { t } = useTranslation();
@@ -56,6 +58,16 @@ export const ProfilePage: React.FC = () => {
             followingCount={currentUser.followingCount || 0}
             postCount={myPosts.length}
         />
+
+        {/* EDIT PROFILE MODAL */}
+        <AnimatePresence>
+            {isEditing && (
+                <EditProfileModal 
+                    user={currentUser} 
+                    onClose={() => setIsEditing(false)} 
+                />
+            )}
+        </AnimatePresence>
 
         {/* TABS */}
         <div className="sticky top-[60px] bg-white z-30 border-b border-gray-200 flex justify-around">

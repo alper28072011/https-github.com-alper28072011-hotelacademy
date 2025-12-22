@@ -5,6 +5,7 @@ import { X, Camera, Save, Loader2, User, Phone, Instagram, Check } from 'lucide-
 import { User as UserType } from '../../../types';
 import { updateUserProfile } from '../../../services/db';
 import { updateProfilePhoto } from '../../../services/userService';
+import { useAuthStore } from '../../../stores/useAuthStore';
 
 interface EditProfileModalProps {
   user: UserType;
@@ -12,6 +13,7 @@ interface EditProfileModalProps {
 }
 
 export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClose }) => {
+  const { updateCurrentUser } = useAuthStore();
   const [name, setName] = useState(user.name);
   const [bio, setBio] = useState(user.bio || '');
   const [phone, setPhone] = useState(user.phoneNumber || ''); 
@@ -41,12 +43,17 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClos
       await updateUserProfile(user.id, {
         name,
         bio,
+        phoneNumber: phone,
         instagramHandle: instagram,
-        // photoUrl is updated inside updateProfilePhoto directly to DB, 
-        // but we might need to ensure consistency if this fails.
-        // updateProfilePhoto returns the new URL, so we can sync if needed,
-        // but usually updateProfilePhoto writes to 'avatar' field.
-        // We'll update other fields here.
+      });
+
+      // 3. Update Local Store
+      updateCurrentUser({
+          name,
+          bio,
+          phoneNumber: phone,
+          instagramHandle: instagram,
+          avatar: photoUrl
       });
 
       onClose();
@@ -138,14 +145,15 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClos
               <div className="text-right text-xs text-gray-400">{bio.length}/150</div>
             </div>
 
-            <div className="space-y-1 opacity-50">
-              <label className="text-xs text-gray-400 font-bold uppercase ml-1">Telefon (Değiştirilemez)</label>
-              <div className="flex items-center gap-3 bg-gray-100 p-3 rounded-2xl border border-gray-200">
+            <div className="space-y-1">
+              <label className="text-xs text-gray-400 font-bold uppercase ml-1">Telefon</label>
+              <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100 focus-within:border-primary focus-within:bg-white transition-all">
                 <Phone className="w-5 h-5 text-gray-400" />
                 <input 
                   value={phone}
-                  readOnly
-                  className="bg-transparent w-full outline-none text-gray-500 font-medium cursor-not-allowed"
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="bg-transparent w-full outline-none text-gray-800 font-medium"
+                  placeholder="+90..."
                 />
               </div>
             </div>
