@@ -17,7 +17,7 @@ import confetti from 'canvas-confetti';
 export const OrganizationProfile: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
-  const { currentUser } = useAuthStore();
+  const { currentUser, updateCurrentUser } = useAuthStore(); // Added updateCurrentUser
   const { switchOrganization } = useOrganizationStore(); 
   
   const [org, setOrg] = useState<Organization | null>(null);
@@ -60,7 +60,7 @@ export const OrganizationProfile: React.FC = () => {
         setLoading(false);
     };
     init();
-  }, [orgId, currentUser]);
+  }, [orgId, currentUser?.id]); // Optimized dependency
 
   const handleJoin = async () => {
       if (!currentUser || !org) return;
@@ -121,12 +121,21 @@ export const OrganizationProfile: React.FC = () => {
   const saveChannels = async () => {
       if (!currentUser) return;
       setIsSavingChannels(true);
+      
+      // 1. Update Database
       const success = await updateUserSubscriptions(currentUser.id, selectedChannels);
+      
       setIsSavingChannels(false);
       if (success) {
+          // 2. CRITICAL FIX: Update Local Store Immediately
+          // This forces StoryRail and Dashboard to re-render with new channels
+          updateCurrentUser({ subscribedChannelIds: selectedChannels });
+
           setShowTuner(false);
           alert("Kanal tercihlerin güncellendi!");
-          handleGoToPanel(); // Auto enter
+          handleGoToPanel(); // Auto enter to dashboard to see changes
+      } else {
+          alert("Güncelleme başarısız oldu.");
       }
   };
 
