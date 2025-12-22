@@ -17,7 +17,7 @@ import { SUPPORTED_LANGUAGES } from '../../i18n/config';
 
 export const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const { setLanguage } = useAppStore();
+  const { setLanguage, systemSettings } = useAppStore();
   const { 
     authMode, setAuthMode, 
     isLoading, setLoading, 
@@ -33,6 +33,9 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+
+  // Default Image Fallback
+  const bgImage = systemSettings?.loginScreenImage || "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1200";
 
   useEffect(() => { setError(null); }, [authMode]);
 
@@ -77,7 +80,7 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-5xl bg-white md:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative">
+    <div className="w-full max-w-5xl bg-white md:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative min-h-[600px]">
       
       {/* MINIMAL LANG SELECTOR (Top Right) */}
       <div className="absolute top-6 right-6 z-20">
@@ -108,9 +111,9 @@ export const LoginPage: React.FC = () => {
           </div>
       </div>
 
-      {/* LEFT: FORM AREA */}
-      <div className="w-full md:w-1/2 p-8 md:p-12 lg:p-16 flex flex-col justify-center">
-        <div className="max-w-sm mx-auto w-full">
+      {/* LEFT: FORM AREA - Updated for Vertical Centering */}
+      <div className="w-full md:w-1/2 p-8 md:p-12 lg:p-16 flex flex-col justify-center h-full">
+        <div className="max-w-sm mx-auto w-full flex flex-col justify-center h-full">
             {/* Brand */}
             <div className="mb-10">
                 <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center mb-4">
@@ -207,9 +210,9 @@ export const LoginPage: React.FC = () => {
       <div className="hidden md:block w-1/2 bg-gray-50 relative p-4">
           <div className="w-full h-full rounded-3xl overflow-hidden relative shadow-inner">
               <img 
-                src="https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1200" 
+                src={bgImage} 
                 alt="Luxury Hotel" 
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover transition-opacity duration-700"
               />
               {/* Soft Blue Overlay */}
               <div className="absolute inset-0 bg-primary/20 mix-blend-multiply" />

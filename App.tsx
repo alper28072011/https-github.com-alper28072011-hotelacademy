@@ -135,16 +135,23 @@ const AnimatedRoutes = () => {
 };
 
 const App: React.FC = () => {
-  const { currentLanguage } = useAppStore();
+  const { currentLanguage, fetchSystemSettings } = useAppStore();
   const { isAuthenticated, currentUser } = useAuthStore();
   const { currentOrganization, switchOrganization } = useOrganizationStore();
   const [isHydrating, setIsHydrating] = useState(true);
 
+  // Initialize Language
   useEffect(() => {
     document.documentElement.dir = currentLanguage === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = currentLanguage;
   }, [currentLanguage]);
 
+  // Fetch System Settings (Global)
+  useEffect(() => {
+      fetchSystemSettings();
+  }, []);
+
+  // Sync Auth State
   useEffect(() => {
       const sync = async () => {
           if (isAuthenticated && currentUser?.currentOrganizationId && !currentOrganization) {

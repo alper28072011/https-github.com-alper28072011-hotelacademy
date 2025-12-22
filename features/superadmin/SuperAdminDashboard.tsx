@@ -1,22 +1,32 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, Activity, Users, DollarSign, Database, Building2, Search, Power, Trash2, Loader2, RotateCcw, AlertTriangle, Check, X } from 'lucide-react';
+import { 
+    ArrowLeft, ShieldCheck, Activity, Users, DollarSign, Database, 
+    Building2, Search, Power, Trash2, Loader2, RotateCcw, AlertTriangle, 
+    Check, X, Settings, Image, Upload, Save
+} from 'lucide-react';
 import { getAllPublicOrganizations } from '../../services/db';
-import { executeOrganizationDeathSentence, setOrganizationStatus } from '../../services/superAdminService';
+import { executeOrganizationDeathSentence, setOrganizationStatus, getSystemSettings, updateSystemSettings } from '../../services/superAdminService';
 import { Organization } from '../../types';
 import { UserManager } from './UserManager';
+import { uploadFile } from '../../services/storage';
 
 export const SuperAdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [hotels, setHotels] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'USERS' | 'HOTELS'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'USERS' | 'HOTELS' | 'SETTINGS'>('OVERVIEW');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Settings State
+  const [loginImage, setLoginImage] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   useEffect(() => {
       loadHotels();
+      loadSettings();
   }, []);
 
   const loadHotels = async () => {
@@ -24,6 +34,11 @@ export const SuperAdminDashboard: React.FC = () => {
       const data = await getAllPublicOrganizations();
       setHotels(data);
       setLoading(false);
+  };
+
+  const loadSettings = async () => {
+      const settings = await getSystemSettings();
+      setLoginImage(settings.loginScreenImage);
   };
 
   const filteredHotels = hotels.filter(h => h.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -57,6 +72,27 @@ export const SuperAdminDashboard: React.FC = () => {
       setActionLoading(null);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          setIsSavingSettings(true);
+          try {
+              const url = await uploadFile(e.target.files[0], 'system_assets');
+              setLoginImage(url);
+          } catch (error) {
+              alert("Resim yüklenemedi.");
+          } finally {
+              setIsSavingSettings(false);
+          }
+      }
+  };
+
+  const handleSaveSettings = async () => {
+      setIsSavingSettings(true);
+      const success = await updateSystemSettings({ loginScreenImage: loginImage });
+      setIsSavingSettings(false);
+      if(success) alert("Ayarlar güncellendi. Giriş ekranı değişti.");
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 text-white font-sans">
       {/* Top Bar */}
@@ -75,6 +111,7 @@ export const SuperAdminDashboard: React.FC = () => {
                 <button onClick={() => setActiveTab('OVERVIEW')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'OVERVIEW' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}`}>Özet</button>
                 <button onClick={() => setActiveTab('USERS')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'USERS' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}`}>Kullanıcılar</button>
                 <button onClick={() => setActiveTab('HOTELS')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'HOTELS' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}`}>İşletmeler</button>
+                <button onClick={() => setActiveTab('SETTINGS')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'SETTINGS' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'}`}>Ayarlar</button>
             </div>
             <button 
                 onClick={() => navigate('/')}
@@ -125,7 +162,6 @@ export const SuperAdminDashboard: React.FC = () => {
                       <h3 className="text-3xl font-bold mb-1">{hotels.length}</h3>
                       <p className="text-sm text-gray-500">Toplam İşletme</p>
                   </div>
-                  {/* ... Other stats ... */}
               </div>
             </>
           )}
@@ -215,6 +251,53 @@ export const SuperAdminDashboard: React.FC = () => {
                     </div>
                 )}
             </div>
+          )}
+
+          {/* TAB 4: SETTINGS */}
+          {activeTab === 'SETTINGS' && (
+              <div className="bg-gray-900 p-8 rounded-3xl border border-gray-800 max-w-3xl">
+                  <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                      <Settings className="w-6 h-6 text-gray-400" />
+                      Sistem Ayarları
+                  </h2>
+
+                  <div className="space-y-6">
+                      <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700">
+                          <div className="flex justify-between items-start mb-4">
+                              <div>
+                                  <h3 className="text-white font-bold flex items-center gap-2">
+                                      <Image className="w-5 h-5 text-yellow-500" /> Giriş Ekranı Görseli
+                                  </h3>
+                                  <p className="text-sm text-gray-400 mt-1">Giriş ve kayıt sayfasında gösterilecek karşılama görselini değiştirin.</p>
+                              </div>
+                              <div className="relative group cursor-pointer bg-gray-800 px-4 py-2 rounded-xl border border-gray-600 hover:bg-gray-700 transition-colors">
+                                  <span className="text-xs font-bold text-white flex items-center gap-2">
+                                      <Upload className="w-4 h-4" /> Değiştir
+                                  </span>
+                                  <input type="file" onChange={handleImageUpload} accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" />
+                              </div>
+                          </div>
+
+                          <div className="aspect-video w-full bg-gray-950 rounded-xl overflow-hidden border-2 border-gray-800 relative group">
+                              <img src={loginImage} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" alt="Login Preview" />
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                  <span className="bg-black/50 text-white px-3 py-1 rounded-full text-xs backdrop-blur">Önizleme</span>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="flex justify-end">
+                          <button 
+                            onClick={handleSaveSettings}
+                            disabled={isSavingSettings}
+                            className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold px-8 py-3 rounded-xl flex items-center gap-2 shadow-lg shadow-yellow-500/20 active:scale-95 transition-all"
+                          >
+                              {isSavingSettings ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                              Ayarları Kaydet
+                          </button>
+                      </div>
+                  </div>
+              </div>
           )}
       </div>
     </div>

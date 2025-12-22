@@ -14,10 +14,11 @@ import {
     QueryDocumentSnapshot,
     DocumentData,
     getDoc,
-    deleteField
+    deleteField,
+    setDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, UserStatus, Organization, OrganizationStatus, FeedPost } from '../types';
+import { User, UserStatus, Organization, OrganizationStatus, FeedPost, SystemSettings } from '../types';
 import { deleteCourseFully } from './courseService';
 import { deleteFileByUrl } from './storage';
 
@@ -28,6 +29,35 @@ export interface PaginatedUsers {
     users: User[];
     lastDoc: QueryDocumentSnapshot<DocumentData> | null;
 }
+
+// --- SYSTEM SETTINGS ---
+
+export const getSystemSettings = async (): Promise<SystemSettings> => {
+    try {
+        const docRef = doc(db, 'system_settings', 'general');
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+            return snap.data() as SystemSettings;
+        }
+        return { 
+            loginScreenImage: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1200' 
+        };
+    } catch (e) {
+        console.error("Get Settings Error:", e);
+        return { loginScreenImage: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1200' };
+    }
+};
+
+export const updateSystemSettings = async (settings: Partial<SystemSettings>): Promise<boolean> => {
+    try {
+        const docRef = doc(db, 'system_settings', 'general');
+        await setDoc(docRef, settings, { merge: true });
+        return true;
+    } catch (e) {
+        console.error("Update Settings Error:", e);
+        return false;
+    }
+};
 
 /**
  * SUPER ADMIN ACTION: Toggle Status (Suspend/Active)

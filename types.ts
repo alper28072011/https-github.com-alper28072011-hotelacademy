@@ -12,6 +12,12 @@ export interface LanguageDefinition {
 
 export type LocalizedString = Record<string, string>;
 
+// --- SYSTEM SETTINGS (NEW) ---
+export interface SystemSettings {
+    loginScreenImage: string;
+    // Future settings can go here (e.g., welcomeMessage, maintenanceMode)
+}
+
 // --- SOCIAL ROLES ---
 export type UserRole = 'user' | 'super_admin' | 'staff' | 'manager' | 'admin'; 
 export type PageRole = 'ADMIN' | 'EDITOR' | 'MODERATOR' | 'MEMBER';
