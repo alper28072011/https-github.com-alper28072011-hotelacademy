@@ -11,7 +11,9 @@ import {
     query,
     where,
     getDocs,
-    limit
+    limit,
+    writeBatch,
+    arrayUnion
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { 
@@ -21,7 +23,9 @@ import {
     ContentTier, 
     VerificationStatus, 
     AuthorType,
-    StoryCard
+    StoryCard,
+    CourseTopic,
+    LearningModule
 } from '../types';
 import { getOrganizationDetails } from './db';
 import { deleteFolder } from './storage';
@@ -31,6 +35,142 @@ import { getPersonalizedRecommendations } from './recommendationService';
 const sanitizeData = (data: any): any => {
     return JSON.parse(JSON.stringify(data));
 };
+
+// --- HIERARCHY MANAGEMENT (NEW) ---
+
+export const createCourse = async (courseData: Partial<Course>, user: User): Promise<Course | null> => {
+    try {
+        const newCourse: any = {
+            ...courseData,
+            createdAt: Date.now(),
+            authorId: user.id,
+            authorName: user.name,
+            authorAvatarUrl: user.avatar,
+            topicIds: [], // Start empty
+            modules: [], // Deprecated
+            steps: [] // Deprecated
+        };
+        const docRef = await addDoc(collection(db, 'courses'), newCourse);
+        return { id: docRef.id, ...newCourse };
+    } catch (e) {
+        console.error("Create Course Error:", e);
+        return null;
+    }
+};
+
+export const createTopic = async (courseId: string, title: string, summary: string): Promise<CourseTopic | null> => {
+    try {
+        const newTopic: any = {
+            courseId,
+            title: { tr: title, en: title },
+            summary: { tr: summary, en: summary },
+            moduleIds: [],
+            createdAt: Date.now()
+        };
+        
+        // 1. Create Topic Doc
+        const docRef = await addDoc(collection(db, 'topics'), newTopic);
+        
+        // 2. Link to Course (Order matters)
+        await updateDoc(doc(db, 'courses', courseId), {
+            topicIds: arrayUnion(docRef.id)
+        }); 
+        
+        return { id: docRef.id, ...newTopic };
+    } catch (e) {
+        console.error("Create Topic Error:", e);
+        return null;
+    }
+};
+
+export const getTopicsByCourse = async (courseId: string): Promise<CourseTopic[]> => {
+    try {
+        const q = query(collection(db, 'topics'), where('courseId', '==', courseId));
+        const snap = await getDocs(q);
+        const topics = snap.docs.map(d => ({ id: d.id, ...d.data() } as CourseTopic));
+        
+        // Sort by course.topicIds order if possible, otherwise by created
+        const courseRef = await getDoc(doc(db, 'courses', courseId));
+        if (courseRef.exists()) {
+            const course = courseRef.data() as Course;
+            const order = course.topicIds || [];
+            return topics.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+        }
+        return topics.sort((a, b) => a.createdAt - b.createdAt);
+    } catch (e) {
+        return [];
+    }
+};
+
+export const createModule = async (topicId: string, courseId: string, title: string, type: 'VIDEO' | 'QUIZ' | 'READING'): Promise<LearningModule | null> => {
+    try {
+        const newModule: any = {
+            topicId,
+            courseId,
+            title: { tr: title, en: title },
+            type,
+            content: [],
+            duration: 5,
+            xp: 10,
+            createdAt: Date.now()
+        };
+
+        const docRef = await addDoc(collection(db, 'modules'), newModule);
+
+        // Link to Topic
+        // We need arrayUnion import. Let's do a read-write for safety without importing arrayUnion if it conflicts
+        const topicRef = doc(db, 'topics', topicId);
+        const topicSnap = await getDoc(topicRef);
+        if (topicSnap.exists()) {
+            const tData = topicSnap.data();
+            const newIds = [...(tData.moduleIds || []), docRef.id];
+            await updateDoc(topicRef, { moduleIds: newIds });
+        }
+
+        return { id: docRef.id, ...newModule };
+    } catch (e) {
+        console.error("Create Module Error:", e);
+        return null;
+    }
+};
+
+export const getModulesByTopic = async (topicId: string): Promise<LearningModule[]> => {
+    try {
+        const q = query(collection(db, 'modules'), where('topicId', '==', topicId));
+        const snap = await getDocs(q);
+        const modules = snap.docs.map(d => ({ id: d.id, ...d.data() } as LearningModule));
+        
+        const topicRef = await getDoc(doc(db, 'topics', topicId));
+        if (topicRef.exists()) {
+            const topic = topicRef.data() as CourseTopic;
+            const order = topic.moduleIds || [];
+            return modules.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+        }
+        return modules;
+    } catch (e) {
+        return [];
+    }
+};
+
+export const getModule = async (moduleId: string): Promise<LearningModule | null> => {
+    try {
+        const snap = await getDoc(doc(db, 'modules', moduleId));
+        return snap.exists() ? { id: snap.id, ...snap.data() } as LearningModule : null;
+    } catch (e) {
+        return null;
+    }
+};
+
+export const updateModuleContent = async (moduleId: string, cards: StoryCard[]) => {
+    try {
+        await updateDoc(doc(db, 'modules', moduleId), { content: cards });
+        return true;
+    } catch (e) {
+        return false;
+    }
+};
+
+// --- LEGACY ---
 
 export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'verificationStatus' | 'qualityScore' | 'flagCount' | 'authorType' | 'authorName' | 'authorAvatarUrl'> & { ownerType?: string }, user: User): Promise<boolean> => {
     try {

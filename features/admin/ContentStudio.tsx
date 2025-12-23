@@ -1,39 +1,52 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
     Wand2, Loader2, ArrowLeft, Save, Plus, Trash2, 
-    Image as ImageIcon, Upload, X, ChevronRight, Layout,
-    Type, AlignLeft, MoreHorizontal
+    Upload, X, ChevronRight, Layout,
+    Type, AlignLeft
 } from 'lucide-react';
-import { createAiModuleContent } from '../../services/careerService';
-import { StoryCard, PedagogyMode } from '../../types';
+import { createAiModuleContent } from '../../services/careerService'; // Using generic name but mapped to gemini
+import { generateModuleContent } from '../../services/geminiService';
+import { StoryCard, PedagogyMode, LearningModule } from '../../types';
 import { getLocalizedContent } from '../../i18n/config';
-import { updateCourse, getCourse } from '../../services/db';
+import { getModule, updateModuleContent } from '../../services/courseService';
 import { uploadFile } from '../../services/storage';
 
 export const ContentStudio: React.FC = () => {
+  const { moduleId } = useParams<{ moduleId: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
-  const state = location.state as { courseId: string; moduleIndex: number; moduleTitle: string; courseTitle: string; existingCards?: StoryCard[] };
 
   // Data State
-  const [cards, setCards] = useState<StoryCard[]>(state?.existingCards || []);
+  const [moduleData, setModuleData] = useState<LearningModule | null>(null);
+  const [cards, setCards] = useState<StoryCard[]>([]);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   
   // UI State
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [pedagogy, setPedagogy] = useState<PedagogyMode>('STANDARD');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Safety Redirect
   useEffect(() => {
-      if (!state?.courseId) navigate('/admin/courses');
-      if (cards.length > 0 && !activeCardId) setActiveCardId(cards[0].id);
-  }, [state, cards]);
+      if (moduleId) {
+          loadData();
+      }
+  }, [moduleId]);
+
+  const loadData = async () => {
+      if(!moduleId) return;
+      setLoading(true);
+      const m = await getModule(moduleId);
+      if(m) {
+          setModuleData(m);
+          setCards(m.content || []);
+          if(m.content?.length > 0) setActiveCardId(m.content[0].id);
+      }
+      setLoading(false);
+  };
 
   // --- CRUD ACTIONS ---
 
@@ -43,7 +56,7 @@ export const ContentStudio: React.FC = () => {
           type: 'INFO',
           title: { tr: 'Yeni Başlık', en: 'New Title' },
           content: { tr: 'İçerik metnini buraya giriniz...', en: 'Content here...' },
-          mediaUrl: 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&q=80&w=800', // Clean gradient placeholder
+          mediaUrl: 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&q=80&w=800', 
           duration: 10
       };
       setCards([...cards, newCard]);
@@ -52,7 +65,6 @@ export const ContentStudio: React.FC = () => {
 
   const handleDeleteCard = (id: string) => {
       if (!confirm("Bu slaytı silmek istediğinize emin misiniz?")) return;
-      
       const newCards = cards.filter(c => c.id !== id);
       setCards(newCards);
       if (activeCardId === id && newCards.length > 0) {
@@ -69,8 +81,6 @@ export const ContentStudio: React.FC = () => {
   const updateActiveCardText = (field: 'title' | 'content', value: string) => {
       const currentCard = cards.find(c => c.id === activeCardId);
       if (!currentCard) return;
-      
-      // Update Turkish by default for this editor, preserve other langs
       const newLocalized = { ...currentCard[field], tr: value };
       updateActiveCard({ [field]: newLocalized });
   };
@@ -92,14 +102,13 @@ export const ContentStudio: React.FC = () => {
   // --- AI GENERATION ---
 
   const handleGenerate = async () => {
+      if(!moduleData) return;
       setLoading(true);
       try {
-          const generatedCards = await createAiModuleContent(
-              state.courseId,
-              state.moduleIndex,
-              state.moduleTitle,
-              state.courseTitle,
-              "Hotel Career Path", 
+          const generatedCards = await generateModuleContent(
+              getLocalizedContent(moduleData.title),
+              "Hotel Course", // Context could be passed via module data if we fetched course
+              "Hospitality", 
               pedagogy
           );
           setCards(generatedCards);
@@ -112,29 +121,16 @@ export const ContentStudio: React.FC = () => {
   };
 
   const handleSave = async () => {
-      setLoading(true);
-      try {
-          const course = await getCourse(state.courseId);
-          if (course && course.modules) {
-              const updatedModules = [...course.modules];
-              updatedModules[state.moduleIndex] = {
-                  ...updatedModules[state.moduleIndex],
-                  cards: cards,
-                  status: 'PUBLISHED'
-              };
-              await updateCourse(state.courseId, { modules: updatedModules });
-              alert("Modül başarıyla kaydedildi!");
-              navigate('/admin/courses');
-          }
-      } catch (e) {
-          console.error(e);
-          alert("Kaydedilemedi.");
-      } finally {
-          setLoading(false);
-      }
+      if(!moduleId) return;
+      setIsSaving(true);
+      await updateModuleContent(moduleId, cards);
+      setIsSaving(false);
+      alert("Kaydedildi!");
   };
 
   const activeCard = cards.find(c => c.id === activeCardId);
+
+  if(loading && !moduleData) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#3b5998]" /></div>;
 
   return (
     <div className="flex flex-col h-[calc(100vh-60px)] bg-[#eff0f5]">
@@ -142,39 +138,28 @@ export const ContentStudio: React.FC = () => {
         {/* TOP BAR */}
         <div className="bg-white border-b border-[#d8dfea] h-[60px] flex justify-between items-center px-6 shrink-0">
             <div className="flex items-center gap-4">
-                <button onClick={() => navigate('/admin/courses')} className="hover:bg-gray-100 p-2 rounded-full transition-colors text-gray-500">
+                <button onClick={() => navigate(-1)} className="hover:bg-gray-100 p-2 rounded-full transition-colors text-gray-500">
                     <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div>
-                    <h1 className="font-bold text-lg text-[#333]">{state?.moduleTitle}</h1>
-                    <p className="text-xs text-gray-500">{state?.courseTitle} • {cards.length} Slayt</p>
+                    <h1 className="font-bold text-lg text-[#333]">{getLocalizedContent(moduleData?.title)}</h1>
+                    <p className="text-xs text-gray-500">{cards.length} Slayt • {moduleData?.type}</p>
                 </div>
             </div>
-            <div className="flex items-center gap-3">
-                <div className="bg-orange-50 border border-orange-200 text-orange-700 px-3 py-1 rounded text-xs font-bold flex items-center gap-1">
-                    <Save className="w-3 h-3" />
-                    Otomatik Kayıt Yok
-                </div>
-                <button 
-                    onClick={handleSave} 
-                    disabled={cards.length === 0 || loading} 
-                    className="bg-[#3b5998] hover:bg-[#2d4373] text-white px-6 py-2 rounded-lg font-bold text-sm shadow-sm transition-all disabled:opacity-50 flex items-center gap-2"
-                >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Kaydet ve Çık'}
-                </button>
-            </div>
+            <button 
+                onClick={handleSave} 
+                disabled={isSaving} 
+                className="bg-[#3b5998] hover:bg-[#2d4373] text-white px-6 py-2 rounded-lg font-bold text-sm shadow-sm transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Kaydet'}
+            </button>
         </div>
 
-        {/* MAIN WORKSPACE (2 COLUMNS) */}
+        {/* WORKSPACE */}
         <div className="flex flex-1 overflow-hidden">
             
-            {/* 1. LEFT SIDEBAR: SLIDE LIST */}
+            {/* LIST */}
             <div className="w-72 bg-white border-r border-[#d8dfea] flex flex-col z-10">
-                <div className="p-4 border-b border-[#d8dfea] bg-gray-50 flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Slayt Listesi</h3>
-                    <span className="bg-white border border-gray-200 px-2 py-0.5 rounded text-[10px] font-bold text-gray-600">{cards.length}</span>
-                </div>
-                
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                     {cards.map((card, idx) => (
                         <div 
@@ -205,7 +190,7 @@ export const ContentStudio: React.FC = () => {
                     </button>
                 </div>
                 
-                {/* AI Generator Footer */}
+                {/* AI Footer */}
                 <div className="p-4 border-t border-[#d8dfea] bg-gray-50">
                     <div className="flex gap-2 mb-2">
                         <select 
@@ -229,44 +214,31 @@ export const ContentStudio: React.FC = () => {
                 </div>
             </div>
 
-            {/* 2. RIGHT SIDEBAR: EDITOR CANVAS */}
+            {/* EDITOR */}
             <div className="flex-1 bg-[#eff0f5] p-8 overflow-y-auto flex flex-col items-center">
                 {activeCard ? (
                     <div className="w-full max-w-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        
-                        {/* 1. IMAGE SECTION */}
+                        {/* Image */}
                         <div className="bg-white rounded-t-xl border border-[#d8dfea] border-b-0 p-4 relative group">
                             <div className="relative aspect-video w-full bg-gray-100 rounded-lg overflow-hidden border border-gray-200 shadow-inner">
                                 <img src={activeCard.mediaUrl} className="w-full h-full object-cover" />
-                                
-                                {/* Image Overlay Controls */}
                                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button 
                                         onClick={() => fileInputRef.current?.click()}
                                         disabled={isUploading}
-                                        className="bg-white text-gray-900 px-4 py-2 rounded-full font-bold text-sm shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
+                                        className="bg-white text-gray-900 px-4 py-2 rounded-full font-bold text-sm shadow-lg flex items-center gap-2"
                                     >
                                         {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                                         Görseli Değiştir
                                     </button>
-                                    <input 
-                                        type="file" 
-                                        ref={fileInputRef} 
-                                        className="hidden" 
-                                        accept="image/*"
-                                        onChange={handleImageUpload} 
-                                    />
+                                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
                                 </div>
-                            </div>
-                            <div className="absolute top-6 right-6 bg-black/60 text-white text-[10px] px-2 py-1 rounded backdrop-blur-md">
-                                16:9 Önerilir
                             </div>
                         </div>
 
-                        {/* 2. FORM SECTION */}
+                        {/* Text */}
                         <div className="bg-white rounded-b-xl border border-[#d8dfea] p-8 shadow-sm">
                             <div className="space-y-6">
-                                {/* Title Input */}
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Slayt Başlığı</label>
                                     <div className="relative">
@@ -274,13 +246,10 @@ export const ContentStudio: React.FC = () => {
                                         <input 
                                             value={getLocalizedContent(activeCard.title, ['tr'])}
                                             onChange={(e) => updateActiveCardText('title', e.target.value)}
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-12 pr-4 font-bold text-gray-800 focus:bg-white focus:border-[#3b5998] focus:ring-4 focus:ring-blue-50 transition-all outline-none text-lg"
-                                            placeholder="Başlık giriniz..."
+                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-12 pr-4 font-bold text-gray-800 focus:bg-white focus:border-[#3b5998] transition-all outline-none text-lg"
                                         />
                                     </div>
                                 </div>
-
-                                {/* Content Textarea */}
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-2">İçerik Metni</label>
                                     <div className="relative">
@@ -289,17 +258,11 @@ export const ContentStudio: React.FC = () => {
                                             rows={6}
                                             value={getLocalizedContent(activeCard.content, ['tr'])}
                                             onChange={(e) => updateActiveCardText('content', e.target.value)}
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-12 pr-4 text-gray-600 focus:bg-white focus:border-[#3b5998] focus:ring-4 focus:ring-blue-50 transition-all outline-none resize-none leading-relaxed"
-                                            placeholder="İçerik detaylarını buraya yazınız..."
+                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-12 pr-4 text-gray-600 focus:bg-white focus:border-[#3b5998] transition-all outline-none resize-none leading-relaxed"
                                         />
                                     </div>
                                 </div>
-
-                                {/* Actions Footer */}
                                 <div className="pt-6 border-t border-gray-100 flex justify-between items-center">
-                                    <div className="text-xs text-gray-400">
-                                        Tip: <span className="font-bold uppercase text-gray-600">{activeCard.type}</span>
-                                    </div>
                                     <button 
                                         onClick={() => handleDeleteCard(activeCard.id)}
                                         className="text-red-500 hover:bg-red-50 px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2"
@@ -309,17 +272,14 @@ export const ContentStudio: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-
                     </div>
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
                         <Layout className="w-16 h-16 mb-4 opacity-20" />
-                        <p className="text-sm font-medium">Düzenlemek için soldaki listeden bir slayt seçin.</p>
-                        <p className="text-xs opacity-60 mt-1">veya yeni bir tane ekleyin.</p>
+                        <p className="text-sm font-medium">Düzenlemek için slayt seçin.</p>
                     </div>
                 )}
             </div>
-
         </div>
     </div>
   );

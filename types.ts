@@ -34,9 +34,8 @@ export type PedagogyMode = 'STANDARD' | 'ACTIVE_RECALL' | 'SOCRATIC' | 'FEYNMAN'
 
 export type SourceType = 'TEXT' | 'PDF' | 'URL' | 'YOUTUBE' | 'MANUAL';
 
-// NEW: Content Generation Wizard Config
 export interface ContentGenerationConfig {
-  sourceType: 'TEXT_PROMPT' | 'PDF_UPLOAD' | 'WEB_URL' | 'HIERARCHY_CONTEXT'; // Added HIERARCHY_CONTEXT
+  sourceType: 'TEXT_PROMPT' | 'PDF_UPLOAD' | 'WEB_URL' | 'HIERARCHY_CONTEXT'; 
   sourceContent: string; 
   targetAudience: string; 
   language: string; 
@@ -45,7 +44,6 @@ export interface ContentGenerationConfig {
   pedagogy: PedagogyMode;
   tone: CourseTone;
   length: 'SHORT' | 'MEDIUM';
-  // Context for Hierarchical Generation
   hierarchyContext?: {
       careerGoal?: string;
       courseTitle?: string;
@@ -53,7 +51,6 @@ export interface ContentGenerationConfig {
   }
 }
 
-// NEW: AI Generated Curriculum Module
 export interface GeneratedModule {
   id: string;
   title: string;
@@ -155,7 +152,7 @@ export interface UserPreferences {
 
 export interface CourseProgress {
     courseId: string;
-    moduleId?: string; // New: Track progress per module
+    moduleId?: string;
     status: 'IN_PROGRESS' | 'COMPLETED';
     currentCardIndex: number;
     totalCards: number;
@@ -232,20 +229,27 @@ export interface ChannelStoryData {
     progressPercent: number;
 }
 
-// --- CONTENT & COURSE (HIERARCHICAL REFACTOR) ---
+// --- CONTENT & HIERARCHY ---
 export type ContentTier = 'COMMUNITY' | 'PRO' | 'OFFICIAL';
 export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'UNDER_REVIEW';
 export type AuthorType = 'USER' | 'ORGANIZATION';
 
-export interface CourseModule {
+// 1. LAYER: CAREER PATH
+export interface CareerPath {
     id: string;
-    title: LocalizedString; // Syllabus Title
-    description?: LocalizedString;
-    status: 'DRAFT' | 'PUBLISHED';
-    cards?: StoryCard[]; // Content lives here
-    learningMethod?: PedagogyMode;
+    organizationId: string;
+    title: string;
+    description: string;
+    targetRole: string; 
+    department: DepartmentType;
+    targetAudience?: string; 
+    courseIds: string[]; // Ordered list of course IDs
+    aiPrompt?: string; 
+    createdAt?: number;
+    updatedAt?: number;
 }
 
+// 2. LAYER: COURSE
 export interface Course {
   id: string;
   authorType: AuthorType;
@@ -264,14 +268,14 @@ export interface Course {
   coverQuote?: LocalizedString;
   thumbnailUrl: string;
   
-  // Hierarchy
+  // HIERARCHY LINKS
   careerPathIds?: string[]; 
-  modules: CourseModule[]; // New: The Syllabus
+  topicIds: string[]; // NEW: Ordered list of Topic IDs
   
-  // Flattened for compatibility, represents total of all modules
-  steps: StoryCard[]; 
+  // Legacy/Computed fields for Feed Display
   duration: number;
   xpReward: number;
+  steps: StoryCard[]; // Deprecated: Only used for legacy flat courses
   
   tags?: string[]; 
   topics?: string[];
@@ -299,6 +303,42 @@ export interface Course {
   
   config?: any;
   translationStatus?: Record<string, TranslationStatus>;
+  
+  // Deprecated
+  modules?: CourseModule[]; 
+}
+
+// 3. LAYER: TOPIC (NEW) - E.g. "Week 1: Introduction"
+export interface CourseTopic {
+    id: string;
+    courseId: string;
+    title: LocalizedString;
+    summary: LocalizedString;
+    moduleIds: string[]; // Ordered list of Module IDs
+    createdAt: number;
+}
+
+// 4. LAYER: LEARNING MODULE (ATOMIC UNIT) - E.g. "Video Lecture"
+export interface LearningModule {
+    id: string;
+    topicId: string;
+    courseId: string; // Redundant but useful for queries
+    title: LocalizedString;
+    type: 'VIDEO' | 'QUIZ' | 'READING' | 'FLASHCARD' | 'MIXED';
+    content: StoryCard[]; // The actual slides
+    duration: number; // minutes
+    xp: number;
+    createdAt: number;
+}
+
+// Deprecated type, mapped to LearningModule
+export interface CourseModule {
+    id: string;
+    title: LocalizedString;
+    description?: LocalizedString;
+    status: 'DRAFT' | 'PUBLISHED';
+    cards?: StoryCard[]; 
+    learningMethod?: PedagogyMode;
 }
 
 export type TranslationStatus = 'SYNCED' | 'STALE' | 'MISSING';
@@ -360,21 +400,6 @@ export interface Issue {
     photoUrl?: string;
     status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
     createdAt: number;
-}
-
-// UPDATED: Robust CareerPath Model
-export interface CareerPath {
-    id: string;
-    organizationId: string;
-    title: string;
-    description: string;
-    targetRole: string; // The goal e.g. "Front Office Manager"
-    department: DepartmentType;
-    targetAudience?: string; // e.g. "New joiners"
-    courseIds: string[]; // Ordered list of course IDs
-    aiPrompt?: string; 
-    createdAt?: number;
-    updatedAt?: number;
 }
 
 export interface LearningJourney {

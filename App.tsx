@@ -21,6 +21,7 @@ import { CourseIntroPage } from './features/course/CourseIntroPage';
 import { JourneyMap } from './features/career/JourneyMap';
 import { Loader2 } from 'lucide-react';
 import ScrollToTop from './components/utils/ScrollToTop';
+import { AdminBreadcrumbs } from './components/layout/AdminBreadcrumbs';
 
 // Admin Imports
 import { AdminLayout } from './features/admin/AdminLayout';
@@ -28,6 +29,8 @@ import { OrganizationManager } from './features/admin/OrganizationManager';
 import { TeamRequests } from './features/admin/TeamRequests'; 
 import { ContentStudio } from './features/admin/ContentStudio';
 import { CourseManager } from './features/admin/CourseManager';
+import { CourseDetail } from './features/admin/CourseDetail';
+import { TopicManager } from './features/admin/TopicManager';
 import { CareerBuilder } from './features/admin/CareerBuilder';
 import { TalentRadar } from './features/admin/TalentRadar';
 import { SuperAdminDashboard } from './features/superadmin/SuperAdminDashboard';
@@ -80,14 +83,31 @@ const AnimatedRoutes = () => {
                       <Route path="/course/:courseId" element={<CourseIntroPage />} />
                       <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
                       
-                      {/* ADMIN ROUTES */}
+                      {/* ADMIN ROUTES (Updated for Hierarchy) */}
                       <Route path="/admin" element={<AdminLayout />}>
+                          {/* Breadcrumbs are rendered inside AdminLayout or layouts below, simplified here */}
                           <Route index element={<PageTransition><OrganizationManager /></PageTransition>} /> 
                           <Route path="organization" element={<PageTransition><OrganizationManager /></PageTransition>} />
                           <Route path="requests" element={<PageTransition><TeamRequests /></PageTransition>} />
                           <Route path="career" element={<PageTransition><CareerBuilder /></PageTransition>} />
-                          <Route path="content" element={<PageTransition><ContentStudio /></PageTransition>} />
-                          <Route path="courses" element={<PageTransition><CourseManager /></PageTransition>} />
+                          
+                          {/* New Hierarchical Routes */}
+                          <Route path="courses" element={
+                              <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><CourseManager /></PageTransition></div>
+                          } />
+                          <Route path="courses/:courseId" element={
+                              <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><CourseDetail /></PageTransition></div>
+                          } />
+                          <Route path="courses/:courseId/topics/:topicId" element={
+                              <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><TopicManager /></PageTransition></div>
+                          } />
+                          <Route path="modules/:moduleId/edit" element={
+                              <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><ContentStudio /></PageTransition></div>
+                          } />
+                          
+                          {/* Legacy Direct Link fallback if needed */}
+                          <Route path="content" element={<Navigate to="courses" replace />} /> 
+
                           <Route path="reports" element={<PageTransition><TalentRadar /></PageTransition>} />
                           <Route path="settings" element={<PageTransition><OrganizationSettings /></PageTransition>} /> 
                       </Route>
@@ -140,18 +160,15 @@ const App: React.FC = () => {
   const { currentOrganization, switchOrganization } = useOrganizationStore();
   const [isHydrating, setIsHydrating] = useState(true);
 
-  // Initialize Language
   useEffect(() => {
     document.documentElement.dir = currentLanguage === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = currentLanguage;
   }, [currentLanguage]);
 
-  // Fetch System Settings (Global)
   useEffect(() => {
       fetchSystemSettings();
   }, []);
 
-  // Sync Auth State
   useEffect(() => {
       const sync = async () => {
           if (isAuthenticated && currentUser?.currentOrganizationId && !currentOrganization) {

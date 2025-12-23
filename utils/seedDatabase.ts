@@ -226,7 +226,8 @@ const MOCK_COURSES: Course[] = [
       verificationStatus: 'VERIFIED',
       qualityScore: 5,
       priceType: 'FREE',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      topicIds: []
   },
   {
       id: '101',
@@ -254,7 +255,8 @@ const MOCK_COURSES: Course[] = [
       verificationStatus: 'VERIFIED',
       qualityScore: 4.7,
       priceType: 'FREE',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      topicIds: []
   },
   {
     id: '401',
@@ -282,7 +284,8 @@ const MOCK_COURSES: Course[] = [
     verificationStatus: 'VERIFIED',
     qualityScore: 4.5,
     priceType: 'FREE',
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    topicIds: []
   }
 ];
 
