@@ -35,7 +35,7 @@ const sanitizeData = (data: any): any => {
     return JSON.parse(JSON.stringify(data));
 };
 
-// ... [Existing Getters Preserved] ...
+// ... (Existing exports like getAdminCourses, getDashboardFeed etc. preserved) ...
 
 export const getAdminCourses = async (userId: string, orgId?: string | null): Promise<Course[]> => {
     try {
@@ -202,7 +202,7 @@ export const getChannelStories = async (user: User): Promise<ChannelStoryData[]>
     } catch (e) { return []; }
 };
 
-// ... [Rest of standard getters - No logical changes needed for these] ...
+// ... [Standard getters] ...
 export const getCourse = async (courseId: string): Promise<Course | null> => {
     try {
       const snap = await getDoc(doc(db, 'courses', courseId));
@@ -313,6 +313,7 @@ export const switchUserActiveOrganization = async (userId: string, orgId: string
     try { await updateDoc(doc(db, 'users', userId), { currentOrganizationId: orgId }); return true; } catch (e) { return false; }
 };
 
+// ... [Existing Learning Functions (startCourse, saveCourseProgress, completeCourse) Preserved] ...
 export const startCourse = async (userId: string, courseId: string) => {
     try { await updateDoc(doc(db, 'users', userId), { startedCourses: arrayUnion(courseId) }); } catch (e) { }
 };
@@ -401,6 +402,7 @@ export const subscribeToLeaderboard = (dept: string, orgId: string, callback: (u
     });
 };
 
+// ... [Existing Request Logic] ...
 export const sendJoinRequest = async (userId: string, orgId: string): Promise<{ success: boolean; message?: string }> => {
     try {
         const q = query(requestsRef, where('userId', '==', userId), where('organizationId', '==', orgId), where('status', '==', 'PENDING'));
@@ -471,6 +473,7 @@ export const rejectJoinRequest = async (requestId: string) => {
     try { await updateDoc(doc(db, 'requests', requestId), { status: 'REJECTED' }); return true; } catch (e) { return false; }
 };
 
+// ... [Existing Operational Logic] ...
 export const getDailyTasks = async (dept: string, orgId: string): Promise<Task[]> => {
     try {
         const q = query(collection(db, 'tasks'), where('organizationId', '==', orgId));
@@ -547,4 +550,67 @@ export const getAllPublicOrganizations = async (): Promise<Organization[]> => {
 
 export const updateOrganization = async (orgId: string, data: Partial<Organization>): Promise<boolean> => {
     try { await updateDoc(doc(db, 'organizations', orgId), data); return true; } catch (e) { return false; }
+};
+
+// --- NEW: INVITATION SYSTEM ---
+
+export const getPendingInvites = async (userId: string): Promise<any[]> => {
+    try {
+        const q = query(collection(db, `users/${userId}/notifications`), where('type', '==', 'INVITE'));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) { return []; }
+};
+
+export const acceptOrgInvite = async (userId: string, notificationId: string, link: string): Promise<boolean> => {
+    // Extract OrgId from link string "/org/{id}"
+    const orgId = link.split('/org/')[1];
+    if (!orgId) return false;
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const membershipId = `${userId}_${orgId}`;
+            const memRef = doc(db, 'memberships', membershipId);
+            const userRef = doc(db, 'users', userId);
+            const orgRef = doc(db, 'organizations', orgId);
+            const notifRef = doc(db, `users/${userId}/notifications`, notificationId);
+
+            // 1. Create Membership
+            transaction.set(memRef, {
+                id: membershipId,
+                userId: userId,
+                organizationId: orgId,
+                role: 'MEMBER',
+                status: 'ACTIVE',
+                joinedAt: Date.now()
+            });
+
+            // 2. Update User (Auto-switch to new org)
+            transaction.update(userRef, {
+                currentOrganizationId: orgId,
+                [`pageRoles.${orgId}`]: 'MEMBER',
+                joinedPageIds: arrayUnion(orgId)
+            });
+
+            // 3. Update Org
+            transaction.update(orgRef, {
+                memberCount: increment(1),
+                members: arrayUnion(userId)
+            });
+
+            // 4. Delete Notification
+            transaction.delete(notifRef);
+        });
+        return true;
+    } catch (e) {
+        console.error("Accept Invite Error:", e);
+        return false;
+    }
+};
+
+export const declineOrgInvite = async (userId: string, notificationId: string): Promise<boolean> => {
+    try {
+        await deleteDoc(doc(db, `users/${userId}/notifications`, notificationId));
+        return true;
+    } catch (e) { return false; }
 };

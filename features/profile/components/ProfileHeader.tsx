@@ -4,13 +4,15 @@ import { useNavigate } from 'react-router-dom';
 import { 
     ExternalLink, ShieldCheck, Building2, 
     ChevronRight, Crown, Eye, ShieldAlert,
-    Camera, Trash2, Loader2, Upload
+    Camera, Trash2, Loader2, Upload, Mail, Check, X
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { User, Organization } from '../../../types';
-import { getOrganizationDetails } from '../../../services/db';
+import { getOrganizationDetails, getPendingInvites, acceptOrgInvite, declineOrgInvite } from '../../../services/db';
 import { updateProfilePhoto, removeProfilePhoto } from '../../../services/userService';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { Avatar } from '../../../components/ui/Avatar';
+import confetti from 'canvas-confetti';
 
 interface ProfileHeaderProps {
   user: User;
@@ -35,6 +37,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   const [loadingOrg, setLoadingOrg] = useState(false);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
   
+  // Invites State
+  const [invites, setInvites] = useState<any[]>([]);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [isProcessingInvite, setIsProcessingInvite] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -48,6 +55,12 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       };
       fetchOrg();
   }, [user.currentOrganizationId]);
+
+  useEffect(() => {
+      if (isOwnProfile) {
+          getPendingInvites(user.id).then(setInvites);
+      }
+  }, [isOwnProfile, user.id]);
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files && e.target.files[0] && isOwnProfile) {
@@ -85,6 +98,28 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       if (user.currentOrganizationId) {
           navigate(`/org/${user.currentOrganizationId}`);
       }
+  };
+
+  const handleAcceptInvite = async (invite: any) => {
+      setIsProcessingInvite(true);
+      const success = await acceptOrgInvite(user.id, invite.id, invite.link);
+      if (success) {
+          confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+          setInvites(prev => prev.filter(i => i.id !== invite.id));
+          setShowInviteModal(false);
+          await refreshProfile();
+          // Extract ID from link /org/{id} and navigate
+          const orgId = invite.link.split('/org/')[1];
+          if(orgId) window.location.reload(); 
+      } else {
+          alert("Hata oluştu.");
+      }
+      setIsProcessingInvite(false);
+  };
+
+  const handleDeclineInvite = async (inviteId: string) => {
+      await declineOrgInvite(user.id, inviteId);
+      setInvites(prev => prev.filter(i => i.id !== inviteId));
   };
 
   const getRoleLabel = (role: string) => {
@@ -127,20 +162,35 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 
                   {/* Standard Org Access */}
                   {!user.currentOrganizationId ? (
-                      <div 
-                          onClick={handleManagementClick}
-                          className="bg-gray-50 border-2 border-dashed border-gray-300 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all group hover:border-accent"
-                      >
-                          <div className="flex items-center gap-3">
-                              <div className="p-2 bg-gray-200 rounded-full group-hover:bg-accent group-hover:text-primary transition-colors">
-                                  <Building2 className="w-5 h-5 text-gray-500 group-hover:text-primary" />
+                      <div className="flex gap-2">
+                          <div 
+                              onClick={handleManagementClick}
+                              className="flex-1 bg-gray-50 border-2 border-dashed border-gray-300 py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all group hover:border-accent"
+                          >
+                              <div className="flex items-center gap-3">
+                                  <div className="p-2 bg-gray-200 rounded-full group-hover:bg-accent group-hover:text-primary transition-colors">
+                                      <Building2 className="w-5 h-5 text-gray-500 group-hover:text-primary" />
+                                  </div>
+                                  <div className="flex flex-col">
+                                      <span className="text-sm font-bold text-gray-800">Bir İşletme Oluştur / Katıl</span>
+                                      <span className="text-[10px] text-gray-500">Kariyerini bir üst seviyeye taşı</span>
+                                  </div>
                               </div>
-                              <div className="flex flex-col">
-                                  <span className="text-sm font-bold text-gray-800">Bir İşletme Oluştur / Katıl</span>
-                                  <span className="text-[10px] text-gray-500">Kariyerini bir üst seviyeye taşı</span>
-                              </div>
+                              <ChevronRight className="w-5 h-5 text-gray-400" />
                           </div>
-                          <ChevronRight className="w-5 h-5 text-gray-400" />
+
+                          {/* Invite Notification Button */}
+                          {invites.length > 0 && (
+                              <button 
+                                  onClick={() => setShowInviteModal(true)}
+                                  className="w-14 bg-red-500 hover:bg-red-600 rounded-xl flex items-center justify-center relative shadow-lg shadow-red-500/30 transition-colors animate-pulse-slow"
+                              >
+                                  <Mail className="w-6 h-6 text-white" />
+                                  <div className="absolute -top-2 -right-2 bg-white text-red-500 text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
+                                      {invites.length}
+                                  </div>
+                              </button>
+                          )}
                       </div>
                   ) : (
                       <div className="flex gap-2">
@@ -158,6 +208,18 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                                   </div>
                               </div>
                           </div>
+
+                          {invites.length > 0 && (
+                              <button 
+                                  onClick={() => setShowInviteModal(true)}
+                                  className="w-14 bg-red-500 hover:bg-red-600 rounded-xl flex items-center justify-center relative shadow-lg shadow-red-500/30 transition-colors"
+                              >
+                                  <Mail className="w-6 h-6 text-white" />
+                                  <div className="absolute -top-2 -right-2 bg-white text-red-500 text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center shadow-sm">
+                                      {invites.length}
+                                  </div>
+                              </button>
+                          )}
 
                           <div 
                               onClick={handleViewPageClick}
@@ -193,7 +255,51 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   };
 
   return (
-    <div className="px-4 pb-2">
+    <div className="px-4 pb-2 relative">
+        {/* INVITE MODAL */}
+        <AnimatePresence>
+            {showInviteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <motion.div 
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.9, opacity: 0 }}
+                        className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl"
+                    >
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-bold text-gray-900">Gelen Davetler</h3>
+                            <button onClick={() => setShowInviteModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            {invites.map(invite => (
+                                <div key={invite.id} className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                                    <h4 className="font-bold text-blue-900 text-sm mb-1">{invite.title}</h4>
+                                    <p className="text-xs text-blue-700 mb-4">{invite.message}</p>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => handleAcceptInvite(invite)}
+                                            disabled={isProcessingInvite}
+                                            className="flex-1 bg-blue-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-blue-700 flex items-center justify-center gap-1 shadow-md shadow-blue-200"
+                                        >
+                                            {isProcessingInvite ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Check className="w-3 h-3" /> Kabul Et</>}
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDeclineInvite(invite.id)}
+                                            className="flex-1 bg-white border border-blue-200 text-blue-600 py-2 rounded-xl text-xs font-bold hover:bg-blue-50"
+                                        >
+                                            Reddet
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            {invites.length === 0 && <div className="text-center text-gray-400 text-xs py-4">Bekleyen davet yok.</div>}
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
+
         <div className="flex items-center gap-6 mb-4">
             <div className="relative shrink-0 group">
                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-pink-600 shadow-md">
