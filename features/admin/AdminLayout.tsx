@@ -17,6 +17,7 @@ export const AdminLayout: React.FC = () => {
   const { can } = usePermission();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [isLogoLoaded, setIsLogoLoaded] = useState(false); // State for smooth image loading
 
   // Fetch pending requests count for the badge
   useEffect(() => {
@@ -98,15 +99,31 @@ export const AdminLayout: React.FC = () => {
         {/* LEFT SIDEBAR (Profile / Menu) */}
         <aside className={`w-full md:w-[180px] shrink-0 flex-col gap-4 ${isMobileMenuOpen ? 'flex' : 'hidden md:flex'}`}>
             
-            {/* Profile Box */}
+            {/* Profile Box - Fixed Aspect Ratio & Smooth Load */}
             <div className="relative group">
-                <div className="border border-[#d8dfea] bg-white p-1">
-                    {currentOrganization.logoUrl ? (
-                        <img src={currentOrganization.logoUrl} className="w-full h-auto object-cover" />
-                    ) : (
-                        <div className="w-full aspect-square bg-[#f7f7f7] flex items-center justify-center text-[#d8dfea] font-bold text-4xl">
-                            {currentOrganization.name[0]}
-                        </div>
+                <div className="border border-[#d8dfea] bg-white p-1 relative aspect-square overflow-hidden">
+                    
+                    {/* Placeholder / Skeleton Layer */}
+                    <div className={`absolute inset-1 flex items-center justify-center transition-opacity duration-700 bg-[#f7f7f7] ${isLogoLoaded && currentOrganization.logoUrl ? 'opacity-0' : 'opacity-100'}`}>
+                        {currentOrganization.logoUrl ? (
+                            // Show pulsing skeleton if there is a URL but not loaded yet
+                            <div className="w-full h-full bg-[#f0f2f5] animate-pulse" />
+                        ) : (
+                            // Show initial if no URL exists
+                            <span className="text-[#d8dfea] font-bold text-4xl select-none">
+                                {currentOrganization.name[0]}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Image Layer */}
+                    {currentOrganization.logoUrl && (
+                        <img 
+                            src={currentOrganization.logoUrl} 
+                            className={`w-full h-full object-cover transition-opacity duration-700 ease-in-out ${isLogoLoaded ? 'opacity-100' : 'opacity-0'}`}
+                            onLoad={() => setIsLogoLoaded(true)}
+                            alt="Logo"
+                        />
                     )}
                 </div>
                 <div className="mt-2">
