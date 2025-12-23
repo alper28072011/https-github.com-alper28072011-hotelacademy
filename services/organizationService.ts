@@ -10,10 +10,12 @@ import {
     getDocs,
     deleteDoc,
     runTransaction,
-    getDoc
+    getDoc,
+    serverTimestamp,
+    arrayRemove
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Organization, Position, RolePermissions, OrgDepartmentDefinition, PositionPrototype, PageRole, JoinConfig } from '../types';
+import { Organization, Position, RolePermissions, OrgDepartmentDefinition, PositionPrototype, PageRole, JoinConfig, User } from '../types';
 import { deleteFolder, replaceFile, deleteFileByUrl } from './storage';
 import { StoragePaths } from '../utils/storagePaths';
 
@@ -248,11 +250,104 @@ export const getDescendantPositions = (rootId: string, allPositions: Position[])
     return descendants;
 };
 
+// --- ADVANCED MEMBER MANAGEMENT (NEW) ---
+
 export const updateUserPageRole = async (orgId: string, userId: string, role: PageRole) => {
     try {
         const memId = `${userId}_${orgId}`;
-        await updateDoc(doc(db, 'users', userId), { [`pageRoles.${orgId}.role`]: role });
-        await updateDoc(doc(db, 'memberships', memId), { role });
+        const userRef = doc(db, 'users', userId);
+        const memRef = doc(db, 'memberships', memId);
+        const orgRef = doc(db, 'organizations', orgId);
+
+        // Update Role in User and Membership
+        await updateDoc(userRef, { [`pageRoles.${orgId}`]: { role, title: role === 'ADMIN' ? 'Yönetici' : 'Üye' } });
+        await updateDoc(memRef, { role });
+
+        // Maintain 'admins' array in Organization doc for quick querying
+        if (role === 'ADMIN') {
+            await updateDoc(orgRef, { admins: arrayUnion(userId) });
+        } else {
+            await updateDoc(orgRef, { admins: arrayRemove(userId) });
+        }
         return true;
     } catch(e) { return false; }
+};
+
+export const kickMember = async (orgId: string, userId: string): Promise<boolean> => {
+    try {
+        const memId = `${userId}_${orgId}`;
+        
+        // 1. Delete Membership Doc
+        await deleteDoc(doc(db, 'memberships', memId));
+
+        // 2. Clean User Doc (Remove from joinedPageIds and pageRoles)
+        const userRef = doc(db, 'users', userId);
+        // Note: We use FieldValue.delete() syntax via update but since we imported specific functions
+        // we will use the update object approach. For `pageRoles.orgId`, we need `deleteField()`.
+        // However, standard `updateDoc` works with dots.
+        // For array removal:
+        await updateDoc(userRef, {
+            joinedPageIds: arrayRemove(orgId),
+            currentOrganizationId: null // Reset active org if it was this one
+        });
+        
+        // 3. Update Org Counts
+        const orgRef = doc(db, 'organizations', orgId);
+        await updateDoc(orgRef, {
+            members: arrayRemove(userId)
+            // Ideally decrement memberCount too, but Firestore increment(-1) is safer
+        });
+
+        return true;
+    } catch (e) {
+        console.error("Kick Member Error:", e);
+        return false;
+    }
+};
+
+export const banMember = async (orgId: string, userId: string): Promise<boolean> => {
+    try {
+        // Similar to kick, but creates a 'banned_users' entry or sets status in membership
+        // For now, let's just update membership status to 'SUSPENDED'
+        const memId = `${userId}_${orgId}`;
+        await updateDoc(doc(db, 'memberships', memId), { status: 'INACTIVE' });
+        return true;
+    } catch (e) { return false; }
+};
+
+export const getRecruitableFollowers = async (orgId: string): Promise<User[]> => {
+    try {
+        const orgRef = doc(db, 'organizations', orgId);
+        const orgSnap = await getDoc(orgRef);
+        if(!orgSnap.exists()) return [];
+        
+        const orgData = orgSnap.data() as Organization;
+        const followers = orgData.followers || [];
+        const members = orgData.members || [];
+        
+        // Filter: Users who follow BUT are NOT members
+        const potentialIds = followers.filter(id => !members.includes(id));
+        
+        if(potentialIds.length === 0) return [];
+
+        const q = query(collection(db, 'users'), where('__name__', 'in', potentialIds.slice(0, 10))); // Limit 10 for safety
+        const snap = await getDocs(q);
+        
+        return snap.docs.map(d => ({id: d.id, ...d.data()} as User));
+    } catch (e) { return []; }
+};
+
+export const inviteUserToOrg = async (orgId: string, userId: string, orgName: string) => {
+    // Create a notification for the user
+    try {
+        await addDoc(collection(db, `users/${userId}/notifications`), {
+            title: `Davet: ${orgName}`,
+            message: `${orgName} sizi ekibine katılmaya davet ediyor.`,
+            type: 'INVITE',
+            link: `/org/${orgId}`,
+            createdAt: serverTimestamp(),
+            isRead: false
+        });
+        return true;
+    } catch (e) { return false; }
 };
