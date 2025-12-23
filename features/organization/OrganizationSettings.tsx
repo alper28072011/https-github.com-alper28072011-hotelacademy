@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Building2, Save, Upload, Loader2, Palette,
     Trash2, AlertTriangle, ArrowRight, LogOut, Crown,
-    UserPlus, ShieldCheck, Tag, Plus, X, Image as ImageIcon
+    UserPlus, ShieldCheck, Tag, Plus, X, Image as ImageIcon,
+    Info
 } from 'lucide-react';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { updateOrganization } from '../../services/db';
@@ -106,7 +107,7 @@ export const OrganizationSettings: React.FC = () => {
       
       setIsSaving(false);
       if (showWelcome) setShowWelcome(false);
-      alert('Ayarlar başarıyla güncellendi.');
+      alert('Değişiklikler başarıyla kaydedildi.');
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -206,289 +207,290 @@ export const OrganizationSettings: React.FC = () => {
   if (!currentOrganization) return <div>Yükleniyor...</div>;
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 pb-20 relative">
-        {/* ONBOARDING MODAL */}
-        <AnimatePresence>
-            {showWelcome && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm">
-                    <motion.div 
-                        initial={{ scale: 0.9, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.9, opacity: 0 }}
-                        className="bg-white rounded-[2rem] w-full max-w-lg overflow-hidden shadow-2xl"
-                    >
-                        <div className="bg-primary p-8 text-center text-white relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10" />
-                            <div className="relative z-10">
-                                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md">
-                                    <Building2 className="w-8 h-8 text-white" />
+    <div className="bg-[#eff0f5] min-h-[600px] p-4 font-sans text-[#333]">
+        
+        {/* HEADER */}
+        <div className="flex justify-between items-center mb-6 px-2">
+            <h1 className="text-xl font-bold text-[#3b5998]">Kurum Ayarları</h1>
+            <button 
+                onClick={handleSave}
+                disabled={isSaving}
+                className="bg-[#3b5998] border border-[#29447e] text-white px-4 py-1.5 text-[11px] font-bold shadow-sm hover:bg-[#2d4373] disabled:opacity-50 flex items-center gap-2"
+            >
+                {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                Değişiklikleri Kaydet
+            </button>
+        </div>
+
+        {/* TABS CONTAINER */}
+        <div className="flex items-end px-2 h-[31px]">
+            <button 
+                onClick={() => setActiveTab('BRAND')}
+                className={`px-4 py-1.5 text-[11px] font-bold border-t border-l border-r rounded-t-[3px] mr-1 cursor-pointer focus:outline-none ${
+                    activeTab === 'BRAND' 
+                    ? 'bg-white border-[#899bc1] text-[#333] mb-[-1px] z-10 pb-2.5' 
+                    : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'
+                }`}
+            >
+                Marka & Profil
+            </button>
+            <button 
+                onClick={() => setActiveTab('ONBOARDING')}
+                className={`px-4 py-1.5 text-[11px] font-bold border-t border-l border-r rounded-t-[3px] mr-1 cursor-pointer focus:outline-none ${
+                    activeTab === 'ONBOARDING' 
+                    ? 'bg-white border-[#899bc1] text-[#333] mb-[-1px] z-10 pb-2.5' 
+                    : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'
+                }`}
+            >
+                Katılım (Onboarding)
+            </button>
+            {isOwner && (
+                <button 
+                    onClick={() => { setActiveTab('DANGER'); loadSuccessors(); }}
+                    className={`px-4 py-1.5 text-[11px] font-bold border-t border-l border-r rounded-t-[3px] mr-1 cursor-pointer focus:outline-none ${
+                        activeTab === 'DANGER' 
+                        ? 'bg-white border-[#899bc1] text-[#dd3c10] mb-[-1px] z-10 pb-2.5' 
+                        : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'
+                    }`}
+                >
+                    Kritik Bölge
+                </button>
+            )}
+        </div>
+
+        {/* MAIN CONTENT BOX */}
+        <div className="bg-white border border-[#899bc1] min-h-[400px] p-6">
+            
+            {/* 1. BRAND TAB */}
+            {activeTab === 'BRAND' && (
+                <div className="space-y-6 max-w-2xl">
+                    <div className="bg-[#fff9d7] border border-[#e2c822] p-3 text-[11px] text-[#333]">
+                        <span className="font-bold">İpucu:</span> Kurumunuzun logosu ve kapak fotoğrafı, çalışanların sayfayı ilk açtığında göreceği yüzdür. Kaliteli görseller seçmeye özen gösterin.
+                    </div>
+
+                    <div className="flex flex-col gap-6">
+                        {/* COVER PHOTO */}
+                        <div>
+                            <div className="flex justify-between items-center mb-2 pb-1 border-b border-[#eee]">
+                                <h3 className="font-bold text-[#3b5998] text-xs">Kapak Fotoğrafı</h3>
+                                {currentOrganization.coverUrl && (
+                                    <button onClick={handleRemoveCover} disabled={isUploadingCover} className="text-[10px] text-red-600 hover:underline">Kaldır</button>
+                                )}
+                            </div>
+                            <div className="relative w-full aspect-[4/1] bg-[#f7f7f7] border border-[#ccc] overflow-hidden group">
+                                {currentOrganization.coverUrl ? (
+                                    <img src={currentOrganization.coverUrl} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-xs">
+                                        Görsel Yok
+                                    </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <label className="bg-white border border-[#999] px-3 py-1 text-[11px] font-bold cursor-pointer shadow-sm hover:bg-[#f7f7f7]">
+                                        {isUploadingCover ? 'Yükleniyor...' : 'Fotoğrafı Değiştir'}
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleCoverUpload} />
+                                    </label>
                                 </div>
-                                <h2 className="text-2xl font-bold mb-1">Hoş Geldin Patron! 👋</h2>
-                                <p className="text-white/80 text-sm">Kurumun hazır. Şimdi detayları tamamlayalım.</p>
                             </div>
                         </div>
-                        <div className="p-8">
+
+                        {/* BASIC INFO */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {/* LOGO */}
+                            <div className="md:col-span-1">
+                                <h3 className="font-bold text-[#3b5998] text-xs mb-2 pb-1 border-b border-[#eee]">Logo</h3>
+                                <div className="flex gap-4 items-start">
+                                    <div className="w-20 h-20 bg-[#f7f7f7] border border-[#ccc] p-1">
+                                        {currentOrganization.logoUrl ? <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" /> : null}
+                                    </div>
+                                    <label className="text-[11px] text-[#3b5998] hover:underline cursor-pointer font-bold mt-1">
+                                        Değiştir
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* TEXT FIELDS */}
+                            <div className="md:col-span-2 space-y-4">
+                                <div>
+                                    <label className="block text-[11px] font-bold text-gray-500 mb-1">Kurum Adı</label>
+                                    <input 
+                                        value={name} 
+                                        onChange={e => setName(e.target.value)} 
+                                        className="w-full border border-[#bdc7d8] p-1.5 text-sm focus:border-[#3b5998] outline-none font-bold text-[#333]"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-bold text-gray-500 mb-1">Web Sitesi</label>
+                                    <input 
+                                        value={website} 
+                                        onChange={e => setWebsite(e.target.value)} 
+                                        className="w-full border border-[#bdc7d8] p-1.5 text-sm focus:border-[#3b5998] outline-none"
+                                        placeholder="http://www.ornekotel.com"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-bold text-gray-500 mb-1">Hakkında</label>
+                                    <textarea 
+                                        value={description} 
+                                        onChange={e => setDescription(e.target.value)} 
+                                        rows={3}
+                                        className="w-full border border-[#bdc7d8] p-1.5 text-sm focus:border-[#3b5998] outline-none resize-none"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 2. ONBOARDING TAB */}
+            {activeTab === 'ONBOARDING' && (
+                <div className="space-y-6 max-w-2xl">
+                    <div>
+                        <h3 className="font-bold text-[#3b5998] text-xs mb-2 pb-1 border-b border-[#eee]">Katılım Kuralları</h3>
+                        <p className="text-[11px] text-gray-600 mb-2">Yeni üyeler katılmadan önce bu metni onaylamak zorundadır.</p>
+                        <textarea 
+                            value={joinConfig.rules}
+                            onChange={e => setJoinConfig({...joinConfig, rules: e.target.value})}
+                            rows={5}
+                            className="w-full border border-[#bdc7d8] p-2 text-xs bg-[#fff] focus:border-[#3b5998] outline-none resize-none font-mono"
+                        />
+                    </div>
+
+                    <div className="bg-[#f7f7f7] border border-[#ccc] p-3 flex items-center gap-3">
+                        <input 
+                            type="checkbox" 
+                            id="approval"
+                            checked={joinConfig.requireApproval}
+                            onChange={e => setJoinConfig({...joinConfig, requireApproval: e.target.checked})}
+                        />
+                        <label htmlFor="approval" className="text-xs font-bold text-[#333] cursor-pointer">
+                            Yönetici onayı gerektir (Kapalı Devre)
+                        </label>
+                    </div>
+
+                    <div>
+                        <h3 className="font-bold text-[#3b5998] text-xs mb-2 pb-1 border-b border-[#eee]">Rol Etiketleri</h3>
+                        <div className="flex gap-2 mb-2">
+                            <input 
+                                value={newRoleInput}
+                                onChange={e => setNewRoleInput(e.target.value)}
+                                placeholder="Yeni rol ekle..."
+                                className="border border-[#bdc7d8] p-1 text-xs w-48 focus:border-[#3b5998] outline-none"
+                                onKeyDown={e => e.key === 'Enter' && addRole()}
+                            />
+                            <button onClick={addRole} className="bg-[#f7f7f7] border border-[#ccc] px-2 text-[10px] font-bold text-[#333] hover:bg-[#e9e9e9]">Ekle</button>
+                        </div>
+                        <div className="flex flex-wrap gap-2 p-2 border border-[#f0f0f0] bg-[#fcfcfc] min-h-[50px]">
+                            {joinConfig.availableRoles.map(role => (
+                                <div key={role} className="bg-[#eff0f5] border border-[#d8dfea] px-2 py-1 text-[11px] text-[#333] flex items-center gap-1">
+                                    {role}
+                                    <button onClick={() => removeRole(role)} className="text-[#999] hover:text-red-500 font-bold ml-1">x</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 3. DANGER ZONE */}
+            {activeTab === 'DANGER' && isOwner && (
+                <div className="space-y-8 max-w-2xl">
+                    <div className="bg-[#fff0f0] border border-red-200 p-4">
+                        <div className="flex items-center gap-2 mb-3 border-b border-red-100 pb-2">
+                            <Crown className="w-4 h-4 text-[#3b5998]" />
+                            <h3 className="font-bold text-[#3b5998] text-sm">Yönetimi Devret</h3>
+                        </div>
+                        <p className="text-[11px] text-gray-600 mb-3">
+                            İşletme sahipliğini başka bir yöneticiye aktarır. Siz yönetici rolüne geçersiniz.
+                        </p>
+                        <div className="flex gap-2">
+                            <select 
+                                className="border border-[#bdc7d8] p-1 text-xs w-64"
+                                value={selectedSuccessor}
+                                onChange={e => setSelectedSuccessor(e.target.value)}
+                            >
+                                <option value="">Devredilecek Kişiyi Seç...</option>
+                                {potentialSuccessors.map(u => (
+                                    <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                                ))}
+                            </select>
+                            <button 
+                                onClick={handleTransfer}
+                                disabled={!selectedSuccessor || isTransferring}
+                                className="bg-[#f7f7f7] border border-[#ccc] text-[#333] px-3 py-1 text-[10px] font-bold hover:bg-[#e9e9e9]"
+                            >
+                                {isTransferring ? 'Devrediliyor...' : 'Devret'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="bg-[#ffebe8] border border-[#dd3c10] p-4">
+                        <div className="flex items-center gap-2 mb-3 border-b border-[#dd3c10] pb-2">
+                            <AlertTriangle className="w-4 h-4 text-[#dd3c10]" />
+                            <h3 className="font-bold text-[#dd3c10] text-sm">Kurumu Sil</h3>
+                        </div>
+                        <p className="text-[11px] text-gray-600 mb-3">
+                            Bu işlem geri alınamaz. Kurum silindiğinde tüm veriler yok olur. Talep Süper Admin onayına gider.
+                        </p>
+                        
+                        {currentOrganization.status === 'PENDING_DELETION' ? (
+                            <div className="text-[#dd3c10] font-bold text-xs p-2 bg-white border border-[#dd3c10] text-center">
+                                Silme Talebi Gönderildi. Onay Bekleniyor.
+                            </div>
+                        ) : (
+                            <>
+                                <textarea 
+                                    value={deleteReason} 
+                                    onChange={e => setDeleteReason(e.target.value)}
+                                    className="w-full border border-[#dd3c10] p-2 text-xs mb-2 outline-none h-20 resize-none placeholder-red-300 text-red-900"
+                                    placeholder="Silme nedenini belirtin..."
+                                />
+                                <button 
+                                    onClick={handleRequestDelete}
+                                    disabled={!deleteReason || isRequestingDelete}
+                                    className="bg-[#dd3c10] text-white border border-[#b0300d] px-4 py-1.5 text-[11px] font-bold hover:bg-[#b0300d]"
+                                >
+                                    Silme Talebi Oluştur
+                                </button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
+        </div>
+
+        {/* ONBOARDING MODAL (Welcome) */}
+        <AnimatePresence>
+            {showWelcome && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[1px]">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white border-[4px] border-[#555] p-0 w-[400px] shadow-2xl"
+                    >
+                        <div className="bg-[#3b5998] text-white px-3 py-2 text-[13px] font-bold flex justify-between items-center">
+                            <span>Kurulum Sihirbazı</span>
+                            <button onClick={() => setShowWelcome(false)}><X className="w-4 h-4" /></button>
+                        </div>
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-[#eff0f5] rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-[#d8dfea]">
+                                <Building2 className="w-8 h-8 text-[#3b5998]" />
+                            </div>
+                            <h2 className="text-lg font-bold text-[#333] mb-2">Hoş Geldin Patron! 👋</h2>
+                            <p className="text-xs text-gray-600 mb-6">Kurumun hazır. Şimdi detayları tamamlayıp ekibini davet etmeye başlayabilirsin.</p>
                             <button 
                                 onClick={() => setShowWelcome(false)}
-                                className="w-full bg-primary hover:bg-primary-light text-white font-bold py-4 rounded-xl shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-95"
+                                className="w-full bg-[#3b5998] text-white py-2 font-bold text-xs border border-[#29447e]"
                             >
-                                Hadi Başlayalım <ArrowRight className="w-5 h-5" />
+                                Ayarlara Başla
                             </button>
                         </div>
                     </motion.div>
                 </div>
             )}
         </AnimatePresence>
-
-        {/* Header */}
-        <div className="bg-white p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 z-20">
-            <h1 className="text-2xl font-bold text-gray-800">Kurum Ayarları</h1>
-            <button 
-                onClick={handleSave}
-                disabled={isSaving}
-                className="bg-primary text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary-light transition-all active:scale-95"
-            >
-                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                Kaydet
-            </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex px-6 pt-6 gap-2 overflow-x-auto">
-            <button onClick={() => setActiveTab('BRAND')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'BRAND' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
-                <Palette className="w-4 h-4" /> Marka & Profil
-            </button>
-            <button onClick={() => setActiveTab('ONBOARDING')} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'ONBOARDING' ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}>
-                <UserPlus className="w-4 h-4" /> Katılım (Onboarding)
-            </button>
-            {isOwner && (
-                <button onClick={() => { setActiveTab('DANGER'); loadSuccessors(); }} className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === 'DANGER' ? 'bg-red-50 text-red-600 border border-red-100' : 'text-gray-500 hover:bg-gray-200'}`}>
-                    <AlertTriangle className="w-4 h-4" /> Kritik Bölge
-                </button>
-            )}
-        </div>
-
-        <div className="p-6">
-            <motion.div 
-                key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100"
-            >
-                {/* BRAND SETTINGS */}
-                {activeTab === 'BRAND' && (
-                    <div className="space-y-8">
-                        {/* Cover Photo Editor */}
-                        <div>
-                            <div className="flex justify-between items-center mb-2">
-                                <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                    <ImageIcon className="w-4 h-4 text-primary" /> Kapak Fotoğrafı
-                                </h3>
-                                {currentOrganization.coverUrl && (
-                                    <button 
-                                        onClick={handleRemoveCover}
-                                        disabled={isUploadingCover}
-                                        className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1"
-                                    >
-                                        <Trash2 className="w-3 h-3" /> Kaldır
-                                    </button>
-                                )}
-                            </div>
-                            
-                            <div className="relative w-full aspect-[3/1] md:aspect-[4/1] rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 overflow-hidden group hover:border-primary transition-colors">
-                                {currentOrganization.coverUrl ? (
-                                    <>
-                                        <img src={currentOrganization.coverUrl} className="w-full h-full object-cover" alt="Cover" />
-                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <div className="bg-white text-gray-800 px-4 py-2 rounded-lg font-bold text-sm shadow-lg flex items-center gap-2 cursor-pointer">
-                                                <Upload className="w-4 h-4" />
-                                                Değiştir
-                                                <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleCoverUpload} />
-                                            </div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
-                                        <ImageIcon className="w-10 h-10 mb-2 opacity-30" />
-                                        <span className="text-sm font-bold">Kapak Fotoğrafı Ekle</span>
-                                        <span className="text-xs mt-1 opacity-70">En iyi sonuç için geniş görsel kullanın (1200x300)</span>
-                                        <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleCoverUpload} />
-                                    </div>
-                                )}
-                                {isUploadingCover && (
-                                    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10">
-                                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="h-px bg-gray-100" />
-
-                        <div className="flex items-center gap-6">
-                            <div className="relative group cursor-pointer w-24 h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden hover:border-primary">
-                                {currentOrganization.logoUrl ? <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" /> : <Upload className="w-8 h-8 text-gray-400" />}
-                                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleLogoUpload} />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-gray-800">Kurum Logosu</h3>
-                                <p className="text-xs text-gray-500">Markanızın yüzü.</p>
-                            </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Kurum Adı</label>
-                                <input value={name} onChange={e => setName(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Konum</label>
-                                <input value={locationStr} onChange={e => setLocationStr(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Hakkında</label>
-                            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-primary" />
-                        </div>
-                    </div>
-                )}
-
-                {/* ONBOARDING SETTINGS */}
-                {activeTab === 'ONBOARDING' && (
-                    <div className="space-y-8">
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-800 mb-1">Katılım Kuralları & Şartları</h3>
-                            <p className="text-sm text-gray-500 mb-4">Yeni üyelerin "Katıl" butonuna bastığında göreceği metin.</p>
-                            <textarea 
-                                value={joinConfig.rules}
-                                onChange={e => setJoinConfig({...joinConfig, rules: e.target.value})}
-                                rows={4}
-                                placeholder="Örn: 1. Saygılı olun. 2. Gizliliğe önem verin..."
-                                className="w-full p-4 bg-gray-50 rounded-2xl border border-gray-200 outline-none focus:border-primary resize-none"
-                            />
-                        </div>
-
-                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                            <div>
-                                <h4 className="font-bold text-gray-800 text-sm">Yönetici Onayı Gerekli</h4>
-                                <p className="text-xs text-gray-500">Kapalı devre kalmak için açık tutun.</p>
-                            </div>
-                            <button 
-                                onClick={() => setJoinConfig({...joinConfig, requireApproval: !joinConfig.requireApproval})}
-                                className={`w-12 h-6 rounded-full p-1 transition-colors ${joinConfig.requireApproval ? 'bg-green-500' : 'bg-gray-300'}`}
-                            >
-                                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transform transition-transform ${joinConfig.requireApproval ? 'translate-x-6' : 'translate-x-0'}`} />
-                            </button>
-                        </div>
-
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-800 mb-1">Rol Seçenekleri</h3>
-                            <p className="text-sm text-gray-500 mb-4">Üyelerin kendileri için seçebileceği veya sizin atayabileceğiniz etiketler.</p>
-                            
-                            <div className="flex gap-2 mb-3">
-                                <input 
-                                    value={newRoleInput}
-                                    onChange={e => setNewRoleInput(e.target.value)}
-                                    placeholder="Rol ekle (Örn: Barmen)"
-                                    className="flex-1 p-3 bg-white border border-gray-200 rounded-xl outline-none focus:border-primary"
-                                    onKeyDown={e => e.key === 'Enter' && addRole()}
-                                />
-                                <button onClick={addRole} className="bg-gray-100 hover:bg-gray-200 p-3 rounded-xl"><Plus className="w-5 h-5 text-gray-600" /></button>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2">
-                                {joinConfig.availableRoles.map(role => (
-                                    <div key={role} className="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-100 text-sm font-bold">
-                                        <Tag className="w-3 h-3" />
-                                        {role}
-                                        <button onClick={() => removeRole(role)} className="hover:text-red-500"><X className="w-3 h-3" /></button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* DANGER ZONE (OWNER ONLY) */}
-                {activeTab === 'DANGER' && isOwner && (
-                    <div className="space-y-8">
-                        
-                        {/* 1. Transfer Ownership */}
-                        <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-                            <div className="flex items-start gap-4 mb-4">
-                                <div className="p-3 bg-white rounded-full text-blue-500 shadow-sm"><Crown className="w-6 h-6" /></div>
-                                <div>
-                                    <h3 className="font-bold text-blue-900 text-lg">Yönetimi Devret</h3>
-                                    <p className="text-blue-800/70 text-sm mt-1">İşletme sahipliğini başka bir yöneticiye aktarır. Siz yönetici rolüne geçersiniz.</p>
-                                </div>
-                            </div>
-                            
-                            <div className="flex gap-2">
-                                <select 
-                                    className="flex-1 p-3 bg-white border border-blue-200 rounded-xl outline-none text-sm font-bold text-gray-700"
-                                    value={selectedSuccessor}
-                                    onChange={e => setSelectedSuccessor(e.target.value)}
-                                >
-                                    <option value="">Devredilecek Kişiyi Seç...</option>
-                                    {potentialSuccessors.map(u => (
-                                        <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                                    ))}
-                                </select>
-                                <button 
-                                    onClick={handleTransfer}
-                                    disabled={!selectedSuccessor || isTransferring}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-xl font-bold flex items-center gap-2 disabled:opacity-50 transition-colors"
-                                >
-                                    {isTransferring ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
-                                    Devret
-                                </button>
-                            </div>
-                            {potentialSuccessors.length === 0 && <p className="text-xs text-red-500 mt-2">Devredecek uygun yönetici bulunamadı. Önce birini yönetici yapmalısınız.</p>}
-                        </div>
-
-                        {/* 2. Delete Request */}
-                        <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
-                            <div className="flex items-start gap-4 mb-4">
-                                <div className="p-3 bg-white rounded-full text-red-500 shadow-sm"><Trash2 className="w-6 h-6" /></div>
-                                <div>
-                                    <h3 className="font-bold text-red-900 text-lg">Kurumu Silmeyi Talep Et</h3>
-                                    <p className="text-red-800/70 text-sm mt-1">
-                                        Bu işlem geri alınamaz. Kurum silindiğinde tüm veriler yok olur ve personel serbest kalır. 
-                                        Bu talep <b>Süper Admin</b> onayına gider.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {currentOrganization.status === 'PENDING_DELETION' ? (
-                                <div className="bg-white p-4 rounded-xl border border-red-200 text-red-600 font-bold text-center flex items-center justify-center gap-2">
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Silme Talebi İnceleniyor...
-                                </div>
-                            ) : (
-                                <>
-                                    <textarea 
-                                        value={deleteReason}
-                                        onChange={e => setDeleteReason(e.target.value)}
-                                        placeholder="Silme nedeninizi kısaca belirtin..."
-                                        className="w-full p-3 bg-white border border-red-200 rounded-xl outline-none text-red-900 placeholder-red-200 focus:ring-2 focus:ring-red-500 mb-4 h-24 resize-none"
-                                    />
-                                    <button 
-                                        onClick={handleRequestDelete}
-                                        disabled={!deleteReason || isRequestingDelete}
-                                        className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 transition-colors"
-                                    >
-                                        {isRequestingDelete ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
-                                        Silme Talebi Gönder
-                                    </button>
-                                </>
-                            )}
-                        </div>
-
-                    </div>
-                )}
-            </motion.div>
-        </div>
     </div>
   );
 };
