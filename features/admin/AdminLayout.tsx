@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { 
     Users, ArrowLeft, Map, BarChart2, Inbox, 
@@ -8,6 +8,7 @@ import {
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { usePermission } from '../../hooks/usePermission';
+import { getJoinRequests } from '../../services/db';
 
 export const AdminLayout: React.FC = () => {
   const { logout, currentUser } = useAuthStore();
@@ -15,6 +16,26 @@ export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
   const { can } = usePermission();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // Fetch pending requests count for the badge
+  useEffect(() => {
+      const fetchCount = async () => {
+          if (currentOrganization && can('canApproveRequests')) {
+              // We fetch requests without department filter to show total relevant to admin view
+              // If user is department-limited, getJoinRequests handles logic if extended, 
+              // but here we grab raw pending for the org to show scope.
+              const reqs = await getJoinRequests(currentOrganization.id);
+              setPendingCount(reqs.length);
+          }
+      };
+      
+      fetchCount();
+      
+      // Optional: Set up a polling interval to keep it "live" without websockets for now
+      const interval = setInterval(fetchCount, 30000);
+      return () => clearInterval(interval);
+  }, [currentOrganization, currentUser]);
 
   if (isLoading) return <div className="h-screen flex items-center justify-center bg-[#eff0f5]"><Loader2 className="w-6 h-6 animate-spin text-[#3b5998]" /></div>;
   if (!currentOrganization) return <div className="h-screen flex items-center justify-center bg-[#eff0f5]">Veri yok.</div>;
@@ -30,7 +51,13 @@ export const AdminLayout: React.FC = () => {
   }
 
   const navItems = [
-    { path: '/admin/requests', icon: Inbox, label: 'İstekler', show: can('canApproveRequests') }, 
+    { 
+        path: '/admin/requests', 
+        icon: Inbox, 
+        label: 'İstekler', 
+        show: can('canApproveRequests'),
+        badge: pendingCount // Inject the dynamic count
+    }, 
     { path: '/admin/organization', icon: Network, label: 'Organizasyon', show: can('manageStructure') || can('manageStaff') }, 
     { path: '/admin/career', icon: Map, label: 'Kariyer Yolu', show: can('manageStructure') },
     { path: '/admin/courses', icon: BookOpen, label: 'Kurslar', show: can('canCreateContent') },
@@ -96,7 +123,7 @@ export const AdminLayout: React.FC = () => {
                         to={item.path}
                         onClick={() => setIsMobileMenuOpen(false)}
                         className={({ isActive }) => 
-                            `flex items-center gap-2 px-2 py-1.5 text-[11px] font-bold transition-colors border ${
+                            `flex items-center gap-2 px-2 py-1.5 text-[11px] font-bold transition-colors border group ${
                                 isActive 
                                 ? 'bg-[#d8dfea] text-[#333] border-[#d8dfea]' 
                                 : 'text-[#3b5998] border-transparent hover:bg-[#eff0f5]'
@@ -105,6 +132,13 @@ export const AdminLayout: React.FC = () => {
                     >
                         <item.icon className="w-3.5 h-3.5" />
                         <span>{item.label}</span>
+                        
+                        {/* THE CLASSIC NOTIFICATION BADGE */}
+                        {item.badge && item.badge > 0 ? (
+                            <span className="ml-auto bg-[#dd3c10] text-white text-[9px] font-bold px-1.5 py-0.5 rounded-[2px] shadow-sm leading-none border border-[#b0300d]">
+                                {item.badge}
+                            </span>
+                        ) : null}
                     </NavLink>
                 ))}
             </nav>
