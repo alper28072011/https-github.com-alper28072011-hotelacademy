@@ -8,8 +8,8 @@ import { getCourse, completeCourse, saveCourseProgress } from '../../services/db
 import { getTopicsByCourse, getModulesByTopic } from '../../services/courseService';
 import { Course, StoryCard } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { logEvent, createEventPayload } from '../../services/analyticsService';
 import { getLocalizedContent } from '../../i18n/config';
+import { useTelemetry } from '../../hooks/useTelemetry'; // NEW
 
 // Animation Variants for Vertical Scroll
 const slideVariants = {
@@ -42,12 +42,13 @@ export const CoursePlayerPage: React.FC = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   const { currentUser, refreshProfile } = useAuthStore();
+  const { logEvent } = useTelemetry(); // New Hook
   
   const [course, setCourse] = useState<Course | null>(null);
   const [playlist, setPlaylist] = useState<StoryCard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [direction, setDirection] = useState(0); // 1 = Down (Next), -1 = Up (Prev)
+  const [direction, setDirection] = useState(0); 
   
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
@@ -55,8 +56,10 @@ export const CoursePlayerPage: React.FC = () => {
   const [isDeepDiveOpen, setIsDeepDiveOpen] = useState(false);
   const [showSwipeHint, setShowSwipeHint] = useState(true);
 
-  // Time Tracking
-  const startTimeRef = useRef(Date.now());
+  // Time Tracking Refs
+  const slideStartTimeRef = useRef(Date.now());
+  const courseStartTimeRef = useRef(Date.now());
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const fetchContent = async () => {
@@ -96,12 +99,8 @@ export const CoursePlayerPage: React.FC = () => {
                 }
             }
 
-            logEvent(createEventPayload(currentUser, {
-                pageId: c.organizationId || 'unknown',
-                channelId: c.channelId,
-                contentId: c.id
-            }, 'VIEW'));
-            startTimeRef.current = Date.now();
+            courseStartTimeRef.current = Date.now();
+            slideStartTimeRef.current = Date.now(); // Reset slide timer
 
         } catch (e) {
             console.error("Player Load Error:", e);
@@ -112,17 +111,44 @@ export const CoursePlayerPage: React.FC = () => {
     fetchContent();
   }, [courseId, currentUser]);
 
+  // --- ANALYTICS: Track Slide Duration & Transition ---
   useEffect(() => {
-      if (course && currentUser && courseId && playlist.length > 0) {
+      const currentCard = playlist[currentIndex];
+      if (!currentCard || !course) return;
+
+      // 1. Log previous slide end (if any) -> Effectively done by start of next, but for cleaner data we track "View" here
+      
+      // Reset Timer
+      slideStartTimeRef.current = Date.now();
+
+      // Log Slide Entry
+      logEvent('SLIDE_VIEW', 
+        { courseId: course.id, targetId: currentCard.id, component: 'CoursePlayer' }, 
+        { meta: { slideType: currentCard.type, slideIndex: currentIndex } }
+      );
+
+      // Save progress
+      if (currentUser && courseId) {
           const save = async () => {
               if (currentIndex < playlist.length - 1) {
                   await saveCourseProgress(currentUser.id, courseId, currentIndex, playlist.length);
               }
           };
           const timeout = setTimeout(save, 500);
-          return () => clearTimeout(timeout);
+          return () => {
+              clearTimeout(timeout);
+              // Log Duration on exit (cleanup)
+              const duration = Date.now() - slideStartTimeRef.current;
+              // We only log if meaningful duration (>500ms)
+              if (duration > 500) {
+                  logEvent('SLIDE_VIEW', 
+                    { courseId: course?.id, targetId: currentCard.id, component: 'CoursePlayer' },
+                    { duration }
+                  );
+              }
+          };
       }
-  }, [currentIndex, course, currentUser, playlist.length]);
+  }, [currentIndex, course?.id, playlist.length]);
 
   // Hide hint after 3 seconds
   useEffect(() => {
@@ -153,7 +179,6 @@ export const CoursePlayerPage: React.FC = () => {
   const handleNext = () => {
       // Block if Quiz not answered
       if (currentCard.type === 'QUIZ' && !isAnswered && !isQuizBroken) {
-          // Shake effect could go here
           alert("Lütfen devam etmeden önce soruyu yanıtlayın.");
           return;
       }
@@ -184,12 +209,9 @@ export const CoursePlayerPage: React.FC = () => {
   // --- GESTURE HANDLER ---
   const onDragEnd = (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
       const threshold = 50;
-      // Drag Up (Negative Y) -> Next Slide
       if (info.offset.y < -threshold) {
           handleNext();
-      } 
-      // Drag Down (Positive Y) -> Prev Slide
-      else if (info.offset.y > threshold) {
+      } else if (info.offset.y > threshold) {
           handlePrev();
       }
   };
@@ -199,22 +221,22 @@ export const CoursePlayerPage: React.FC = () => {
       
       const correctIndex = currentCard.interaction.correctOptionIndex;
       const isRight = optionIndex === correctIndex;
+      const timeToAnswer = Date.now() - slideStartTimeRef.current; // Thinking time
       
       setSelectedOption(optionIndex);
       setIsAnswered(true);
       setIsCorrect(isRight);
 
-      if (currentUser && course) {
-          logEvent(createEventPayload(currentUser, {
-              pageId: course.organizationId || 'unknown',
-              channelId: course.channelId,
-              contentId: course.id
-          }, 'QUIZ_ANSWER', {
-              question: getLocalizedContent(currentCard.interaction.question),
-              selectedOptionIndex: optionIndex,
-              isCorrect: isRight
-          }));
-      }
+      // Deep Analytics for Quiz
+      logEvent('QUIZ_ATTEMPT', {
+          courseId: course.id,
+          targetId: currentCard.id,
+      }, {
+          duration: timeToAnswer, // How long they thought
+          isSuccess: isRight,
+          quizAnswer: optionIndex,
+          meta: { question: getLocalizedContent(currentCard.interaction.question) }
+      });
 
       if (isRight) {
           confetti({
@@ -229,16 +251,27 @@ export const CoursePlayerPage: React.FC = () => {
   const finishCourse = async () => {
       if (currentUser && courseId && course) {
           await completeCourse(currentUser.id, courseId, course.xpReward, playlist.length);
-          const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
-          logEvent(createEventPayload(currentUser, {
-              pageId: course.organizationId || 'unknown',
-              channelId: course.channelId,
-              contentId: course.id
-          }, 'COMPLETE', { timeSpentSeconds: timeSpent }));
+          
+          const timeSpentSeconds = Math.floor((Date.now() - courseStartTimeRef.current) / 1000);
+          
+          // Enhanced Completion Log
+          logEvent('VIDEO_COMPLETE', { // Or COURSE_COMPLETE if we add that type
+              courseId: course.id,
+              organizationId: course.organizationId
+          }, { 
+              duration: timeSpentSeconds * 1000,
+              percentage: 100 
+          });
+          
           await refreshProfile();
       }
       navigate('/');
   };
+
+  // Video Event Handlers
+  const onVideoPlay = () => logEvent('VIDEO_PLAY', { courseId: course.id, targetId: currentCard.id });
+  const onVideoPause = () => logEvent('VIDEO_PAUSE', { courseId: course.id, targetId: currentCard.id }, { videoTime: videoRef.current?.currentTime });
+  const onVideoSeeked = () => logEvent('VIDEO_SEEK', { courseId: course.id, targetId: currentCard.id }, { videoTime: videoRef.current?.currentTime });
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden">
@@ -246,7 +279,7 @@ export const CoursePlayerPage: React.FC = () => {
         {/* DESKTOP CONTAINER WRAPPER */}
         <div className="relative w-full h-full md:max-w-md md:h-[90vh] md:rounded-3xl overflow-hidden bg-gray-900 shadow-2xl">
             
-            {/* STATIC PROGRESS BARS (No Animation, just state) */}
+            {/* STATIC PROGRESS BARS */}
             <div className="absolute top-0 left-0 right-0 z-30 flex gap-1 p-2">
                 {playlist.map((step, idx) => (
                     <div key={idx} className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden">
@@ -285,12 +318,16 @@ export const CoursePlayerPage: React.FC = () => {
                         <div className="absolute inset-0">
                             {currentCard.mediaUrl?.endsWith('.mp4') ? (
                                 <video 
+                                    ref={videoRef}
                                     src={currentCard.mediaUrl} 
                                     className="w-full h-full object-cover" 
                                     autoPlay 
-                                    muted 
+                                    muted={false} // Allow sound if user wants, usually better UX to start muted or allow unmute
                                     loop 
-                                    playsInline 
+                                    playsInline
+                                    onPlay={onVideoPlay}
+                                    onPause={onVideoPause}
+                                    onSeeked={onVideoSeeked}
                                 />
                             ) : (
                                 <img src={currentCard.mediaUrl} className="w-full h-full object-cover" alt="Slide" />
@@ -298,7 +335,7 @@ export const CoursePlayerPage: React.FC = () => {
                             <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/90 pointer-events-none" />
                         </div>
 
-                        {/* CONTENT OVERLAY (Pointer events passed through to buttons) */}
+                        {/* CONTENT OVERLAY */}
                         <div className="absolute bottom-0 left-0 right-0 p-8 pb-24 z-20 pointer-events-none">
                             <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>
                                 <div className="inline-block px-2 py-0.5 rounded bg-accent text-primary text-[10px] font-black mb-3 uppercase tracking-widest">
@@ -312,7 +349,7 @@ export const CoursePlayerPage: React.FC = () => {
                                     {getLocalizedContent(currentCard.content)}
                                 </p>
 
-                                {/* QUIZ INTERACTION - Pointer events enabled */}
+                                {/* QUIZ INTERACTION */}
                                 {currentCard.type === 'QUIZ' && (
                                     <div className="flex flex-col gap-3 pointer-events-auto">
                                         <p className="text-white font-bold mb-2 text-sm uppercase opacity-60 tracking-wider">
@@ -328,7 +365,6 @@ export const CoursePlayerPage: React.FC = () => {
                                             return (
                                                 <button 
                                                     key={idx} 
-                                                    // Stop propagation so tap doesn't trigger drag logic inadvertently
                                                     onPointerDown={(e) => e.stopPropagation()}
                                                     onClick={() => handleQuizAnswer(idx)} 
                                                     disabled={isAnswered} 

@@ -5,6 +5,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from './stores/useAppStore';
 import { useAuthStore } from './stores/useAuthStore';
 import { useOrganizationStore } from './stores/useOrganizationStore';
+import { useTelemetry } from './hooks/useTelemetry'; // Telemetry Import
+
 import { LoginPage } from './features/auth/LoginPage';
 import { OrganizationLobby } from './features/organization/OrganizationLobby';
 import { OrganizationProfile } from './features/organization/OrganizationProfile';
@@ -68,89 +70,96 @@ const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return <>{children}</>;
 };
 
+// --- TELEMETRY WRAPPER ---
+// Separate component to use hooks inside Router context
+const TelemetryProvider = () => {
+    useTelemetry(); // Initializes page view tracking
+    return null;
+};
+
 const AnimatedRoutes = () => {
     const location = useLocation();
     const { isAuthenticated } = useAuthStore();
 
     return (
-        <AnimatePresence mode="wait">
-            <Routes location={location} key={location.pathname}>
-                {isAuthenticated ? (
-                   <>
-                      <Route path="/org/:orgId" element={<PageTransition><OrganizationProfile /></PageTransition>} />
-                      <Route path="/hotel/:orgId" element={<Navigate to={`/org/${window.location.hash.split('/').pop()}`} replace />} />
+        <>
+            <TelemetryProvider />
+            <AnimatePresence mode="wait">
+                <Routes location={location} key={location.pathname}>
+                    {isAuthenticated ? (
+                       <>
+                          <Route path="/org/:orgId" element={<PageTransition><OrganizationProfile /></PageTransition>} />
+                          <Route path="/hotel/:orgId" element={<Navigate to={`/org/${window.location.hash.split('/').pop()}`} replace />} />
 
-                      <Route path="/course/:courseId" element={<CourseIntroPage />} />
-                      <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
-                      
-                      {/* ADMIN ROUTES (Updated for Hierarchy) */}
-                      <Route path="/admin" element={<AdminLayout />}>
-                          {/* Breadcrumbs are rendered inside AdminLayout or layouts below, simplified here */}
-                          <Route index element={<PageTransition><OrganizationManager /></PageTransition>} /> 
-                          <Route path="organization" element={<PageTransition><OrganizationManager /></PageTransition>} />
-                          <Route path="requests" element={<PageTransition><TeamRequests /></PageTransition>} />
-                          <Route path="career" element={<PageTransition><CareerBuilder /></PageTransition>} />
+                          <Route path="/course/:courseId" element={<CourseIntroPage />} />
+                          <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
                           
-                          {/* New Hierarchical Routes */}
-                          <Route path="courses" element={
-                              <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><CourseManager /></PageTransition></div>
-                          } />
-                          <Route path="courses/:courseId" element={
-                              <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><CourseDetail /></PageTransition></div>
-                          } />
-                          <Route path="courses/:courseId/topics/:topicId" element={
-                              <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><TopicManager /></PageTransition></div>
-                          } />
-                          <Route path="modules/:moduleId/edit" element={
-                              <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><ContentStudio /></PageTransition></div>
-                          } />
-                          
-                          {/* Legacy Direct Link fallback if needed */}
-                          <Route path="content" element={<Navigate to="courses" replace />} /> 
+                          {/* ADMIN ROUTES */}
+                          <Route path="/admin" element={<AdminLayout />}>
+                              <Route index element={<PageTransition><OrganizationManager /></PageTransition>} /> 
+                              <Route path="organization" element={<PageTransition><OrganizationManager /></PageTransition>} />
+                              <Route path="requests" element={<PageTransition><TeamRequests /></PageTransition>} />
+                              <Route path="career" element={<PageTransition><CareerBuilder /></PageTransition>} />
+                              
+                              <Route path="courses" element={
+                                  <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><CourseManager /></PageTransition></div>
+                              } />
+                              <Route path="courses/:courseId" element={
+                                  <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><CourseDetail /></PageTransition></div>
+                              } />
+                              <Route path="courses/:courseId/topics/:topicId" element={
+                                  <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><TopicManager /></PageTransition></div>
+                              } />
+                              <Route path="modules/:moduleId/edit" element={
+                                  <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><ContentStudio /></PageTransition></div>
+                              } />
+                              
+                              <Route path="content" element={<Navigate to="courses" replace />} /> 
 
-                          <Route path="reports" element={<PageTransition><TalentRadar /></PageTransition>} />
-                          <Route path="settings" element={<PageTransition><OrganizationSettings /></PageTransition>} /> 
-                      </Route>
+                              <Route path="reports" element={<PageTransition><TalentRadar /></PageTransition>} />
+                              <Route path="settings" element={<PageTransition><OrganizationSettings /></PageTransition>} /> 
+                          </Route>
 
-                      {/* SUPER ADMIN ROUTES */}
-                      <Route path="/super-admin" element={
-                          <SuperAdminGuard>
-                              <PageTransition><SuperAdminDashboard /></PageTransition>
-                          </SuperAdminGuard>
-                      } />
+                          {/* SUPER ADMIN ROUTES */}
+                          <Route path="/super-admin" element={
+                              <SuperAdminGuard>
+                                  <PageTransition><SuperAdminDashboard /></PageTransition>
+                              </SuperAdminGuard>
+                          } />
 
-                      {/* USER APP ROUTES */}
-                      <Route 
-                        path="/*" 
-                        element={
-                        <DashboardLayout>
-                            <Routes>
-                                <Route path="/" element={<PageTransition><DashboardPage /></PageTransition>} />
-                                <Route path="/journey" element={<PageTransition><JourneyMap /></PageTransition>} />
-                                <Route path="/profile" element={<PageTransition><ProfilePage /></PageTransition>} />
-                                <Route path="/user/:userId" element={<PageTransition><PublicProfilePage /></PageTransition>} />
-                                <Route path="/operations" element={<PageTransition><OperationsPage /></PageTransition>} />
-                                <Route path="/report" element={<PageTransition><ReportPage /></PageTransition>} />
-                                <Route path="/explore" element={<PageTransition><ExplorePage /></PageTransition>} />
-                                <Route path="/lobby" element={<PageTransition><OrganizationLobby /></PageTransition>} /> 
-                                <Route path="*" element={<Navigate to="/" replace />} />
-                            </Routes>
-                        </DashboardLayout>
-                        } 
-                    />
-                   </>
-                ) : (
-                   <Route 
-                     path="/*" 
-                     element={
-                       <LoginLayout>
-                         <PageTransition className="w-full"><LoginPage /></PageTransition>
-                       </LoginLayout>
-                     } 
-                   />
-                )}
-            </Routes>
-        </AnimatePresence>
+                          {/* USER APP ROUTES */}
+                          <Route 
+                            path="/*" 
+                            element={
+                            <DashboardLayout>
+                                <Routes>
+                                    <Route path="/" element={<PageTransition><DashboardPage /></PageTransition>} />
+                                    <Route path="/journey" element={<PageTransition><JourneyMap /></PageTransition>} />
+                                    <Route path="/profile" element={<PageTransition><ProfilePage /></PageTransition>} />
+                                    <Route path="/user/:userId" element={<PageTransition><PublicProfilePage /></PageTransition>} />
+                                    <Route path="/operations" element={<PageTransition><OperationsPage /></PageTransition>} />
+                                    <Route path="/report" element={<PageTransition><ReportPage /></PageTransition>} />
+                                    <Route path="/explore" element={<PageTransition><ExplorePage /></PageTransition>} />
+                                    <Route path="/lobby" element={<PageTransition><OrganizationLobby /></PageTransition>} /> 
+                                    <Route path="*" element={<Navigate to="/" replace />} />
+                                </Routes>
+                            </DashboardLayout>
+                            } 
+                        />
+                       </>
+                    ) : (
+                       <Route 
+                         path="/*" 
+                         element={
+                           <LoginLayout>
+                             <PageTransition className="w-full"><LoginPage /></PageTransition>
+                           </LoginLayout>
+                         } 
+                       />
+                    )}
+                </Routes>
+            </AnimatePresence>
+        </>
     );
 };
 

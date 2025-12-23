@@ -15,12 +15,14 @@ import { checkFollowStatus, followOrganizationSmart, unfollowUserSmart } from '.
 import { addDoc, collection } from 'firebase/firestore'; 
 import { db } from '../../services/firebase';
 import confetti from 'canvas-confetti';
+import { useTelemetry } from '../../hooks/useTelemetry';
 
 export const OrganizationProfile: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
   const { currentUser, updateCurrentUser } = useAuthStore();
   const { switchOrganization } = useOrganizationStore(); 
+  const { logEvent } = useTelemetry();
   
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,12 +82,15 @@ export const OrganizationProfile: React.FC = () => {
 
   const handleJoinClick = () => {
       if (!currentUser || !org) return;
+      logEvent('MODAL_OPEN', { organizationId: org.id, component: 'JoinModal' });
       setShowJoinModal(true);
   };
 
   const submitJoinRequest = async () => {
       if (!currentUser || !org || !selectedRole || !agreedToRules) return;
       setIsJoinSubmitting(true);
+
+      logEvent('CLICK', { organizationId: org.id, targetId: 'submit_join' }, { meta: { role: selectedRole } });
 
       try {
           // Custom Implementation of sendJoinRequest to support extended payload
@@ -119,12 +124,14 @@ export const OrganizationProfile: React.FC = () => {
           await unfollowUserSmart(currentUser.id, org.id);
           setFollowStatus('NONE');
           setOrg(prev => prev ? ({...prev, followersCount: Math.max(0, (prev.followersCount || 0) - 1)}) : null);
+          logEvent('CLICK', { organizationId: org.id, targetId: 'unfollow' });
       } else {
           const res = await followOrganizationSmart(currentUser.id, org.id);
           if (res.success) {
               setFollowStatus('FOLLOWING');
               setOrg(prev => prev ? ({...prev, followersCount: (prev.followersCount || 0) + 1}) : null);
               confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
+              logEvent('CLICK', { organizationId: org.id, targetId: 'follow' });
           }
       }
       setIsFollowLoading(false);
@@ -132,6 +139,7 @@ export const OrganizationProfile: React.FC = () => {
 
   const handleEnterWorkspace = async () => {
       if (!currentUser || !org) return;
+      logEvent('CLICK', { organizationId: org.id, targetId: 'enter_workspace' });
       if (currentUser.currentOrganizationId === org.id) {
           navigate('/');
           return;
