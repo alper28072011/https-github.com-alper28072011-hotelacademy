@@ -2,8 +2,8 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { 
-    Users, Film, LogOut, ArrowLeft, Map, BarChart2, Inbox, 
-    Settings, Loader2, Network, Lock, Menu, Search
+    Users, ArrowLeft, Map, BarChart2, Inbox, 
+    Settings, Loader2, Network, Lock, Menu, BookOpen
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
@@ -33,8 +33,7 @@ export const AdminLayout: React.FC = () => {
     { path: '/admin/requests', icon: Inbox, label: 'İstekler', show: can('canApproveRequests') }, 
     { path: '/admin/organization', icon: Network, label: 'Organizasyon', show: can('manageStructure') || can('manageStaff') }, 
     { path: '/admin/career', icon: Map, label: 'Kariyer Yolu', show: can('manageStructure') },
-    { path: '/admin/content', icon: Film, label: 'İçerik Stüdyosu', show: can('canCreateContent') },
-    { path: '/admin/courses', icon: Menu, label: 'Eğitimler', show: can('canCreateContent') },
+    { path: '/admin/courses', icon: BookOpen, label: 'Kurslar', show: can('canCreateContent') },
     { path: '/admin/reports', icon: BarChart2, label: 'İstatistikler', show: can('viewAnalytics') },
     { path: '/admin/settings', icon: Settings, label: 'Ayarlar', show: can('adminAccess') },
   ];

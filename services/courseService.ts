@@ -58,6 +58,20 @@ export const createCourse = async (courseData: Partial<Course>, user: User): Pro
     }
 };
 
+export const updateCourse = async (courseId: string, data: Partial<Course>): Promise<boolean> => {
+    try { 
+        await updateDoc(doc(db, 'courses', courseId), sanitizeData(data)); 
+        return true; 
+    } catch (e) { 
+        console.error("Update Course Error:", e);
+        return false; 
+    }
+};
+
+export const deleteCourse = async (courseId: string): Promise<boolean> => {
+    return deleteCourseFully(courseId);
+};
+
 export const createTopic = async (courseId: string, title: string, summary: string): Promise<CourseTopic | null> => {
     try {
         const newTopic: any = {
