@@ -1,13 +1,14 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, GripVertical, ChevronRight, Wand2, Trash2, Plus } from 'lucide-react';
+import { Loader2, GripVertical, ChevronRight, Wand2, Trash2, Plus, Image as ImageIcon, Upload } from 'lucide-react';
 import { Course, CourseTopic } from '../../types';
 import { getCourse } from '../../services/db';
-import { getTopicsByCourse, createTopic, reorderTopics, deleteTopic } from '../../services/courseService';
+import { getTopicsByCourse, createTopic, reorderTopics, deleteTopic, updateCourse } from '../../services/courseService';
 import { generateCourseTopics } from '../../services/geminiService';
 import { getLocalizedContent } from '../../i18n/config';
 import { SortableList } from '../../components/ui/SortableList';
+import { uploadFile } from '../../services/storage';
 
 export const CourseDetail: React.FC = () => {
     const { courseId } = useParams<{ courseId: string }>();
@@ -19,6 +20,9 @@ export const CourseDetail: React.FC = () => {
     // AI & Actions
     const [isGenerating, setIsGenerating] = useState(false);
     const [newTopicTitle, setNewTopicTitle] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
+    
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if(courseId) loadData();
@@ -67,18 +71,77 @@ export const CourseDetail: React.FC = () => {
         await deleteTopic(courseId, topicId);
     };
 
+    const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0] && courseId && course) {
+            setIsUploading(true);
+            try {
+                // Upload
+                const url = await uploadFile(e.target.files[0], 'course_thumbnails', undefined, 'BANNER');
+                
+                // Update DB
+                await updateCourse(courseId, { thumbnailUrl: url });
+                
+                // Update Local State
+                setCourse({ ...course, thumbnailUrl: url });
+            } catch (error) {
+                alert("Görsel yüklenemedi.");
+            } finally {
+                setIsUploading(false);
+            }
+        }
+    };
+
     if(loading) return <div className="p-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#3b5998]" /></div>;
     if(!course) return <div>Bulunamadı.</div>;
 
     return (
         <div className="bg-white border border-[#d8dfea] min-h-[600px]">
-            {/* Header */}
-            <div className="bg-[#f7f7f7] border-b border-[#d8dfea] p-4">
-                <div className="flex justify-between items-start mb-2">
-                    <h1 className="text-lg font-bold text-[#3b5998]">{getLocalizedContent(course.title)}</h1>
-                    <span className="text-[10px] bg-gray-200 text-gray-600 px-2 py-1 rounded font-bold uppercase">{course.visibility}</span>
+            {/* Header / Cover Image Area */}
+            <div className="relative h-64 bg-gray-200 border-b border-[#d8dfea] group overflow-hidden">
+                <img 
+                    src={course.thumbnailUrl} 
+                    alt="Course Cover" 
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                />
+                
+                {/* Dark Gradient for Text Visibility */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
+
+                {/* Content */}
+                <div className="absolute bottom-0 left-0 right-0 p-6 text-white z-10">
+                    <div className="flex justify-between items-end">
+                        <div className="flex-1 mr-4">
+                            <span className="inline-block px-2 py-0.5 rounded bg-white/20 backdrop-blur-md text-[10px] font-bold uppercase tracking-wider mb-2 border border-white/20">
+                                {course.visibility === 'PUBLIC' ? 'Herkese Açık' : 'Gizli / Kurumsal'}
+                            </span>
+                            <h1 className="text-3xl font-bold leading-tight mb-1 shadow-black drop-shadow-md">
+                                {getLocalizedContent(course.title)}
+                            </h1>
+                            <p className="text-sm text-gray-200 line-clamp-1 opacity-90">
+                                {getLocalizedContent(course.description)}
+                            </p>
+                        </div>
+                        
+                        {/* Change Cover Button */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isUploading}
+                                className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/30 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-lg"
+                            >
+                                {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImageIcon className="w-3 h-3" />}
+                                Kapak Değiştir
+                            </button>
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                className="hidden" 
+                                accept="image/*" 
+                                onChange={handleCoverUpload} 
+                            />
+                        </div>
+                    </div>
                 </div>
-                <p className="text-xs text-gray-500">{getLocalizedContent(course.description)}</p>
             </div>
 
             {/* Topics List */}

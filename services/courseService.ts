@@ -37,12 +37,15 @@ const sanitizeData = (data: any): any => {
     return JSON.parse(JSON.stringify(data));
 };
 
+const DEFAULT_THUMBNAIL = 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&q=80&w=1200';
+
 // --- HIERARCHY MANAGEMENT (NEW) ---
 
 export const createCourse = async (courseData: Partial<Course>, user: User): Promise<Course | null> => {
     try {
         const newCourse: any = {
             ...courseData,
+            thumbnailUrl: courseData.thumbnailUrl || DEFAULT_THUMBNAIL,
             createdAt: Date.now(),
             authorId: user.id,
             authorName: user.name,
@@ -299,7 +302,8 @@ export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'v
             authorType,
             authorId: finalAuthorId,
             authorName,
-            authorAvatarUrl
+            authorAvatarUrl,
+            thumbnailUrl: dataToSave.thumbnailUrl || DEFAULT_THUMBNAIL
         };
 
         await addDoc(collection(db, 'courses'), sanitizeData(finalData));
