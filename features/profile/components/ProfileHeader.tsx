@@ -4,10 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { 
     ExternalLink, ShieldCheck, Building2, 
     ChevronRight, Crown, Eye, ShieldAlert,
-    Camera, Trash2, Loader2, Upload, Mail, Check, X
+    Camera, Trash2, Loader2, Upload, Mail, Check, X,
+    UserCheck, Settings2, Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Organization } from '../../../types';
+import { User, Organization, PageRole } from '../../../types';
 import { getOrganizationDetails, getPendingInvites, acceptOrgInvite, declineOrgInvite } from '../../../services/db';
 import { updateProfilePhoto, removeProfilePhoto } from '../../../services/userService';
 import { useAuthStore } from '../../../stores/useAuthStore';
@@ -125,17 +126,32 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   const getRoleLabel = (role: string) => {
       switch(role) {
           case 'super_admin': return "Platform Sahibi";
-          case 'admin': return "Kurucu / İşletme Sahibi";
-          case 'manager': return "Yönetici";
-          case 'staff': return "Ekip Üyesi";
+          case 'ADMIN': return "Yönetici";
+          case 'MODERATOR': return "Moderatör";
+          case 'EDITOR': return "Editör";
+          case 'MEMBER': return "Ekip Üyesi";
           default: return "Kullanıcı";
       }
   };
 
   const renderActionSection = () => {
-      const roleLabel = getRoleLabel(user.role);
       const orgName = loadingOrg ? "Yükleniyor..." : (org?.name || "Bilinmeyen Kurum");
       const isSuper = user.role === 'super_admin';
+
+      // Determine Page Role for Current Org
+      let currentOrgRole: PageRole = 'MEMBER';
+      const roleData = user.pageRoles?.[user.currentOrganizationId || ''];
+      if (typeof roleData === 'string') {
+          currentOrgRole = roleData as PageRole;
+      } else if (roleData?.role) {
+          currentOrgRole = roleData.role;
+      } else if (user.role === 'manager' || user.role === 'admin') {
+          currentOrgRole = 'ADMIN'; // Fallback for legacy
+      }
+
+      // Permissions Logic
+      const canManage = ['ADMIN', 'MODERATOR', 'EDITOR'].includes(currentOrgRole);
+      const roleLabel = getRoleLabel(currentOrgRole);
 
       // --- SCENARIO 1: OWN PROFILE ---
       if (isOwnProfile) {
@@ -194,19 +210,33 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                       </div>
                   ) : (
                       <div className="flex gap-2">
+                          {/* Role-Based Management Button */}
                           <div 
-                              onClick={handleManagementClick}
-                              className="flex-1 bg-primary text-white py-3 px-4 rounded-xl flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-primary/30 relative overflow-hidden group"
+                              onClick={canManage ? handleManagementClick : undefined}
+                              className={`flex-1 py-3 px-4 rounded-xl flex items-center justify-between transition-all relative overflow-hidden group border
+                                ${canManage 
+                                    ? 'bg-gradient-to-r from-blue-400 via-blue-500 to-indigo-500 text-white border-transparent shadow-lg shadow-blue-500/20 cursor-pointer active:scale-[0.98]' 
+                                    : 'bg-gradient-to-r from-gray-50 to-gray-100 border-gray-200 text-gray-600 cursor-default'
+                                }
+                              `}
                           >
                               <div className="flex items-center gap-3 relative z-10">
-                                  <div className="p-1.5 bg-white/10 rounded-lg backdrop-blur-sm">
-                                      <Crown className="w-5 h-5 text-accent" />
+                                  <div className={`p-1.5 rounded-lg backdrop-blur-sm ${canManage ? 'bg-white/20 text-white' : 'bg-white text-gray-400 border border-gray-100'}`}>
+                                      {canManage ? <Settings2 className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
                                   </div>
                                   <div className="flex flex-col min-w-0 text-left">
-                                      <span className="text-xs font-bold opacity-80">Yönetim Paneli</span>
+                                      <span className={`text-[10px] font-bold uppercase tracking-wider ${canManage ? 'opacity-80' : 'text-gray-400'}`}>
+                                          {canManage ? 'Yönetim Paneli' : roleLabel}
+                                      </span>
                                       <span className="text-sm font-bold truncate">{orgName}</span>
                                   </div>
                               </div>
+                              {/* Visual Indicator */}
+                              {canManage ? (
+                                  <ChevronRight className="w-5 h-5 opacity-60" />
+                              ) : (
+                                  <div className="bg-gray-200/50 p-1 rounded-full"><Lock className="w-3 h-3 text-gray-400" /></div>
+                              )}
                           </div>
 
                           {invites.length > 0 && (
@@ -223,7 +253,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 
                           <div 
                               onClick={handleViewPageClick}
-                              className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 px-4 rounded-xl flex items-center justify-center cursor-pointer active:scale-[0.98] transition-all"
+                              className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 py-3 px-4 rounded-xl flex items-center justify-center cursor-pointer active:scale-[0.98] transition-all"
                               title="Sayfayı Görüntüle"
                           >
                               <Eye className="w-6 h-6" />
