@@ -182,10 +182,13 @@ export const generateModuleContent = async (
 
         if (response.text) {
             const cards = JSON.parse(cleanJsonResponse(response.text));
+            // Use the same gradient placeholder as manual creation
+            const DEFAULT_PLACEHOLDER = 'https://images.unsplash.com/photo-1557683316-973673baf926?auto=format&fit=crop&q=80&w=800';
+            
             return cards.map((c: any, i: number) => ({
                 ...c,
                 id: `card_${Date.now()}_${i}`,
-                mediaUrl: `https://images.unsplash.com/photo-1556742049-0cfed4f7a07d?auto=format&fit=crop&q=80` 
+                mediaUrl: DEFAULT_PLACEHOLDER 
             }));
         }
         return [];
