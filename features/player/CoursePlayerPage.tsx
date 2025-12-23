@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronDown, BookOpen, AlertTriangle, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getCourse, completeCourse, saveCourseProgress } from '../../services/db';
+import { getTopicsByCourse, getModulesByTopic } from '../../services/courseService';
 import { Course, StoryCard } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { logEvent, createEventPayload } from '../../services/analyticsService';
@@ -16,6 +17,7 @@ export const CoursePlayerPage: React.FC = () => {
   const { currentUser, refreshProfile } = useAuthStore();
   
   const [course, setCourse] = useState<Course | null>(null);
+  const [playlist, setPlaylist] = useState<StoryCard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   
@@ -28,60 +30,105 @@ export const CoursePlayerPage: React.FC = () => {
   const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
-    const fetch = async () => {
-        if(courseId && currentUser) {
+    const fetchContent = async () => {
+        if(!courseId || !currentUser) return;
+        setLoading(true);
+
+        try {
+            // 1. Fetch Course Meta
             const c = await getCourse(courseId);
+            if (!c) {
+                setLoading(false);
+                return;
+            }
             setCourse(c);
-            setLoading(false);
-            
-            // --- RESUME LOGIC ---
+
+            // 2. Build Playlist (Flatten Hierarchy)
+            let finalPlaylist: StoryCard[] = [];
+
+            if (c.topicIds && c.topicIds.length > 0) {
+                // NEW STRUCTURE: Fetch Topics -> Modules -> Content
+                const topics = await getTopicsByCourse(c.id);
+                
+                for (const topic of topics) {
+                    const modules = await getModulesByTopic(topic.id);
+                    for (const mod of modules) {
+                        if (mod.content && mod.content.length > 0) {
+                            // Inject context if needed, or just push cards
+                            finalPlaylist = [...finalPlaylist, ...mod.content];
+                        }
+                    }
+                }
+            } else {
+                // LEGACY STRUCTURE
+                finalPlaylist = c.steps || [];
+            }
+
+            setPlaylist(finalPlaylist);
+
+            // 3. Resume Progress
             if (currentUser.progressMap && currentUser.progressMap[courseId]) {
                 const progress = currentUser.progressMap[courseId];
-                if (progress.status === 'IN_PROGRESS' && progress.currentCardIndex > 0) {
+                if (progress.status === 'IN_PROGRESS' && progress.currentCardIndex > 0 && progress.currentCardIndex < finalPlaylist.length) {
                     setCurrentIndex(progress.currentCardIndex);
                 }
             }
-            
-            // ANALYTICS: Log View Start
-            if (c) {
-                logEvent(createEventPayload(currentUser, {
-                    pageId: c.organizationId || 'unknown',
-                    channelId: c.channelId,
-                    contentId: c.id
-                }, 'VIEW'));
-                startTimeRef.current = Date.now();
-            }
+
+            // 4. Analytics
+            logEvent(createEventPayload(currentUser, {
+                pageId: c.organizationId || 'unknown',
+                channelId: c.channelId,
+                contentId: c.id
+            }, 'VIEW'));
+            startTimeRef.current = Date.now();
+
+        } catch (e) {
+            console.error("Player Load Error:", e);
+        } finally {
+            setLoading(false);
         }
     };
-    fetch();
+    fetchContent();
   }, [courseId, currentUser]);
 
-  // SAVE PROGRESS ON INDEX CHANGE
+  // SAVE PROGRESS
   useEffect(() => {
-      if (course && currentUser && courseId) {
+      if (course && currentUser && courseId && playlist.length > 0) {
           const save = async () => {
-              // Don't save on the very last card immediately, wait for 'finish' action
-              if (currentIndex < course.steps.length - 1) {
-                  await saveCourseProgress(currentUser.id, courseId, currentIndex, course.steps.length);
+              if (currentIndex < playlist.length - 1) {
+                  await saveCourseProgress(currentUser.id, courseId, currentIndex, playlist.length);
               }
           };
-          const timeout = setTimeout(save, 500); // Debounce
+          const timeout = setTimeout(save, 500);
           return () => clearTimeout(timeout);
       }
-  }, [currentIndex, course, currentUser]);
+  }, [currentIndex, course, currentUser, playlist.length]);
 
-  if (loading || !course) return <div className="bg-black h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
+  if (loading) return <div className="bg-black h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
+  
+  if (!course || playlist.length === 0) {
+      return (
+          <div className="bg-black h-screen flex flex-col items-center justify-center text-white px-6 text-center">
+              <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+              <h2 className="text-xl font-bold mb-2">İçerik Bulunamadı</h2>
+              <p className="text-gray-400 text-sm mb-6">Bu kursun içeriği henüz hazırlanmamış veya yüklenirken bir hata oluştu.</p>
+              <button onClick={() => navigate('/')} className="bg-white text-black px-6 py-3 rounded-full font-bold text-sm">Geri Dön</button>
+          </div>
+      );
+  }
 
-  const currentCard = course.steps[currentIndex] as StoryCard;
+  const currentCard = playlist[currentIndex];
 
-  // VERİ DOĞRULAMA (QUIZ): Interaction datası eksikse veya bozuksa pass edilmesine izin ver
+  // Defensive check for card data integrity
+  if (!currentCard) return null;
+
   const isQuizBroken = currentCard.type === 'QUIZ' && 
     (!currentCard.interaction || !Array.isArray(currentCard.interaction.options) || currentCard.interaction.options.length === 0);
 
   const handleNext = () => {
       if (currentCard.type === 'QUIZ' && !isAnswered && !isQuizBroken) return; 
       
-      if (currentIndex < course.steps.length - 1) {
+      if (currentIndex < playlist.length - 1) {
           setCurrentIndex(prev => prev + 1);
           setSelectedOption(null);
           setIsAnswered(false);
@@ -109,15 +156,13 @@ export const CoursePlayerPage: React.FC = () => {
       setIsAnswered(true);
       setIsCorrect(isRight);
 
-      // ANALYTICS: Log Quiz Answer
       if (currentUser && course) {
-          const questionText = getLocalizedContent(currentCard.interaction.question);
           logEvent(createEventPayload(currentUser, {
               pageId: course.organizationId || 'unknown',
               channelId: course.channelId,
               contentId: course.id
           }, 'QUIZ_ANSWER', {
-              question: questionText,
+              question: getLocalizedContent(currentCard.interaction.question),
               selectedOptionIndex: optionIndex,
               isCorrect: isRight
           }));
@@ -135,10 +180,8 @@ export const CoursePlayerPage: React.FC = () => {
 
   const finishCourse = async () => {
       if (currentUser && courseId && course) {
-          // 1. Update Progress & Mark Complete
-          await completeCourse(currentUser.id, courseId, course.xpReward, course.steps.length);
+          await completeCourse(currentUser.id, courseId, course.xpReward, playlist.length);
           
-          // 2. Analytics: Complete
           const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
           logEvent(createEventPayload(currentUser, {
               pageId: course.organizationId || 'unknown',
@@ -146,7 +189,6 @@ export const CoursePlayerPage: React.FC = () => {
               contentId: course.id
           }, 'COMPLETE', { timeSpentSeconds: timeSpent }));
 
-          // 3. Refresh Profile (Critical for StoryRail to update)
           await refreshProfile();
       }
       navigate('/');
@@ -157,7 +199,7 @@ export const CoursePlayerPage: React.FC = () => {
         <div className="relative w-full h-full md:max-w-md md:h-[90vh] md:rounded-3xl overflow-hidden bg-gray-900 shadow-2xl">
             {/* PROGRESS BARS */}
             <div className="absolute top-0 left-0 right-0 z-30 flex gap-1 p-2">
-                {course.steps.map((step, idx) => (
+                {playlist.map((step, idx) => (
                     <div key={idx} className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden">
                         <motion.div 
                             initial={{ width: 0 }}
