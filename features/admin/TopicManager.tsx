@@ -1,13 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Video, BookOpen, BrainCircuit, Wand2, Edit3, Plus } from 'lucide-react';
+import { Loader2, Video, BookOpen, BrainCircuit, Wand2, Edit3, GripVertical, Trash2 } from 'lucide-react';
 import { CourseTopic, LearningModule } from '../../types';
 import { getDoc, doc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { getModulesByTopic, createModule } from '../../services/courseService';
+import { getModulesByTopic, createModule, reorderModules, deleteModule } from '../../services/courseService';
 import { generateTopicModules } from '../../services/geminiService';
 import { getLocalizedContent } from '../../i18n/config';
+import { SortableList } from '../../components/ui/SortableList';
 
 export const TopicManager: React.FC = () => {
     const { courseId, topicId } = useParams<{ courseId: string; topicId: string }>();
@@ -38,7 +39,6 @@ export const TopicManager: React.FC = () => {
     const handleGenerateModules = async () => {
         if(!topic || !courseId) return;
         setIsGenerating(true);
-        // Assuming we fetched course title in parent or stored it, here simplified to generic
         const result = await generateTopicModules(getLocalizedContent(topic.title), "Hotel Training");
         for (const m of result.modules) {
             await createModule(topic.id, courseId, m.title, m.type as any);
@@ -55,8 +55,37 @@ export const TopicManager: React.FC = () => {
         await loadData();
     };
 
+    const handleSort = (newItems: LearningModule[]) => {
+        setModules(newItems);
+        if (topicId) {
+            reorderModules(topicId, newItems.map(m => m.id));
+        }
+    };
+
+    const handleDeleteModule = async (moduleId: string) => {
+        if (!topicId || !confirm("Bu modülü silmek istediğinize emin misiniz?")) return;
+        setModules(prev => prev.filter(m => m.id !== moduleId));
+        await deleteModule(topicId, moduleId);
+    };
+
     if(loading) return <div className="p-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#3b5998]" /></div>;
     if(!topic) return <div>Konu bulunamadı.</div>;
+
+    const getTypeIcon = (type: string) => {
+        switch(type) {
+            case 'VIDEO': return <Video className="w-4 h-4 text-blue-600" />;
+            case 'QUIZ': return <BrainCircuit className="w-4 h-4 text-orange-600" />;
+            default: return <BookOpen className="w-4 h-4 text-green-600" />;
+        }
+    };
+
+    const getTypeColor = (type: string) => {
+        switch(type) {
+            case 'VIDEO': return 'bg-blue-100';
+            case 'QUIZ': return 'bg-orange-100';
+            default: return 'bg-green-100';
+        }
+    };
 
     return (
         <div className="bg-white border border-[#d8dfea] min-h-[600px]">
@@ -77,30 +106,41 @@ export const TopicManager: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                    {modules.map((mod, idx) => (
-                        <div key={mod.id} className="border border-[#d8dfea] rounded bg-white p-3 flex gap-3 hover:shadow-md transition-shadow">
-                            <div className={`w-10 h-10 rounded flex items-center justify-center shrink-0 ${
-                                mod.type === 'VIDEO' ? 'bg-blue-100 text-blue-600' : 
-                                mod.type === 'QUIZ' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'
-                            }`}>
-                                {mod.type === 'VIDEO' && <Video className="w-5 h-5" />}
-                                {mod.type === 'QUIZ' && <BrainCircuit className="w-5 h-5" />}
-                                {mod.type === 'READING' && <BookOpen className="w-5 h-5" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="text-xs font-bold text-gray-800 truncate mb-1">{getLocalizedContent(mod.title)}</div>
-                                <div className="flex gap-2">
+                <div className="mb-6">
+                    <SortableList 
+                        items={modules}
+                        onOrderChange={handleSort}
+                        renderItem={({ item, dragListeners }) => (
+                            <div className="flex items-center gap-3 p-3 bg-white border-b border-[#e9e9e9] hover:bg-[#f0f2f5] group transition-all">
+                                <div {...dragListeners} className="text-gray-400 cursor-move p-1 hover:text-[#3b5998]">
+                                    <GripVertical className="w-4 h-4" />
+                                </div>
+                                
+                                <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${getTypeColor(item.type)}`}>
+                                    {getTypeIcon(item.type)}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-bold text-gray-800">{getLocalizedContent(item.title)}</div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
                                     <button 
-                                        onClick={() => navigate(`/admin/modules/${mod.id}/edit`)}
-                                        className="text-[10px] bg-[#3b5998] text-white px-2 py-0.5 rounded font-bold hover:bg-[#2d4373]"
+                                        onClick={() => navigate(`/admin/modules/${item.id}/edit`)}
+                                        className="text-[10px] bg-[#3b5998] text-white px-2 py-1 rounded font-bold hover:bg-[#2d4373] border border-[#29447e]"
                                     >
-                                        İçerik Stüdyosu
+                                        Stüdyo
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDeleteModule(item.id)}
+                                        className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        )}
+                    />
                 </div>
 
                 {isGenerating && <div className="p-4 text-center text-xs text-[#3b5998] font-bold animate-pulse">Modüller Oluşturuluyor...</div>}

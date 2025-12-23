@@ -13,7 +13,8 @@ import {
     getDocs,
     limit,
     writeBatch,
-    arrayUnion
+    arrayUnion,
+    arrayRemove
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { 
@@ -72,6 +73,8 @@ export const deleteCourse = async (courseId: string): Promise<boolean> => {
     return deleteCourseFully(courseId);
 };
 
+// --- TOPIC MANAGEMENT ---
+
 export const createTopic = async (courseId: string, title: string, summary: string): Promise<CourseTopic | null> => {
     try {
         const newTopic: any = {
@@ -82,10 +85,8 @@ export const createTopic = async (courseId: string, title: string, summary: stri
             createdAt: Date.now()
         };
         
-        // 1. Create Topic Doc
         const docRef = await addDoc(collection(db, 'topics'), newTopic);
         
-        // 2. Link to Course (Order matters)
         await updateDoc(doc(db, 'courses', courseId), {
             topicIds: arrayUnion(docRef.id)
         }); 
@@ -97,24 +98,62 @@ export const createTopic = async (courseId: string, title: string, summary: stri
     }
 };
 
+export const reorderTopics = async (courseId: string, newTopicIds: string[]) => {
+    try {
+        await updateDoc(doc(db, 'courses', courseId), { topicIds: newTopicIds });
+        return true;
+    } catch (e) {
+        console.error("Reorder Topics Error:", e);
+        return false;
+    }
+};
+
+export const deleteTopic = async (courseId: string, topicId: string): Promise<boolean> => {
+    try {
+        // 1. Delete Topic Doc
+        await deleteDoc(doc(db, 'topics', topicId));
+        
+        // 2. Remove ID from Parent Course
+        await updateDoc(doc(db, 'courses', courseId), {
+            topicIds: arrayRemove(topicId)
+        });
+        
+        // Note: Ideally we should also delete all modules inside this topic (Cascading delete)
+        // For simplicity in this iteration, we leave orphaned modules or handle them in background.
+        return true;
+    } catch (e) {
+        console.error("Delete Topic Error:", e);
+        return false;
+    }
+};
+
 export const getTopicsByCourse = async (courseId: string): Promise<CourseTopic[]> => {
     try {
         const q = query(collection(db, 'topics'), where('courseId', '==', courseId));
         const snap = await getDocs(q);
         const topics = snap.docs.map(d => ({ id: d.id, ...d.data() } as CourseTopic));
         
-        // Sort by course.topicIds order if possible, otherwise by created
         const courseRef = await getDoc(doc(db, 'courses', courseId));
         if (courseRef.exists()) {
             const course = courseRef.data() as Course;
             const order = course.topicIds || [];
-            return topics.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+            // Sort based on ID array order
+            return topics.sort((a, b) => {
+                const idxA = order.indexOf(a.id);
+                const idxB = order.indexOf(b.id);
+                // If not in array (legacy), put at end
+                if (idxA === -1) return 1;
+                if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
         }
         return topics.sort((a, b) => a.createdAt - b.createdAt);
     } catch (e) {
         return [];
     }
 };
+
+// --- MODULE MANAGEMENT ---
 
 export const createModule = async (topicId: string, courseId: string, title: string, type: 'VIDEO' | 'QUIZ' | 'READING'): Promise<LearningModule | null> => {
     try {
@@ -131,8 +170,6 @@ export const createModule = async (topicId: string, courseId: string, title: str
 
         const docRef = await addDoc(collection(db, 'modules'), newModule);
 
-        // Link to Topic
-        // We need arrayUnion import. Let's do a read-write for safety without importing arrayUnion if it conflicts
         const topicRef = doc(db, 'topics', topicId);
         const topicSnap = await getDoc(topicRef);
         if (topicSnap.exists()) {
@@ -148,6 +185,30 @@ export const createModule = async (topicId: string, courseId: string, title: str
     }
 };
 
+export const reorderModules = async (topicId: string, newModuleIds: string[]) => {
+    try {
+        await updateDoc(doc(db, 'topics', topicId), { moduleIds: newModuleIds });
+        return true;
+    } catch (e) {
+        console.error("Reorder Modules Error:", e);
+        return false;
+    }
+};
+
+export const deleteModule = async (topicId: string, moduleId: string): Promise<boolean> => {
+    try {
+        await deleteDoc(doc(db, 'modules', moduleId));
+        
+        await updateDoc(doc(db, 'topics', topicId), {
+            moduleIds: arrayRemove(moduleId)
+        });
+        return true;
+    } catch (e) {
+        console.error("Delete Module Error:", e);
+        return false;
+    }
+};
+
 export const getModulesByTopic = async (topicId: string): Promise<LearningModule[]> => {
     try {
         const q = query(collection(db, 'modules'), where('topicId', '==', topicId));
@@ -158,7 +219,13 @@ export const getModulesByTopic = async (topicId: string): Promise<LearningModule
         if (topicRef.exists()) {
             const topic = topicRef.data() as CourseTopic;
             const order = topic.moduleIds || [];
-            return modules.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+            return modules.sort((a, b) => {
+                const idxA = order.indexOf(a.id);
+                const idxB = order.indexOf(b.id);
+                if (idxA === -1) return 1;
+                if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
         }
         return modules;
     } catch (e) {

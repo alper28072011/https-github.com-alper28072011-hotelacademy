@@ -1,12 +1,13 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Plus, GripVertical, ChevronRight, Wand2, Trash2 } from 'lucide-react';
+import { Loader2, GripVertical, ChevronRight, Wand2, Trash2, Plus } from 'lucide-react';
 import { Course, CourseTopic } from '../../types';
 import { getCourse } from '../../services/db';
-import { getTopicsByCourse, createTopic } from '../../services/courseService';
+import { getTopicsByCourse, createTopic, reorderTopics, deleteTopic } from '../../services/courseService';
 import { generateCourseTopics } from '../../services/geminiService';
 import { getLocalizedContent } from '../../i18n/config';
+import { SortableList } from '../../components/ui/SortableList';
 
 export const CourseDetail: React.FC = () => {
     const { courseId } = useParams<{ courseId: string }>();
@@ -50,6 +51,22 @@ export const CourseDetail: React.FC = () => {
         await loadData();
     };
 
+    const handleSort = (newItems: CourseTopic[]) => {
+        setTopics(newItems); // Optimistic Update
+        if (courseId) {
+            const ids = newItems.map(t => t.id);
+            reorderTopics(courseId, ids);
+        }
+    };
+
+    const handleDeleteTopic = async (topicId: string) => {
+        if (!courseId || !confirm("Bu konuyu silmek istediğinize emin misiniz?")) return;
+        
+        // Optimistic Remove
+        setTopics(prev => prev.filter(t => t.id !== topicId));
+        await deleteTopic(courseId, topicId);
+    };
+
     if(loading) return <div className="p-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[#3b5998]" /></div>;
     if(!course) return <div>Bulunamadı.</div>;
 
@@ -77,24 +94,36 @@ export const CourseDetail: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="space-y-2 mb-6">
-                    {topics.map((topic, idx) => (
-                        <div 
-                            key={topic.id}
-                            onClick={() => navigate(`/admin/courses/${course.id}/topics/${topic.id}`)}
-                            className="flex items-center gap-3 p-3 bg-white border border-[#e9e9e9] rounded hover:border-[#3b5998] cursor-pointer group transition-all"
-                        >
-                            <div className="text-gray-400 cursor-move"><GripVertical className="w-4 h-4" /></div>
-                            <div className="w-6 h-6 bg-[#f0f2f5] rounded-full flex items-center justify-center text-[10px] font-bold text-gray-600">
-                                {idx + 1}
+                <div className="mb-6">
+                    <SortableList
+                        items={topics}
+                        onOrderChange={handleSort}
+                        renderItem={({ item, index, dragListeners }) => (
+                            <div className="flex items-center gap-3 p-3 bg-white border-b border-[#e9e9e9] hover:bg-[#f0f2f5] group transition-all">
+                                <div {...dragListeners} className="text-gray-400 cursor-move p-1 hover:text-[#3b5998]">
+                                    <GripVertical className="w-4 h-4" />
+                                </div>
+                                <div className="w-6 h-6 bg-[#f0f2f5] rounded-full flex items-center justify-center text-[10px] font-bold text-gray-600 shrink-0">
+                                    {index + 1}
+                                </div>
+                                <div className="flex-1 cursor-pointer" onClick={() => navigate(`/admin/courses/${course.id}/topics/${item.id}`)}>
+                                    <div className="text-sm font-bold text-gray-800 group-hover:text-[#3b5998]">{getLocalizedContent(item.title)}</div>
+                                    <div className="text-[10px] text-gray-500">{(item.moduleIds || []).length} Modül</div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button 
+                                        onClick={() => handleDeleteTopic(item.id)}
+                                        className="p-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                                        title="Konuyu Sil"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                                </div>
                             </div>
-                            <div className="flex-1">
-                                <div className="text-sm font-bold text-gray-800 group-hover:text-[#3b5998]">{getLocalizedContent(topic.title)}</div>
-                                <div className="text-[10px] text-gray-500">{topic.moduleIds.length} Modül</div>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#3b5998]" />
-                        </div>
-                    ))}
+                        )}
+                    />
+                    
                     {topics.length === 0 && !isGenerating && (
                         <div className="text-center p-6 border-2 border-dashed border-gray-200 rounded text-gray-400 text-xs">
                             Henüz konu eklenmemiş. AI ile taslak oluşturabilir veya manuel ekleyebilirsiniz.
@@ -109,9 +138,10 @@ export const CourseDetail: React.FC = () => {
                         value={newTopicTitle}
                         onChange={(e) => setNewTopicTitle(e.target.value)}
                         placeholder="Yeni Konu Başlığı..."
-                        className="flex-1 border border-[#ccc] p-2 text-xs rounded outline-none focus:border-[#3b5998]"
+                        className="flex-1 border border-[#bdc7d8] p-2 text-xs rounded outline-none focus:border-[#3b5998]"
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddTopic()}
                     />
-                    <button onClick={handleAddTopic} className="bg-[#3b5998] text-white px-4 py-2 rounded text-xs font-bold">Ekle</button>
+                    <button onClick={handleAddTopic} className="bg-[#3b5998] text-white px-4 py-2 rounded text-xs font-bold border border-[#29447e]">Ekle</button>
                 </div>
             </div>
         </div>
