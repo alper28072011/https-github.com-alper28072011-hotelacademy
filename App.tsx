@@ -94,8 +94,12 @@ const AnimatedRoutes = () => {
                           <Route path="/course/:courseId" element={<CourseIntroPage />} />
                           <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
                           
-                          {/* ADMIN ROUTES */}
-                          <Route path="/admin" element={<AdminLayout />}>
+                          {/* ADMIN ROUTES - Wrapped in DashboardLayout for Header */}
+                          <Route path="/admin" element={
+                              <DashboardLayout>
+                                  <AdminLayout />
+                              </DashboardLayout>
+                          }>
                               <Route index element={<PageTransition><OrganizationManager /></PageTransition>} /> 
                               <Route path="organization" element={<PageTransition><OrganizationManager /></PageTransition>} />
                               <Route path="requests" element={<PageTransition><TeamRequests /></PageTransition>} />

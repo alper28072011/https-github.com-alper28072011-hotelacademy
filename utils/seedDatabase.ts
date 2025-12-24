@@ -207,6 +207,10 @@ const MOCK_CATEGORIES: Category[] = [
 const MOCK_COURSES: Course[] = [
   {
       id: '001',
+      publisherId: SEED_ORG_ID,
+      publisherType: 'ORGANIZATION',
+      publisherName: 'Hotel Academy',
+      publisherAvatar: 'https://ui-avatars.com/api/?name=HA&background=0B1E3B&color=fff',
       organizationId: SEED_ORG_ID,
       authorId: 'system_admin',
       authorType: 'ORGANIZATION',
@@ -246,6 +250,10 @@ const MOCK_COURSES: Course[] = [
   },
   {
       id: '101',
+      publisherId: SEED_ORG_ID,
+      publisherType: 'ORGANIZATION',
+      publisherName: 'Hotel Academy',
+      publisherAvatar: 'https://ui-avatars.com/api/?name=HA&background=0B1E3B&color=fff',
       organizationId: SEED_ORG_ID,
       authorId: 'system_admin',
       authorType: 'ORGANIZATION',
@@ -275,6 +283,10 @@ const MOCK_COURSES: Course[] = [
   },
   {
     id: '401',
+    publisherId: SEED_ORG_ID,
+    publisherType: 'ORGANIZATION',
+    publisherName: 'Hotel Academy',
+    publisherAvatar: 'https://ui-avatars.com/api/?name=HA&background=0B1E3B&color=fff',
     organizationId: SEED_ORG_ID,
     authorId: 'system_admin',
     authorType: 'ORGANIZATION',

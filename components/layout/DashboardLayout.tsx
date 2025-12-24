@@ -225,7 +225,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       </div>
       
       {/* 2. Main Content Area */}
-      <main className="flex-1 overflow-y-auto pb-24 scroll-smooth no-scrollbar relative w-full">
+      <main className={`flex-1 overflow-y-auto scroll-smooth no-scrollbar relative w-full ${!isOrgMode ? 'pb-24' : 'pb-4'}`}>
         {children}
       </main>
 
