@@ -15,7 +15,7 @@ import {
     arrayRemove
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Organization, Position, RolePermissions, OrgDepartmentDefinition, PositionPrototype, PageRole, JoinConfig, User } from '../types';
+import { Organization, Position, RolePermissions, OrgDepartmentDefinition, PositionPrototype, PageRole, JoinConfig, User, Channel } from '../types';
 import { deleteFolder, replaceFile, deleteFileByUrl } from './storage';
 import { StoragePaths } from '../utils/storagePaths';
 
@@ -45,7 +45,15 @@ export const createPage = async (
             memberCount: 1,
             createdAt: Date.now(),
             channels: [
-                { id: `ch_${Date.now()}_1`, name: 'Genel', description: 'Ana akış', isPrivate: false, createdAt: Date.now() }
+                { 
+                    id: `ch_${Date.now()}_1`, 
+                    name: 'Genel', 
+                    description: 'Ana akış', 
+                    isPrivate: false, 
+                    createdAt: Date.now(), 
+                    isMandatory: true,
+                    managerIds: [userId]
+                }
             ],
             status: 'ACTIVE',
             organizationHistory: [], 
@@ -178,22 +186,47 @@ export const getUserManagedPages = async (userId: string): Promise<Organization[
     } catch (e) { return []; }
 };
 
-export const createChannel = async (orgId: string, name: string, description: string, isPrivate: boolean) => {
+export const createChannel = async (orgId: string, name: string, description: string, isPrivate: boolean, isMandatory: boolean = false) => {
     try {
         const orgRef = doc(db, 'organizations', orgId);
-        const newChannel = {
+        const newChannel: Channel = {
             id: `ch_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             name,
             description,
             isPrivate,
-            createdAt: Date.now(),
-            managerIds: []
+            isMandatory,
+            managerIds: [],
+            createdAt: Date.now()
         };
         await updateDoc(orgRef, {
             channels: arrayUnion(newChannel)
         });
         return true;
     } catch(e) { return false; }
+};
+
+export const updateChannelConfig = async (orgId: string, channelId: string, updates: Partial<Channel>) => {
+    try {
+        const orgRef = doc(db, 'organizations', orgId);
+        await runTransaction(db, async (transaction) => {
+            const orgDoc = await transaction.get(orgRef);
+            if (!orgDoc.exists()) throw new Error("Org not found");
+            const data = orgDoc.data() as Organization;
+            
+            const channels = data.channels || [];
+            const index = channels.findIndex(c => c.id === channelId);
+            if (index === -1) throw new Error("Channel not found");
+            
+            const updatedChannel = { ...channels[index], ...updates };
+            channels[index] = updatedChannel;
+            
+            transaction.update(orgRef, { channels });
+        });
+        return true;
+    } catch (e) {
+        console.error("Update Channel Error:", e);
+        return false;
+    }
 };
 
 export const deleteChannel = async (orgId: string, chId: string) => { return true; };

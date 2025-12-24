@@ -1,27 +1,28 @@
 
 import React, { useState, useEffect } from 'react';
+import { useOrganizationStore } from '../../stores/useOrganizationStore';
+import { updateOrganization, getOrganizationUsers } from '../../services/db';
+import { 
+    requestOrganizationDeletion, 
+    getPotentialSuccessors, 
+    transferOwnership, 
+    updateJoinConfig, 
+    updateOrganizationCover, 
+    removeOrganizationCover,
+    updateChannelConfig 
+} from '../../services/organizationService';
+import { uploadFile } from '../../services/storage';
+import { useAuthStore } from '../../stores/useAuthStore';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { OrganizationSector, OrganizationSize, User, JoinConfig, Channel } from '../../types';
+import confetti from 'canvas-confetti';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Building2, Save, Upload, Loader2, Palette,
     Trash2, AlertTriangle, ArrowRight, LogOut, Crown,
     UserPlus, ShieldCheck, Tag, Plus, X, Image as ImageIcon,
-    Info
+    Info, Hash, Lock, CheckCircle2, User as UserIcon
 } from 'lucide-react';
-import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { updateOrganization } from '../../services/db';
-import { 
-    requestOrganizationDeletion, 
-    getPotentialSuccessors, 
-    transferOwnership, 
-    updateJoinConfig,
-    updateOrganizationCover,
-    removeOrganizationCover
-} from '../../services/organizationService';
-import { uploadFile } from '../../services/storage';
-import { useAuthStore } from '../../stores/useAuthStore';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { OrganizationSector, OrganizationSize, User, JoinConfig } from '../../types';
-import confetti from 'canvas-confetti';
 
 export const OrganizationSettings: React.FC = () => {
   const { currentOrganization, switchOrganization } = useOrganizationStore();
@@ -29,10 +30,13 @@ export const OrganizationSettings: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  const [activeTab, setActiveTab] = useState<'BRAND' | 'ONBOARDING' | 'DANGER'>('BRAND');
+  const [activeTab, setActiveTab] = useState<'BRAND' | 'CHANNELS' | 'ONBOARDING' | 'DANGER'>('BRAND');
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+
+  // Users Data for Channel Manager Assignment
+  const [staff, setStaff] = useState<User[]>([]);
 
   // Danger Zone States
   const [deleteReason, setDeleteReason] = useState('');
@@ -71,6 +75,8 @@ export const OrganizationSettings: React.FC = () => {
           if (currentOrganization.joinConfig) {
               setJoinConfig(currentOrganization.joinConfig);
           }
+          // Load staff for manager assignment
+          getOrganizationUsers(currentOrganization.id).then(setStaff);
       }
   }, [currentOrganization]);
 
@@ -99,15 +105,18 @@ export const OrganizationSettings: React.FC = () => {
       };
 
       await updateOrganization(currentOrganization.id, updates);
-      
-      // Save Onboarding separately (optional, could be merged)
       await updateJoinConfig(currentOrganization.id, joinConfig);
-
       await switchOrganization(currentOrganization.id);
       
       setIsSaving(false);
       if (showWelcome) setShowWelcome(false);
       alert('Değişiklikler başarıyla kaydedildi.');
+  };
+
+  const handleChannelUpdate = async (channelId: string, updates: Partial<Channel>) => {
+      if (!currentOrganization) return;
+      await updateChannelConfig(currentOrganization.id, channelId, updates);
+      await switchOrganization(currentOrganization.id); // Refresh
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,7 +134,7 @@ export const OrganizationSettings: React.FC = () => {
           setIsUploadingCover(true);
           try {
               await updateOrganizationCover(currentOrganization.id, e.target.files[0]);
-              await switchOrganization(currentOrganization.id); // Refresh state
+              await switchOrganization(currentOrganization.id); 
           } catch (error) {
               alert("Kapak fotoğrafı güncellenemedi.");
           } finally {
@@ -224,38 +233,24 @@ export const OrganizationSettings: React.FC = () => {
 
         {/* TABS CONTAINER */}
         <div className="flex items-end px-2 h-[31px]">
-            <button 
-                onClick={() => setActiveTab('BRAND')}
-                className={`px-4 py-1.5 text-[11px] font-bold border-t border-l border-r rounded-t-[3px] mr-1 cursor-pointer focus:outline-none ${
-                    activeTab === 'BRAND' 
-                    ? 'bg-white border-[#899bc1] text-[#333] mb-[-1px] z-10 pb-2.5' 
-                    : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'
-                }`}
-            >
-                Marka & Profil
-            </button>
-            <button 
-                onClick={() => setActiveTab('ONBOARDING')}
-                className={`px-4 py-1.5 text-[11px] font-bold border-t border-l border-r rounded-t-[3px] mr-1 cursor-pointer focus:outline-none ${
-                    activeTab === 'ONBOARDING' 
-                    ? 'bg-white border-[#899bc1] text-[#333] mb-[-1px] z-10 pb-2.5' 
-                    : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'
-                }`}
-            >
-                Katılım (Onboarding)
-            </button>
-            {isOwner && (
+            {[
+                { id: 'BRAND', label: 'Marka & Profil' },
+                { id: 'CHANNELS', label: 'Kanal Yönetimi' },
+                { id: 'ONBOARDING', label: 'Katılım (Onboarding)' },
+                ...(isOwner ? [{ id: 'DANGER', label: 'Kritik Bölge' }] : [])
+            ].map(tab => (
                 <button 
-                    onClick={() => { setActiveTab('DANGER'); loadSuccessors(); }}
+                    key={tab.id}
+                    onClick={() => { setActiveTab(tab.id as any); if(tab.id === 'DANGER') loadSuccessors(); }}
                     className={`px-4 py-1.5 text-[11px] font-bold border-t border-l border-r rounded-t-[3px] mr-1 cursor-pointer focus:outline-none ${
-                        activeTab === 'DANGER' 
-                        ? 'bg-white border-[#899bc1] text-[#dd3c10] mb-[-1px] z-10 pb-2.5' 
+                        activeTab === tab.id 
+                        ? 'bg-white border-[#899bc1] text-[#333] mb-[-1px] z-10 pb-2.5' 
                         : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'
                     }`}
                 >
-                    Kritik Bölge
+                    {tab.label}
                 </button>
-            )}
+            ))}
         </div>
 
         {/* MAIN CONTENT BOX */}
@@ -265,7 +260,7 @@ export const OrganizationSettings: React.FC = () => {
             {activeTab === 'BRAND' && (
                 <div className="space-y-6 max-w-2xl">
                     <div className="bg-[#fff9d7] border border-[#e2c822] p-3 text-[11px] text-[#333]">
-                        <span className="font-bold">İpucu:</span> Kurumunuzun logosu ve kapak fotoğrafı, çalışanların sayfayı ilk açtığında göreceği yüzdür. Kaliteli görseller seçmeye özen gösterin.
+                        <span className="font-bold">İpucu:</span> Kurumunuzun logosu ve kapak fotoğrafı, çalışanların sayfayı ilk açtığında göreceği yüzdür.
                     </div>
 
                     <div className="flex flex-col gap-6">
@@ -344,12 +339,92 @@ export const OrganizationSettings: React.FC = () => {
                 </div>
             )}
 
-            {/* 2. ONBOARDING TAB */}
+            {/* 2. CHANNELS TAB (NEW) */}
+            {activeTab === 'CHANNELS' && (
+                <div className="space-y-6">
+                    <div className="bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
+                        <span className="font-bold">Kanal Yönetimi:</span> Her kanal için bir veya daha fazla yönetici atayabilirsiniz. Zorunlu kanallara tüm personel otomatik abone olur.
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                        {currentOrganization.channels.map(channel => (
+                            <div key={channel.id} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center gap-4">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Hash className="w-4 h-4 text-[#3b5998]" />
+                                        <span className="font-bold text-[#333] text-sm">{channel.name}</span>
+                                        {channel.isPrivate && <Lock className="w-3 h-3 text-gray-400" />}
+                                    </div>
+                                    <p className="text-xs text-gray-500">{channel.description}</p>
+                                </div>
+
+                                {/* Controls */}
+                                <div className="flex items-center gap-6">
+                                    {/* Mandatory Toggle */}
+                                    <div className="flex items-center gap-2">
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                className="sr-only peer"
+                                                checked={channel.isMandatory}
+                                                onChange={(e) => handleChannelUpdate(channel.id, { isMandatory: e.target.checked })}
+                                            />
+                                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+                                        </label>
+                                        <span className="text-xs font-bold text-gray-600">Zorunlu</span>
+                                    </div>
+
+                                    {/* Manager Selector */}
+                                    <div className="relative group">
+                                        <div className="text-xs font-bold text-gray-600 mb-1">Yöneticiler:</div>
+                                        <div className="flex -space-x-2">
+                                            {(channel.managerIds || []).map(mid => {
+                                                const m = staff.find(s => s.id === mid);
+                                                return m ? (
+                                                    <div key={mid} className="w-6 h-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[8px] font-bold" title={m.name}>
+                                                        {m.avatar.length > 2 ? <img src={m.avatar} className="w-full h-full rounded-full object-cover"/> : m.name[0]}
+                                                    </div>
+                                                ) : null;
+                                            })}
+                                            <button className="w-6 h-6 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center text-gray-400 hover:bg-gray-200">
+                                                <Plus className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                        
+                                        {/* Dropdown (Simplified) */}
+                                        <select 
+                                            className="absolute inset-0 opacity-0 cursor-pointer"
+                                            onChange={(e) => {
+                                                const userId = e.target.value;
+                                                const currentIds = channel.managerIds || [];
+                                                if (currentIds.includes(userId)) {
+                                                    handleChannelUpdate(channel.id, { managerIds: currentIds.filter(id => id !== userId) });
+                                                } else {
+                                                    handleChannelUpdate(channel.id, { managerIds: [...currentIds, userId] });
+                                                }
+                                            }}
+                                            value=""
+                                        >
+                                            <option value="">Yönetici Ekle/Çıkar...</option>
+                                            {staff.map(s => (
+                                                <option key={s.id} value={s.id}>
+                                                    {(channel.managerIds || []).includes(s.id) ? '✓ ' : ''} {s.name} ({s.roleTitle || 'Personel'})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* 3. ONBOARDING TAB */}
             {activeTab === 'ONBOARDING' && (
                 <div className="space-y-6 max-w-2xl">
                     <div>
                         <h3 className="font-bold text-[#3b5998] text-xs mb-2 pb-1 border-b border-[#eee]">Katılım Kuralları</h3>
-                        <p className="text-[11px] text-gray-600 mb-2">Yeni üyeler katılmadan önce bu metni onaylamak zorundadır.</p>
                         <textarea 
                             value={joinConfig.rules}
                             onChange={e => setJoinConfig({...joinConfig, rules: e.target.value})}
@@ -361,13 +436,10 @@ export const OrganizationSettings: React.FC = () => {
                     <div className="bg-[#f7f7f7] border border-[#ccc] p-3 flex items-center gap-3">
                         <input 
                             type="checkbox" 
-                            id="approval"
                             checked={joinConfig.requireApproval}
                             onChange={e => setJoinConfig({...joinConfig, requireApproval: e.target.checked})}
                         />
-                        <label htmlFor="approval" className="text-xs font-bold text-[#333] cursor-pointer">
-                            Yönetici onayı gerektir (Kapalı Devre)
-                        </label>
+                        <span className="text-xs font-bold text-[#333]">Yönetici onayı gerektir (Kapalı Devre)</span>
                     </div>
 
                     <div>
@@ -394,7 +466,7 @@ export const OrganizationSettings: React.FC = () => {
                 </div>
             )}
 
-            {/* 3. DANGER ZONE */}
+            {/* 4. DANGER ZONE */}
             {activeTab === 'DANGER' && isOwner && (
                 <div className="space-y-8 max-w-2xl">
                     <div className="bg-[#fff0f0] border border-red-200 p-4">
@@ -460,6 +532,14 @@ export const OrganizationSettings: React.FC = () => {
                 </div>
             )}
 
+            {/* FOOTER ACTIONS */}
+            {activeTab !== 'DELETE' && (
+                <div className="mt-8 border-t border-[#d8dfea] pt-4 flex justify-end gap-2">
+                    <button onClick={handleSave} disabled={isSaving} className="bg-[#3b5998] text-white px-6 py-1.5 text-[11px] font-bold border border-[#29447e]">
+                        {isSaving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
+                    </button>
+                </div>
+            )}
         </div>
 
         {/* ONBOARDING MODAL (Welcome) */}

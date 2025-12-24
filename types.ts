@@ -218,8 +218,9 @@ export interface Channel {
   description?: string;
   icon?: string;
   isPrivate: boolean; 
+  isMandatory?: boolean; // NEW: Auto-subscribe logic
+  managerIds?: string[]; // NEW: Specific managers for this channel
   createdAt: number;
-  managerIds?: string[];
 }
 
 export interface ChannelStoryData {
@@ -258,7 +259,8 @@ export interface Course {
   authorAvatarUrl: string;
   
   organizationId?: string; 
-  channelId?: string;      
+  channelId?: string; // Primary channel (Legacy support)
+  targetChannelIds?: string[]; // NEW: Multi-channel publishing
   categoryId?: string;
   
   visibility: 'PUBLIC' | 'PRIVATE' | 'FOLLOWERS_ONLY';
@@ -377,6 +379,7 @@ export interface FeedPost {
     createdAt: number; 
     kudosData?: { badgeType: KudosType; recipientId: string; recipientName: string; }; 
     likes?: Record<string, any>;
+    targetChannelIds?: string[]; // NEW
 }
 
 export interface Task {

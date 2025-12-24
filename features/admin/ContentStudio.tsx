@@ -4,23 +4,33 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
     Wand2, Loader2, ArrowLeft, Save, Plus, Trash2, 
     Upload, X, ChevronRight, Layout,
-    Type, AlignLeft
+    Type, AlignLeft, Hash, Check
 } from 'lucide-react';
-import { createAiModuleContent } from '../../services/careerService'; // Using generic name but mapped to gemini
+import { createAiModuleContent } from '../../services/careerService'; 
 import { generateModuleContent } from '../../services/geminiService';
-import { StoryCard, PedagogyMode, LearningModule } from '../../types';
+import { StoryCard, PedagogyMode, LearningModule, Channel } from '../../types';
 import { getLocalizedContent } from '../../i18n/config';
-import { getModule, updateModuleContent } from '../../services/courseService';
+import { getModule, updateModuleContent, updateCourse } from '../../services/courseService';
 import { uploadFile } from '../../services/storage';
+import { useOrganizationStore } from '../../stores/useOrganizationStore';
+import { useAuthStore } from '../../stores/useAuthStore';
+import { getCourse } from '../../services/db';
 
 export const ContentStudio: React.FC = () => {
   const { moduleId } = useParams<{ moduleId: string }>();
   const navigate = useNavigate();
+  const { currentOrganization } = useOrganizationStore();
+  const { currentUser } = useAuthStore();
 
   // Data State
   const [moduleData, setModuleData] = useState<LearningModule | null>(null);
   const [cards, setCards] = useState<StoryCard[]>([]);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  
+  // Publishing State
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [availableChannels, setAvailableChannels] = useState<Channel[]>([]);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   
   // UI State
   const [loading, setLoading] = useState(true);
@@ -36,6 +46,17 @@ export const ContentStudio: React.FC = () => {
       }
   }, [moduleId]);
 
+  // Determine authorized channels for publishing
+  useEffect(() => {
+      if (currentOrganization && currentUser) {
+          const isOwner = currentOrganization.ownerId === currentUser.id;
+          const userChannels = currentOrganization.channels.filter(c => 
+              isOwner || (c.managerIds && c.managerIds.includes(currentUser.id))
+          );
+          setAvailableChannels(userChannels);
+      }
+  }, [currentOrganization, currentUser]);
+
   const loadData = async () => {
       if(!moduleId) return;
       setLoading(true);
@@ -44,12 +65,46 @@ export const ContentStudio: React.FC = () => {
           setModuleData(m);
           setCards(m.content || []);
           if(m.content?.length > 0) setActiveCardId(m.content[0].id);
+          
+          // Pre-load existing targets
+          const course = await getCourse(m.courseId);
+          if (course?.targetChannelIds) {
+              setSelectedChannels(course.targetChannelIds);
+          }
       }
       setLoading(false);
   };
 
-  // --- CRUD ACTIONS ---
+  // --- ACTIONS ---
 
+  const handleSave = async () => {
+      if(!moduleId) return;
+      setIsSaving(true);
+      await updateModuleContent(moduleId, cards);
+      
+      // If modal is open, also save channels
+      if (showPublishModal && moduleData) {
+          await updateCourse(moduleData.courseId, { targetChannelIds: selectedChannels });
+      }
+      
+      setIsSaving(false);
+      if (showPublishModal) {
+          setShowPublishModal(false);
+          alert("Yayınlandı!");
+      } else {
+          // Just saving draft
+      }
+  };
+
+  const toggleChannel = (id: string) => {
+      if (selectedChannels.includes(id)) {
+          setSelectedChannels(selectedChannels.filter(c => c !== id));
+      } else {
+          setSelectedChannels([...selectedChannels, id]);
+      }
+  };
+
+  // ... (Existing AI and Card CRUD handlers) ...
   const handleAddCard = () => {
       const newCard: StoryCard = {
           id: `card_${Date.now()}`,
@@ -74,15 +129,11 @@ export const ContentStudio: React.FC = () => {
       }
   };
 
-  const updateActiveCard = (updates: Partial<StoryCard>) => {
-      setCards(prev => prev.map(c => c.id === activeCardId ? { ...c, ...updates } : c));
-  };
-
   const updateActiveCardText = (field: 'title' | 'content', value: string) => {
       const currentCard = cards.find(c => c.id === activeCardId);
       if (!currentCard) return;
       const newLocalized = { ...currentCard[field], tr: value };
-      updateActiveCard({ [field]: newLocalized });
+      setCards(prev => prev.map(c => c.id === activeCardId ? { ...c, [field]: newLocalized } : c));
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,7 +141,7 @@ export const ContentStudio: React.FC = () => {
           setIsUploading(true);
           try {
               const url = await uploadFile(e.target.files[0], 'story_assets');
-              updateActiveCard({ mediaUrl: url });
+              setCards(prev => prev.map(c => c.id === activeCardId ? { ...c, mediaUrl: url } : c));
           } catch (error) {
               alert("Resim yüklenemedi.");
           } finally {
@@ -99,15 +150,13 @@ export const ContentStudio: React.FC = () => {
       }
   };
 
-  // --- AI GENERATION ---
-
   const handleGenerate = async () => {
       if(!moduleData) return;
       setLoading(true);
       try {
           const generatedCards = await generateModuleContent(
               getLocalizedContent(moduleData.title),
-              "Hotel Course", // Context could be passed via module data if we fetched course
+              "Hotel Course", 
               "Hospitality", 
               pedagogy
           );
@@ -120,20 +169,12 @@ export const ContentStudio: React.FC = () => {
       }
   };
 
-  const handleSave = async () => {
-      if(!moduleId) return;
-      setIsSaving(true);
-      await updateModuleContent(moduleId, cards);
-      setIsSaving(false);
-      alert("Kaydedildi!");
-  };
-
   const activeCard = cards.find(c => c.id === activeCardId);
 
   if(loading && !moduleData) return <div className="h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#3b5998]" /></div>;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-60px)] bg-[#eff0f5]">
+    <div className="flex flex-col h-[calc(100vh-60px)] bg-[#eff0f5] relative">
         
         {/* TOP BAR */}
         <div className="bg-white border-b border-[#d8dfea] h-[60px] flex justify-between items-center px-6 shrink-0">
@@ -146,13 +187,21 @@ export const ContentStudio: React.FC = () => {
                     <p className="text-xs text-gray-500">{cards.length} Slayt • {moduleData?.type}</p>
                 </div>
             </div>
-            <button 
-                onClick={handleSave} 
-                disabled={isSaving} 
-                className="bg-[#3b5998] hover:bg-[#2d4373] text-white px-6 py-2 rounded-lg font-bold text-sm shadow-sm transition-all disabled:opacity-50 flex items-center gap-2"
-            >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Kaydet'}
-            </button>
+            <div className="flex gap-2">
+                <button 
+                    onClick={handleSave} 
+                    disabled={isSaving} 
+                    className="bg-white border border-[#ccc] text-[#333] px-4 py-2 rounded-lg font-bold text-sm hover:bg-gray-50"
+                >
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Taslağı Kaydet'}
+                </button>
+                <button 
+                    onClick={() => setShowPublishModal(true)} 
+                    className="bg-[#3b5998] hover:bg-[#2d4373] text-white px-6 py-2 rounded-lg font-bold text-sm shadow-sm transition-all flex items-center gap-2"
+                >
+                    Yayınla
+                </button>
+            </div>
         </div>
 
         {/* WORKSPACE */}
@@ -281,6 +330,56 @@ export const ContentStudio: React.FC = () => {
                 )}
             </div>
         </div>
+
+        {/* PUBLISH MODAL */}
+        {showPublishModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                    <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                        <h3 className="font-bold text-[#3b5998]">Yayınla: Hedef Kitle Seçimi</h3>
+                        <button onClick={() => setShowPublishModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
+                    </div>
+                    <div className="p-6">
+                        <p className="text-sm text-gray-600 mb-4">Bu eğitimi hangi kanallara (departmanlara) göndermek istiyorsunuz?</p>
+                        
+                        <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 rounded-xl p-2 bg-gray-50/50">
+                            {availableChannels.map(channel => (
+                                <div 
+                                    key={channel.id}
+                                    onClick={() => toggleChannel(channel.id)}
+                                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-all ${
+                                        selectedChannels.includes(channel.id) 
+                                        ? 'bg-white border-primary shadow-sm' 
+                                        : 'bg-transparent border-transparent hover:bg-gray-100'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded flex items-center justify-center ${selectedChannels.includes(channel.id) ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'}`}>
+                                            <Hash className="w-4 h-4" />
+                                        </div>
+                                        <span className={`text-sm font-bold ${selectedChannels.includes(channel.id) ? 'text-primary' : 'text-gray-600'}`}>
+                                            {channel.name}
+                                        </span>
+                                    </div>
+                                    {selectedChannels.includes(channel.id) && <Check className="w-5 h-5 text-primary" />}
+                                </div>
+                            ))}
+                            {availableChannels.length === 0 && (
+                                <div className="text-center p-4 text-xs text-gray-400">Yönetici olduğunuz kanal bulunamadı.</div>
+                            )}
+                        </div>
+
+                        <button 
+                            onClick={handleSave}
+                            disabled={isSaving || selectedChannels.length === 0}
+                            className="w-full mt-6 bg-[#3b5998] hover:bg-[#2d4373] text-white py-3 rounded-xl font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Seçili Kanallara Yayınla'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

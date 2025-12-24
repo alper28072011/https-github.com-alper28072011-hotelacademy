@@ -95,13 +95,28 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
             
             if (subbedChannels.length > 0) {
                 // Fetch content from subscribed channels in joined orgs
+                // Support both legacy `channelId` and new `targetChannelIds`
+                // Note: Firestore 'in' query works on single fields. For array-contains-any on targetChannelIds, we might need separate query.
+                // Simplified: We query courses in user's ORG and filter in memory or rely on 'channelId' primary.
+                
+                // Better approach: Query by Org + Filter by Channel locally or improved index.
+                // For this implementation, let's assume `targetChannelIds` contains the channel ID.
                 const workQ = query(
                     coursesRef,
                     where('organizationId', 'in', user.joinedPageIds.slice(0, 10)),
-                    where('channelId', 'in', subbedChannels.slice(0, 10)),
+                    where('targetChannelIds', 'array-contains-any', subbedChannels.slice(0, 10)), // Requires index
                     limit(20)
                 );
                 promises.push(getDocs(workQ));
+                
+                // Fallback for legacy
+                const legacyWorkQ = query(
+                    coursesRef,
+                    where('organizationId', 'in', user.joinedPageIds.slice(0, 10)),
+                    where('channelId', 'in', subbedChannels.slice(0, 10)), 
+                    limit(20)
+                );
+                promises.push(getDocs(legacyWorkQ));
             }
         }
 
@@ -157,7 +172,9 @@ export const getChannelStories = async (user: User): Promise<ChannelStoryData[]>
         const relevantChannels = org.channels.filter(c => user.channelSubscriptions.includes(c.id));
 
         for (const channel of relevantChannels) {
-            const channelCourses = allOrgCourses.filter(c => c.channelId === channel.id);
+            // Updated to check targetChannelIds array
+            const channelCourses = allOrgCourses.filter(c => c.targetChannelIds?.includes(channel.id) || c.channelId === channel.id);
+            
             let status: 'HAS_NEW' | 'IN_PROGRESS' | 'ALL_CAUGHT_UP' | 'EMPTY' = 'EMPTY';
             let nextCourseId = undefined;
             let progressPercent = 0;
@@ -283,8 +300,8 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
         const orgId = name.toLowerCase().replace(/\s/g, '_') + '_' + Math.floor(Math.random() * 1000);
         const code = name.substring(0, 3).toUpperCase() + Math.floor(1000 + Math.random() * 9000); 
         const defaultChannels = [
-            { id: 'ch_general', name: 'Genel Duyurular', description: 'Tüm personel için', isPrivate: false, managerIds: [owner.id], createdAt: Date.now() },
-            { id: 'ch_welcome', name: 'Oryantasyon', description: 'Aramıza hoş geldin!', isPrivate: false, managerIds: [owner.id], createdAt: Date.now() }
+            { id: 'ch_general', name: 'Genel Duyurular', description: 'Tüm personel için', isPrivate: false, managerIds: [owner.id], createdAt: Date.now(), isMandatory: true },
+            { id: 'ch_welcome', name: 'Oryantasyon', description: 'Aramıza hoş geldin!', isPrivate: false, managerIds: [owner.id], createdAt: Date.now(), isMandatory: true }
         ];
         const newOrg: Organization = {
             id: orgId, name, sector, logoUrl: '', location: 'Global', ownerId: owner.id, code, createdAt: Date.now(),
@@ -443,25 +460,39 @@ export const getJoinRequests = async (orgId: string, departmentFilter?: string):
     } catch (e) { return []; }
 };
 
+/**
+ * UPDATED: Approve Request with Auto-Subscription for Mandatory Channels
+ */
 export const approveJoinRequest = async (requestId: string, request: JoinRequest, roleTitle?: string, permissions?: PermissionType[]) => {
     try {
         return await runTransaction(db, async (transaction) => {
+            // 1. Get Org Channels to find Mandatory ones
+            const orgRef = doc(db, 'organizations', request.organizationId);
+            const orgSnap = await transaction.get(orgRef);
+            if (!orgSnap.exists()) throw new Error("Org missing");
+            const orgData = orgSnap.data() as Organization;
+            
+            const mandatoryChannels = orgData.channels.filter(c => c.isMandatory).map(c => c.id);
+
+            // 2. Create Membership
             const membershipId = `${request.userId}_${request.organizationId}`;
             const memRef = doc(db, 'memberships', membershipId);
             transaction.set(memRef, { id: membershipId, userId: request.userId, organizationId: request.organizationId, role: 'MEMBER', status: 'ACTIVE', joinedAt: Date.now() });
             
+            // 3. Update User (Add Org & Channels)
             const userRef = doc(db, 'users', request.userId);
-            // Add to joined list
             transaction.update(userRef, { 
                 currentOrganizationId: request.organizationId, 
                 [`pageRoles.${request.organizationId}`]: 'MEMBER',
-                joinedPageIds: arrayUnion(request.organizationId)
+                joinedPageIds: arrayUnion(request.organizationId),
+                channelSubscriptions: arrayUnion(...mandatoryChannels) // Auto Subscribe
             });
             
+            // 4. Update Request Status
             const reqRef = doc(db, 'requests', requestId);
             transaction.update(reqRef, { status: 'APPROVED' });
             
-            const orgRef = doc(db, 'organizations', request.organizationId);
+            // 5. Update Org Count
             transaction.update(orgRef, { memberCount: increment(1), members: arrayUnion(request.userId) });
             
             return true;
@@ -569,10 +600,15 @@ export const acceptOrgInvite = async (userId: string, notificationId: string, li
 
     try {
         await runTransaction(db, async (transaction) => {
+            const orgRef = doc(db, 'organizations', orgId);
+            const orgSnap = await transaction.get(orgRef);
+            if (!orgSnap.exists()) throw new Error("Org missing");
+            const orgData = orgSnap.data() as Organization;
+            const mandatoryChannels = orgData.channels.filter(c => c.isMandatory).map(c => c.id);
+
             const membershipId = `${userId}_${orgId}`;
             const memRef = doc(db, 'memberships', membershipId);
             const userRef = doc(db, 'users', userId);
-            const orgRef = doc(db, 'organizations', orgId);
             const notifRef = doc(db, `users/${userId}/notifications`, notificationId);
 
             // 1. Create Membership
@@ -585,11 +621,12 @@ export const acceptOrgInvite = async (userId: string, notificationId: string, li
                 joinedAt: Date.now()
             });
 
-            // 2. Update User (Auto-switch to new org)
+            // 2. Update User (Auto-switch to new org + Subscribe)
             transaction.update(userRef, {
                 currentOrganizationId: orgId,
                 [`pageRoles.${orgId}`]: 'MEMBER',
-                joinedPageIds: arrayUnion(orgId)
+                joinedPageIds: arrayUnion(orgId),
+                channelSubscriptions: arrayUnion(...mandatoryChannels)
             });
 
             // 3. Update Org
