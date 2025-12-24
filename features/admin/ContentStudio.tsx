@@ -4,22 +4,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
     Wand2, Loader2, ArrowLeft, Save, Plus, Trash2, 
     Upload, X, ChevronRight, Layout,
-    Type, AlignLeft, Hash, Check, Building2, User
+    Type, AlignLeft, Hash, Check, Building2, User, AlertCircle
 } from 'lucide-react';
-import { createAiModuleContent } from '../../services/careerService'; 
 import { generateModuleContent } from '../../services/geminiService';
 import { StoryCard, PedagogyMode, LearningModule, Channel } from '../../types';
 import { getLocalizedContent } from '../../i18n/config';
 import { getModule, updateModuleContent, updateCourse } from '../../services/courseService';
 import { uploadFile } from '../../services/storage';
-import { useOrganizationStore } from '../../stores/useOrganizationStore';
-import { useAuthStore } from '../../stores/useAuthStore';
+import { useContextStore } from '../../stores/useContextStore'; // Context Store
 import { getCourse, getOrganizationDetails } from '../../services/db';
 
 export const ContentStudio: React.FC = () => {
   const { moduleId } = useParams<{ moduleId: string }>();
   const navigate = useNavigate();
-  const { currentUser, activeContext } = useAuthStore();
+  const { contextType, activeEntityId, activeEntityName, activeEntityAvatar } = useContextStore();
 
   // Data State
   const [moduleData, setModuleData] = useState<LearningModule | null>(null);
@@ -48,24 +46,20 @@ export const ContentStudio: React.FC = () => {
   // Determine authorized channels based on ACTIVE CONTEXT
   useEffect(() => {
       const loadChannels = async () => {
-          if (!activeContext) return;
+          if (!activeEntityId) return;
 
           // If Context is ORGANIZATION -> Fetch Org Channels
-          if (activeContext.type === 'ORGANIZATION') {
-              const org = await getOrganizationDetails(activeContext.id);
+          if (contextType === 'ORGANIZATION') {
+              const org = await getOrganizationDetails(activeEntityId);
               if (org) {
-                  // If Admin, see all. If Manager, filter (simplified here to all for context mode)
                   setAvailableChannels(org.channels || []);
               }
-          } 
-          // If Context is USER -> No "Channels" in the corporate sense, but maybe categories. 
-          // For now, leave empty or mock personal collections.
-          else {
+          } else {
               setAvailableChannels([]); 
           }
       };
       loadChannels();
-  }, [activeContext]);
+  }, [contextType, activeEntityId]);
 
   const loadData = async () => {
       if(!moduleId) return;
@@ -101,8 +95,6 @@ export const ContentStudio: React.FC = () => {
       if (showPublishModal) {
           setShowPublishModal(false);
           alert("Yayınlandı!");
-      } else {
-          // Just saving draft
       }
   };
 
@@ -186,12 +178,13 @@ export const ContentStudio: React.FC = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-60px)] bg-[#eff0f5] relative">
         
-        {/* CONTEXT BANNER (NEW) */}
-        <div className="bg-[#333] text-white px-6 py-1 text-xs font-bold flex items-center justify-center gap-2 shadow-inner">
-            <span className="opacity-70">Yayıncı Kimliği:</span>
-            <div className="flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded">
-                {activeContext?.type === 'ORGANIZATION' ? <Building2 className="w-3 h-3" /> : <User className="w-3 h-3" />}
-                {activeContext?.name}
+        {/* AUTHOR CARD (CONTEXT REMINDER) */}
+        <div className={`px-6 py-2 text-xs font-bold flex items-center justify-center gap-2 shadow-inner border-b border-black/10 ${contextType === 'ORGANIZATION' ? 'bg-[#333] text-white' : 'bg-gray-200 text-gray-700'}`}>
+            <span className="opacity-70 uppercase tracking-wider">Yayıncı Kimliği:</span>
+            <div className="flex items-center gap-2 bg-white/10 px-3 py-1 rounded-full border border-white/10">
+                {contextType === 'ORGANIZATION' ? <Building2 className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+                <span className="text-sm">{activeEntityName}</span>
+                <span className="ml-2 text-[9px] opacity-50 border-l border-white/20 pl-2">Değiştirilemez</span>
             </div>
         </div>
 
@@ -225,7 +218,7 @@ export const ContentStudio: React.FC = () => {
 
         {/* WORKSPACE */}
         <div className="flex flex-1 overflow-hidden">
-            
+            {/* ... (Editor Layout remains same) ... */}
             {/* LIST */}
             <div className="w-72 bg-white border-r border-[#d8dfea] flex flex-col z-10">
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -359,14 +352,14 @@ export const ContentStudio: React.FC = () => {
                         <button onClick={() => setShowPublishModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
                     </div>
                     
-                    {/* CONTEXT WARNING IN MODAL */}
+                    {/* CONTEXT CONFIRMATION */}
                     <div className="bg-blue-50 border-b border-blue-100 p-3 flex items-center gap-2 text-xs text-blue-900">
                         <Building2 className="w-4 h-4" />
-                        <span className="font-bold">{activeContext?.name}</span> adına yayınlanacak.
+                        <span className="font-bold">{activeEntityName}</span> olarak yayınlanacak.
                     </div>
 
                     <div className="p-6">
-                        {activeContext?.type === 'ORGANIZATION' ? (
+                        {contextType === 'ORGANIZATION' ? (
                             <>
                                 <p className="text-sm text-gray-600 mb-4">Bu eğitimi hangi kanallara (departmanlara) göndermek istiyorsunuz?</p>
                                 
@@ -405,7 +398,7 @@ export const ContentStudio: React.FC = () => {
 
                         <button 
                             onClick={handleSave}
-                            disabled={isSaving || (activeContext?.type === 'ORGANIZATION' && selectedChannels.length === 0)}
+                            disabled={isSaving || (contextType === 'ORGANIZATION' && selectedChannels.length === 0)}
                             className="w-full mt-6 bg-[#3b5998] hover:bg-[#2d4373] text-white py-3 rounded-xl font-bold disabled:opacity-50 flex items-center justify-center gap-2"
                         >
                             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Yayınla'}

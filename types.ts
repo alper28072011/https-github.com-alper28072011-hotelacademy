@@ -16,6 +16,14 @@ export interface SystemSettings {
     loginScreenImage: string;
 }
 
+export interface ActiveContext {
+    id: string;
+    type: 'USER' | 'ORGANIZATION';
+    role: string;
+    name: string;
+    avatar?: string;
+}
+
 // --- SOCIAL ROLES ---
 export type UserRole = 'user' | 'super_admin' | 'staff' | 'manager' | 'admin'; 
 export type PageRole = 'ADMIN' | 'EDITOR' | 'MODERATOR' | 'MEMBER';
@@ -24,21 +32,15 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
 
-// --- CONTEXT & PUBLISHING (NEW) ---
+// --- CONTEXT & PUBLISHING (STRICT) ---
+export type AppContextType = 'PERSONAL' | 'ORGANIZATION';
+
 export interface Publisher {
-    id: string; // User ID or Org ID
-    type: 'USER' | 'ORGANIZATION';
+    id: string; // The Entity ID (User ID or Org ID)
+    type: AppContextType;
     name: string;
     avatarUrl?: string;
-    role?: string; // e.g. "Front Office Manager" or "Admin"
-}
-
-export interface ActiveContext {
-    id: string;
-    type: 'USER' | 'ORGANIZATION';
-    role: UserRole | PageRole;
-    name: string;
-    avatar?: string;
+    roleTitle?: string; // e.g. "Front Office Manager"
 }
 
 // --- CONTENT TYPES ---
@@ -46,7 +48,6 @@ export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
 export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN' | 'INSPIRATIONAL' | 'AUTHORITATIVE';
 export type StoryCardType = 'COVER' | 'INFO' | 'QUIZ' | 'POLL' | 'REWARD' | 'VIDEO' | 'XP_REWARD';
 
-// UPDATED: Advanced Pedagogy Methods
 export type PedagogyMode = 'STANDARD' | 'ACTIVE_RECALL' | 'SOCRATIC' | 'FEYNMAN' | 'CASE_STUDY';
 
 export type SourceType = 'TEXT' | 'PDF' | 'URL' | 'YOUTUBE' | 'MANUAL';
@@ -278,14 +279,16 @@ export interface CareerPath {
 export interface Course {
   id: string;
   
-  // NEW POLYMORPHIC OWNER
-  publisher?: Publisher;
+  // NEW PUBLISHER MODEL (Context Aware)
+  publisherId: string; // ID of the Entity (User or Org)
+  publisherType: AppContextType; // 'PERSONAL' or 'ORGANIZATION'
+  publisherName: string;
+  publisherAvatar?: string;
 
-  // Legacy Fields (Maintain for now)
-  authorType: AuthorType;
-  authorId: string;
-  authorName: string;
-  authorAvatarUrl: string;
+  // AUDIT TRAIL (Who actually clicked the button)
+  authorId: string; // The User ID
+  
+  // Organization Context (If applicable)
   organizationId?: string; 
   
   channelId?: string; // Primary channel (Legacy support)
@@ -337,6 +340,9 @@ export interface Course {
   
   // Deprecated
   modules?: CourseModule[]; 
+  authorName?: string; // Legacy
+  authorAvatarUrl?: string; // Legacy
+  authorType?: AuthorType; // Legacy
 }
 
 // 3. LAYER: TOPIC (NEW) - E.g. "Week 1: Introduction"
@@ -396,13 +402,14 @@ export interface StoryCard {
 export interface FeedPost { 
     id: string; 
     
-    // NEW POLYMORPHIC OWNER
-    publisher?: Publisher;
+    // NEW PUBLISHER MODEL
+    publisherId: string;
+    publisherType: AppContextType;
+    publisherName: string;
+    publisherAvatar?: string;
 
-    authorType: AuthorType; 
-    authorId: string; 
-    authorName: string; 
-    authorAvatar: string; 
+    authorId: string; // Audit
+    
     organizationId?: string; 
     
     type: 'image' | 'video' | 'kudos' | 'course'; 
@@ -414,6 +421,11 @@ export interface FeedPost {
     kudosData?: { badgeType: KudosType; recipientId: string; recipientName: string; }; 
     likes?: Record<string, any>;
     targetChannelIds?: string[]; // NEW
+    
+    // Legacy mapping
+    authorType?: AuthorType;
+    authorName?: string;
+    authorAvatar?: string;
 }
 
 export interface Task {
