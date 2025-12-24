@@ -26,7 +26,8 @@ import {
     AuthorType,
     StoryCard,
     CourseTopic,
-    LearningModule
+    LearningModule,
+    Publisher
 } from '../types';
 import { getOrganizationDetails } from './db';
 import { deleteFolder } from './storage';
@@ -47,9 +48,12 @@ export const createCourse = async (courseData: Partial<Course>, user: User): Pro
             ...courseData,
             thumbnailUrl: courseData.thumbnailUrl || DEFAULT_THUMBNAIL,
             createdAt: Date.now(),
+            
+            // Legacy fallbacks (will be overwritten by publishContent logic usually)
             authorId: user.id,
             authorName: user.name,
             authorAvatarUrl: user.avatar,
+            
             topicIds: [], // Start empty
             modules: [], // Deprecated
             steps: [] // Deprecated
@@ -254,60 +258,63 @@ export const updateModuleContent = async (moduleId: string, cards: StoryCard[]) 
     }
 };
 
-// --- LEGACY ---
+// --- PUBLISH CONTENT (Context Aware) ---
 
-export const publishContent = async (courseData: Omit<Course, 'id' | 'tier' | 'verificationStatus' | 'qualityScore' | 'flagCount' | 'authorType' | 'authorName' | 'authorAvatarUrl'> & { ownerType?: string }, user: User): Promise<boolean> => {
+export const publishContent = async (
+    courseData: Omit<Course, 'id' | 'tier' | 'verificationStatus' | 'qualityScore' | 'flagCount' | 'authorType' | 'authorName' | 'authorAvatarUrl' | 'publisher'> & { ownerType?: string }, 
+    publisher: Publisher,
+    user: User // Still need the actual user making the request for audit
+): Promise<boolean> => {
     try {
         let tier: ContentTier = 'COMMUNITY';
         let status: VerificationStatus = 'VERIFIED'; 
         
-        if (user.role === 'manager' || user.role === 'admin' || user.role === 'super_admin') {
+        // Determine Status based on Publisher Type and Role
+        if (publisher.type === 'ORGANIZATION') {
             tier = 'OFFICIAL';
             status = 'VERIFIED';
-        } else if (user.creatorLevel === 'EXPERT' || user.creatorLevel === 'MASTER') {
-            tier = 'PRO';
-            status = 'PENDING'; 
-        } else {
-            tier = 'COMMUNITY';
-            if (courseData.duration > 5) {
-                throw new Error("Başlangıç seviyesindeki içerik üreticileri maks. 5 dakikalık içerik üretebilir.");
+        } else if (publisher.type === 'USER') {
+            // Check User's Level
+            if (user.creatorLevel === 'EXPERT' || user.creatorLevel === 'MASTER') {
+                tier = 'PRO';
+                status = 'PENDING'; 
+            } else {
+                tier = 'COMMUNITY';
+                if (courseData.duration > 5) {
+                    throw new Error("Başlangıç seviyesindeki içerik üreticileri maks. 5 dakikalık içerik üretebilir.");
+                }
             }
         }
 
-        let authorType: AuthorType = 'USER';
-        let authorName = user.name;
-        let authorAvatarUrl = user.avatar;
-        let finalAuthorId = user.id;
-
-        if (courseData.ownerType === 'ORGANIZATION' && courseData.organizationId) {
-            authorType = 'ORGANIZATION';
-            finalAuthorId = courseData.organizationId; 
-            
-            const org = await getOrganizationDetails(courseData.organizationId);
-            if (org) {
-                authorName = org.name;
-                authorAvatarUrl = org.logoUrl;
-            }
-        }
+        // Context Mapping
+        let authorType: AuthorType = publisher.type;
+        let finalAuthorId = publisher.id;
+        let finalOrgId = publisher.type === 'ORGANIZATION' ? publisher.id : undefined;
 
         const { ownerType, ...dataToSave } = courseData;
 
         const finalData = {
             ...dataToSave,
+            publisher, // New Polymorphic Field
+            
+            // Legacy Fields mapping
+            authorType,
+            authorId: finalAuthorId,
+            authorName: publisher.name,
+            authorAvatarUrl: publisher.avatarUrl || '',
+            organizationId: finalOrgId, // Only set if publisher is Org
+
             tier,
             verificationStatus: status,
             qualityScore: 0,
             flagCount: 0,
             createdAt: Date.now(),
-            authorType,
-            authorId: finalAuthorId,
-            authorName,
-            authorAvatarUrl,
             thumbnailUrl: dataToSave.thumbnailUrl || DEFAULT_THUMBNAIL
         };
 
         await addDoc(collection(db, 'courses'), sanitizeData(finalData));
         
+        // Reward User (even if publishing as Org, the user gets some XP for the effort)
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
             xp: increment(50) 

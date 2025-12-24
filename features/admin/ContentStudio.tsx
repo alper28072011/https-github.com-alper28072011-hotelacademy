@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
     Wand2, Loader2, ArrowLeft, Save, Plus, Trash2, 
     Upload, X, ChevronRight, Layout,
-    Type, AlignLeft, Hash, Check
+    Type, AlignLeft, Hash, Check, Building2, User
 } from 'lucide-react';
 import { createAiModuleContent } from '../../services/careerService'; 
 import { generateModuleContent } from '../../services/geminiService';
@@ -14,13 +14,12 @@ import { getModule, updateModuleContent, updateCourse } from '../../services/cou
 import { uploadFile } from '../../services/storage';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { getCourse } from '../../services/db';
+import { getCourse, getOrganizationDetails } from '../../services/db';
 
 export const ContentStudio: React.FC = () => {
   const { moduleId } = useParams<{ moduleId: string }>();
   const navigate = useNavigate();
-  const { currentOrganization } = useOrganizationStore();
-  const { currentUser } = useAuthStore();
+  const { currentUser, activeContext } = useAuthStore();
 
   // Data State
   const [moduleData, setModuleData] = useState<LearningModule | null>(null);
@@ -46,16 +45,27 @@ export const ContentStudio: React.FC = () => {
       }
   }, [moduleId]);
 
-  // Determine authorized channels for publishing
+  // Determine authorized channels based on ACTIVE CONTEXT
   useEffect(() => {
-      if (currentOrganization && currentUser) {
-          const isOwner = currentOrganization.ownerId === currentUser.id;
-          const userChannels = currentOrganization.channels.filter(c => 
-              isOwner || (c.managerIds && c.managerIds.includes(currentUser.id))
-          );
-          setAvailableChannels(userChannels);
-      }
-  }, [currentOrganization, currentUser]);
+      const loadChannels = async () => {
+          if (!activeContext) return;
+
+          // If Context is ORGANIZATION -> Fetch Org Channels
+          if (activeContext.type === 'ORGANIZATION') {
+              const org = await getOrganizationDetails(activeContext.id);
+              if (org) {
+                  // If Admin, see all. If Manager, filter (simplified here to all for context mode)
+                  setAvailableChannels(org.channels || []);
+              }
+          } 
+          // If Context is USER -> No "Channels" in the corporate sense, but maybe categories. 
+          // For now, leave empty or mock personal collections.
+          else {
+              setAvailableChannels([]); 
+          }
+      };
+      loadChannels();
+  }, [activeContext]);
 
   const loadData = async () => {
       if(!moduleId) return;
@@ -176,6 +186,15 @@ export const ContentStudio: React.FC = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-60px)] bg-[#eff0f5] relative">
         
+        {/* CONTEXT BANNER (NEW) */}
+        <div className="bg-[#333] text-white px-6 py-1 text-xs font-bold flex items-center justify-center gap-2 shadow-inner">
+            <span className="opacity-70">Yayıncı Kimliği:</span>
+            <div className="flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded">
+                {activeContext?.type === 'ORGANIZATION' ? <Building2 className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                {activeContext?.name}
+            </div>
+        </div>
+
         {/* TOP BAR */}
         <div className="bg-white border-b border-[#d8dfea] h-[60px] flex justify-between items-center px-6 shrink-0">
             <div className="flex items-center gap-4">
@@ -339,42 +358,57 @@ export const ContentStudio: React.FC = () => {
                         <h3 className="font-bold text-[#3b5998]">Yayınla: Hedef Kitle Seçimi</h3>
                         <button onClick={() => setShowPublishModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
                     </div>
+                    
+                    {/* CONTEXT WARNING IN MODAL */}
+                    <div className="bg-blue-50 border-b border-blue-100 p-3 flex items-center gap-2 text-xs text-blue-900">
+                        <Building2 className="w-4 h-4" />
+                        <span className="font-bold">{activeContext?.name}</span> adına yayınlanacak.
+                    </div>
+
                     <div className="p-6">
-                        <p className="text-sm text-gray-600 mb-4">Bu eğitimi hangi kanallara (departmanlara) göndermek istiyorsunuz?</p>
-                        
-                        <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 rounded-xl p-2 bg-gray-50/50">
-                            {availableChannels.map(channel => (
-                                <div 
-                                    key={channel.id}
-                                    onClick={() => toggleChannel(channel.id)}
-                                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-all ${
-                                        selectedChannels.includes(channel.id) 
-                                        ? 'bg-white border-primary shadow-sm' 
-                                        : 'bg-transparent border-transparent hover:bg-gray-100'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded flex items-center justify-center ${selectedChannels.includes(channel.id) ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'}`}>
-                                            <Hash className="w-4 h-4" />
+                        {activeContext?.type === 'ORGANIZATION' ? (
+                            <>
+                                <p className="text-sm text-gray-600 mb-4">Bu eğitimi hangi kanallara (departmanlara) göndermek istiyorsunuz?</p>
+                                
+                                <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 rounded-xl p-2 bg-gray-50/50">
+                                    {availableChannels.map(channel => (
+                                        <div 
+                                            key={channel.id}
+                                            onClick={() => toggleChannel(channel.id)}
+                                            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-all ${
+                                                selectedChannels.includes(channel.id) 
+                                                ? 'bg-white border-primary shadow-sm' 
+                                                : 'bg-transparent border-transparent hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded flex items-center justify-center ${selectedChannels.includes(channel.id) ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'}`}>
+                                                    <Hash className="w-4 h-4" />
+                                                </div>
+                                                <span className={`text-sm font-bold ${selectedChannels.includes(channel.id) ? 'text-primary' : 'text-gray-600'}`}>
+                                                    {channel.name}
+                                                </span>
+                                            </div>
+                                            {selectedChannels.includes(channel.id) && <Check className="w-5 h-5 text-primary" />}
                                         </div>
-                                        <span className={`text-sm font-bold ${selectedChannels.includes(channel.id) ? 'text-primary' : 'text-gray-600'}`}>
-                                            {channel.name}
-                                        </span>
-                                    </div>
-                                    {selectedChannels.includes(channel.id) && <Check className="w-5 h-5 text-primary" />}
+                                    ))}
+                                    {availableChannels.length === 0 && (
+                                        <div className="text-center p-4 text-xs text-gray-400">Yönetici olduğunuz kanal bulunamadı.</div>
+                                    )}
                                 </div>
-                            ))}
-                            {availableChannels.length === 0 && (
-                                <div className="text-center p-4 text-xs text-gray-400">Yönetici olduğunuz kanal bulunamadı.</div>
-                            )}
-                        </div>
+                            </>
+                        ) : (
+                            <div className="text-center py-6 text-gray-500 text-sm">
+                                Kişisel profilinizde yayınlanacak ve takipçilerinizle paylaşılacak.
+                            </div>
+                        )}
 
                         <button 
                             onClick={handleSave}
-                            disabled={isSaving || selectedChannels.length === 0}
+                            disabled={isSaving || (activeContext?.type === 'ORGANIZATION' && selectedChannels.length === 0)}
                             className="w-full mt-6 bg-[#3b5998] hover:bg-[#2d4373] text-white py-3 rounded-xl font-bold disabled:opacity-50 flex items-center justify-center gap-2"
                         >
-                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Seçili Kanallara Yayınla'}
+                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Yayınla'}
                         </button>
                     </div>
                 </div>

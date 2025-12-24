@@ -24,6 +24,23 @@ export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 export type CreatorLevel = 'NOVICE' | 'RISING_STAR' | 'EXPERT' | 'MASTER';
 export type KudosType = 'STAR_PERFORMER' | 'TEAM_PLAYER' | 'GUEST_HERO' | 'FAST_LEARNER';
 
+// --- CONTEXT & PUBLISHING (NEW) ---
+export interface Publisher {
+    id: string; // User ID or Org ID
+    type: 'USER' | 'ORGANIZATION';
+    name: string;
+    avatarUrl?: string;
+    role?: string; // e.g. "Front Office Manager" or "Admin"
+}
+
+export interface ActiveContext {
+    id: string;
+    type: 'USER' | 'ORGANIZATION';
+    role: UserRole | PageRole;
+    name: string;
+    avatar?: string;
+}
+
 // --- CONTENT TYPES ---
 export type DifficultyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
 export type CourseTone = 'FORMAL' | 'CASUAL' | 'FUN' | 'INSPIRATIONAL' | 'AUTHORITATIVE';
@@ -91,12 +108,12 @@ export interface User {
   bio?: string;
   instagramHandle?: string;
   
-  // IDENTITY & NETWORK (New Facebook-style logic)
-  primaryNetworkId: string | null; // Ana Bağlılık (İşveren/Okul) - Örn: "Rubi Platinum"
-  primaryNetworkRole: 'ADMIN' | 'MEMBER' | 'ALUMNI'; // O ağdaki statüsü
+  // IDENTITY & NETWORK
+  primaryNetworkId: string | null; 
+  primaryNetworkRole: 'ADMIN' | 'MEMBER' | 'ALUMNI'; 
   
-  // VISION (Career Goals)
-  targetCareerPathId: string | null; // Hedeflediği Kariyer Yolu (Örn: "Front Office Manager Path")
+  // VISION
+  targetCareerPathId: string | null; 
   
   followingUsers: string[]; 
   followingPages: string[]; 
@@ -260,12 +277,17 @@ export interface CareerPath {
 // 2. LAYER: COURSE
 export interface Course {
   id: string;
+  
+  // NEW POLYMORPHIC OWNER
+  publisher?: Publisher;
+
+  // Legacy Fields (Maintain for now)
   authorType: AuthorType;
   authorId: string;
   authorName: string;
   authorAvatarUrl: string;
-  
   organizationId?: string; 
+  
   channelId?: string; // Primary channel (Legacy support)
   targetChannelIds?: string[]; // NEW: Multi-channel publishing
   categoryId?: string;
@@ -373,11 +395,16 @@ export interface StoryCard {
 
 export interface FeedPost { 
     id: string; 
+    
+    // NEW POLYMORPHIC OWNER
+    publisher?: Publisher;
+
     authorType: AuthorType; 
     authorId: string; 
     authorName: string; 
     authorAvatar: string; 
     organizationId?: string; 
+    
     type: 'image' | 'video' | 'kudos' | 'course'; 
     mediaUrl?: string; 
     caption: string; 
