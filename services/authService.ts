@@ -86,7 +86,10 @@ export const loginUser = async (identifier: string, password: string): Promise<U
         managedPageIds: [],
         channelSubscriptions: [],
         pageRoles: {},
-        isPrivate: false
+        isPrivate: false,
+        primaryNetworkId: null,
+        primaryNetworkRole: 'MEMBER',
+        targetCareerPathId: null
     };
 
     // Save the recovered profile
@@ -159,7 +162,10 @@ export const registerUser = async (data: {
     channelSubscriptions: [],
     subscribedChannelIds: [],
     pageRoles: {},
-    isPrivate: false
+    isPrivate: false,
+    primaryNetworkId: null,
+    primaryNetworkRole: 'MEMBER',
+    targetCareerPathId: null
   };
 
   await setDoc(doc(db, 'users', uid), newUser);

@@ -91,6 +91,13 @@ export interface User {
   bio?: string;
   instagramHandle?: string;
   
+  // IDENTITY & NETWORK (New Facebook-style logic)
+  primaryNetworkId: string | null; // Ana Bağlılık (İşveren/Okul) - Örn: "Rubi Platinum"
+  primaryNetworkRole: 'ADMIN' | 'MEMBER' | 'ALUMNI'; // O ağdaki statüsü
+  
+  // VISION (Career Goals)
+  targetCareerPathId: string | null; // Hedeflediği Kariyer Yolu (Örn: "Front Office Manager Path")
+  
   followingUsers: string[]; 
   followingPages: string[]; 
   followedTags: string[];   

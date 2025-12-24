@@ -385,7 +385,8 @@ export const getSmartFeed = async (user: User, showVerifiedOnly: boolean): Promi
         let courses: Course[] = [];
 
         if (user.currentOrganizationId) {
-            const { courses: recCourses } = await getPersonalizedRecommendations(user.id, user.currentOrganizationId);
+            const { duties, vision } = await getPersonalizedRecommendations(user.id, user.currentOrganizationId);
+            const recCourses = [...duties, ...vision];
             const newRecs = recCourses.filter(c => !user.completedCourses.includes(c.id));
             courses = [...newRecs]; 
         }

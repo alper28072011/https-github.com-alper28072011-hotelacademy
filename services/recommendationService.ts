@@ -1,79 +1,103 @@
 
-import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, query, where, documentId } from 'firebase/firestore';
 import { db } from './firebase';
-import { Course, UserSkillProfile, SkillMetric } from '../types';
+import { Course, User, CareerPath, Organization } from '../types';
+
+interface DualEngineRecommendations {
+    duties: Course[]; // Network Duties (Mandatory)
+    vision: Course[]; // Career Growth (Aspirational)
+}
 
 /**
- * ADAPTIVE RECOMMENDATION ENGINE
+ * DUAL ENGINE RECOMMENDATION SYSTEM
  * 
- * Analyzes the user's skill profile to find:
- * 1. Weak Spots (High failure count or Low level)
- * 2. Stale Skills (Not tested in a long time - "Spaced Repetition")
- * 3. Returns content matching these topics.
+ * Engine 1: "Duties" (High Priority)
+ * - Source: Primary Network (Organization)
+ * - Logic: Mandatory channels, Assigned departmental courses.
+ * 
+ * Engine 2: "Vision" (Growth)
+ * - Source: Target Career Path
+ * - Logic: Next steps in the selected career path.
  */
-export const getPersonalizedRecommendations = async (userId: string, orgId: string): Promise<{
-    courses: Course[];
-    reason: string; // "Zayıf Yönlerini Güçlendir" or "Bilgilerini Tazele"
-}> => {
+export const getPersonalizedRecommendations = async (userId: string, orgId: string): Promise<DualEngineRecommendations> => {
     try {
-        // 1. Fetch User Skills
-        const skillDoc = await getDoc(doc(db, `users/${userId}/metrics/skills`));
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) return { duties: [], vision: [] };
         
-        if (!skillDoc.exists()) {
-            return { courses: [], reason: '' };
-        }
-
-        const profile = skillDoc.data() as UserSkillProfile;
-        const skills = profile.skills || {};
-
-        // 2. Identify Target Topics
-        const weakTopics: string[] = [];
-        const staleTopics: string[] = [];
-        const now = Date.now();
-        const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
-
-        Object.entries(skills).forEach(([topic, metric]) => {
-            if (metric.level < 40 || metric.failureCount > 2) {
-                weakTopics.push(topic);
-            } else if ((now - metric.lastTestedAt) > ONE_WEEK && metric.level < 80) {
-                staleTopics.push(topic);
-            }
-        });
-
-        // 3. Select Strategy
-        let targetTopics = [];
-        let reason = "";
-
-        if (weakTopics.length > 0) {
-            targetTopics = weakTopics.slice(0, 5); // Focus on top 5 weak points
-            reason = "Eksiklerini Tamamla";
-        } else if (staleTopics.length > 0) {
-            targetTopics = staleTopics.slice(0, 5);
-            reason = "Bilgilerini Tazele";
-        } else {
-            return { courses: [], reason: '' };
-        }
-
-        // 4. Query Content (Firestore array-contains-any limit is 10)
-        // Note: In production, we might use MeiliSearch/Algolia for this.
-        // Here we use Firestore basic capabilities.
+        const user = userSnap.data() as User;
         
-        if (targetTopics.length === 0) return { courses: [], reason: '' };
+        // Use primaryNetworkId if available, otherwise fallback to orgId context
+        const networkId = user.primaryNetworkId || orgId;
+        const careerPathId = user.targetCareerPathId || user.assignedPathId;
 
-        const q = query(
-            collection(db, 'courses'),
-            where('organizationId', '==', orgId),
-            where('topics', 'array-contains-any', targetTopics),
-            limit(10)
-        );
+        // --- ENGINE 1: DUTIES ---
+        const dutiesPromise = (async () => {
+            if (!networkId) return [];
+            
+            // 1. Get Org Data to find Mandatory Channels
+            const orgRef = doc(db, 'organizations', networkId);
+            const orgSnap = await getDoc(orgRef);
+            if (!orgSnap.exists()) return [];
+            const org = orgSnap.data() as Organization;
+            
+            const mandatoryChannelIds = org.channels?.filter(c => c.isMandatory).map(c => c.id) || [];
+            // Combine with user subscriptions
+            const allTargetChannels = [...new Set([...mandatoryChannelIds, ...(user.channelSubscriptions || [])])];
+            
+            if (allTargetChannels.length === 0) return [];
 
-        const snapshot = await getDocs(q);
-        const courses = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Course));
+            // 2. Query Courses targeting these channels
+            // Note: Firestore array-contains-any is limited to 10. We take top 10.
+            const safeChannels = allTargetChannels.slice(0, 10);
+            
+            const q = query(
+                collection(db, 'courses'),
+                where('organizationId', '==', networkId),
+                where('targetChannelIds', 'array-contains-any', safeChannels),
+                limit(5) // Top 5 Duties
+            );
+            
+            const snap = await getDocs(q);
+            const courses = snap.docs.map(d => ({ id: d.id, ...d.data() } as Course));
+            
+            // Filter completed
+            return courses.filter(c => !user.completedCourses.includes(c.id));
+        })();
 
-        return { courses, reason };
+        // --- ENGINE 2: VISION ---
+        const visionPromise = (async () => {
+            if (!careerPathId) return [];
+            
+            const pathRef = doc(db, 'careerPaths', careerPathId);
+            const pathSnap = await getDoc(pathRef);
+            if (!pathSnap.exists()) return [];
+            
+            const path = pathSnap.data() as CareerPath;
+            const courseIds = path.courseIds || [];
+            
+            // Find first 3 uncompleted courses in path order
+            const nextCourseIds = courseIds.filter(id => !user.completedCourses.includes(id)).slice(0, 3);
+            
+            if (nextCourseIds.length === 0) return [];
+
+            const q = query(
+                collection(db, 'courses'),
+                where(documentId(), 'in', nextCourseIds)
+            );
+            
+            const snap = await getDocs(q);
+            // Re-sort based on path order
+            const courses = snap.docs.map(d => ({ id: d.id, ...d.data() } as Course));
+            return courses.sort((a, b) => courseIds.indexOf(a.id) - courseIds.indexOf(b.id));
+        })();
+
+        const [duties, vision] = await Promise.all([dutiesPromise, visionPromise]);
+
+        return { duties, vision };
 
     } catch (e) {
         console.error("Recommendation Error:", e);
-        return { courses: [], reason: '' };
+        return { duties: [], vision: [] };
     }
 };

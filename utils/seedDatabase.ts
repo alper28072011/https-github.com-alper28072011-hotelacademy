@@ -39,7 +39,10 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       followedTags: [],
       followedPageIds: [],
       managedPageIds: [],
-      isPrivate: false
+      isPrivate: false,
+      primaryNetworkId: null,
+      primaryNetworkRole: 'MEMBER',
+      targetCareerPathId: null
   },
   { 
       name: 'Fatma Demir', 
@@ -73,7 +76,10 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       followedTags: [],
       followedPageIds: [],
       managedPageIds: [],
-      isPrivate: false
+      isPrivate: false,
+      primaryNetworkId: SEED_ORG_ID,
+      primaryNetworkRole: 'MEMBER',
+      targetCareerPathId: null
   },
   { 
       name: 'Mehmet Öztürk', 
@@ -107,7 +113,10 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       followedTags: [],
       followedPageIds: [],
       managedPageIds: [],
-      isPrivate: false
+      isPrivate: false,
+      primaryNetworkId: SEED_ORG_ID,
+      primaryNetworkRole: 'MEMBER',
+      targetCareerPathId: null
   },
   { 
       name: 'Canan Kaya', 
@@ -142,7 +151,10 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       followedTags: [],
       followedPageIds: [],
       managedPageIds: [],
-      isPrivate: false
+      isPrivate: false,
+      primaryNetworkId: SEED_ORG_ID,
+      primaryNetworkRole: 'MEMBER',
+      targetCareerPathId: 'path_fo_manager'
   },
   { 
       name: 'System Admin', 
@@ -176,7 +188,10 @@ const MOCK_USERS: Omit<User, 'id'>[] = [
       followedTags: [],
       followedPageIds: [],
       managedPageIds: [],
-      isPrivate: false
+      isPrivate: false,
+      primaryNetworkId: SEED_ORG_ID,
+      primaryNetworkRole: 'ADMIN',
+      targetCareerPathId: null
   },
 ];
 
