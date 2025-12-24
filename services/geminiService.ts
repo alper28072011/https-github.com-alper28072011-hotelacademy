@@ -9,6 +9,45 @@ const cleanJsonResponse = (text: string): string => {
 const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
+ * 0. SMART DESCRIPTION GENERATOR (New)
+ * Generates a short, context-aware description for a course title.
+ */
+export const generateShortDescription = async (title: string): Promise<{ tr: string, en: string }> => {
+    try {
+        const ai = getAiClient();
+        const schema: Schema = {
+            type: Type.OBJECT,
+            properties: {
+                tr: { type: Type.STRING, description: "Turkish summary (1-2 sentences)" },
+                en: { type: Type.STRING, description: "English summary (1-2 sentences)" }
+            },
+            required: ["tr", "en"]
+        };
+
+        const prompt = `
+            Task: Write a short, professional description (1-2 sentences) for a hotel staff training course.
+            Course Title: "${title}"
+            Context: Luxury Hotel Environment.
+            Output: JSON with 'tr' and 'en' keys.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json", responseSchema: schema }
+        });
+
+        if (response.text) {
+            return JSON.parse(cleanJsonResponse(response.text));
+        }
+        return { tr: title, en: title };
+    } catch (e) {
+        console.error("Desc Gen Error:", e);
+        return { tr: "Eğitim açıklaması hazırlanıyor...", en: "Course description pending..." };
+    }
+};
+
+/**
  * 1. CAREER PATH ARCHITECT (Level 1)
  */
 export const generateCareerPath = async (targetRole: string, language: string = 'Turkish'): Promise<{ title: string, description: string, courses: { title: string, description: string }[] }> => {

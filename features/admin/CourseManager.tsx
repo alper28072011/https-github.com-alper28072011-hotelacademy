@@ -1,13 +1,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Plus, FileText, ChevronRight, Users, Clock, Edit2, Trash2, X } from 'lucide-react';
+import { Loader2, Plus, FileText, ChevronRight, Users, Clock, Edit2, Trash2, X, Wand2 } from 'lucide-react';
 import { Course } from '../../types';
 import { getAdminCourses } from '../../services/db';
 import { createCourse, deleteCourse, updateCourse } from '../../services/courseService';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { getLocalizedContent } from '../../i18n/config';
+import { generateShortDescription } from '../../services/geminiService';
 
 export const CourseManager: React.FC = () => {
   const navigate = useNavigate();
@@ -22,7 +23,11 @@ export const CourseManager: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState<'CREATE' | 'EDIT'>('CREATE');
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  
+  // Form Fields
   const [inputTitle, setInputTitle] = useState('');
+  const [inputDescription, setInputDescription] = useState('');
+  
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
@@ -42,6 +47,7 @@ export const CourseManager: React.FC = () => {
   const handleOpenCreate = () => {
       setModalMode('CREATE');
       setInputTitle('');
+      setInputDescription('');
       setSelectedCourse(null);
       setShowModal(true);
   };
@@ -50,6 +56,7 @@ export const CourseManager: React.FC = () => {
       e.stopPropagation();
       setModalMode('EDIT');
       setInputTitle(getLocalizedContent(course.title));
+      setInputDescription(getLocalizedContent(course.description));
       setSelectedCourse(course);
       setShowModal(true);
   };
@@ -58,11 +65,25 @@ export const CourseManager: React.FC = () => {
       if (!currentUser || !inputTitle.trim()) return;
       setIsProcessing(true);
 
+      // AI GENERATION: If user didn't provide a description, generate one.
+      let finalDescription = { tr: inputDescription, en: inputDescription };
+      
+      // If Creating NEW and description is empty, or Editing and description is empty (auto-fix)
+      if (!inputDescription.trim()) {
+          try {
+              const aiDesc = await generateShortDescription(inputTitle);
+              finalDescription = aiDesc;
+          } catch (e) {
+              // Fallback
+              finalDescription = { tr: inputTitle + ' eğitimi.', en: inputTitle + ' training.' };
+          }
+      }
+
       if (modalMode === 'CREATE') {
           // CREATE LOGIC
           const newCourse = await createCourse({
               title: { tr: inputTitle, en: inputTitle },
-              description: { tr: 'Açıklama giriniz.', en: 'Description here.' },
+              description: finalDescription,
               organizationId: currentOrganization?.id,
               visibility: 'PRIVATE',
           }, currentUser);
@@ -75,10 +96,15 @@ export const CourseManager: React.FC = () => {
           // EDIT LOGIC
           if (selectedCourse) {
               const success = await updateCourse(selectedCourse.id, {
-                  title: { ...selectedCourse.title, tr: inputTitle }
+                  title: { ...selectedCourse.title, tr: inputTitle },
+                  description: finalDescription // Updates the description too
               });
               if (success) {
-                  setCourses(courses.map(c => c.id === selectedCourse.id ? { ...c, title: { ...c.title, tr: inputTitle } } : c));
+                  setCourses(courses.map(c => c.id === selectedCourse.id ? { 
+                      ...c, 
+                      title: { ...c.title, tr: inputTitle },
+                      description: finalDescription
+                  } : c));
                   setShowModal(false);
               }
           }
@@ -144,7 +170,7 @@ export const CourseManager: React.FC = () => {
                             <button 
                                 onClick={(e) => handleOpenEdit(e, course)}
                                 className="p-2 text-gray-400 hover:text-[#3b5998] hover:bg-[#d8dfea] rounded transition-colors"
-                                title="İsmi Düzenle"
+                                title="Düzenle"
                             >
                                 <Edit2 className="w-4 h-4" />
                             </button>
@@ -176,16 +202,30 @@ export const CourseManager: React.FC = () => {
                     </div>
                     
                     {/* Body */}
-                    <div className="p-4 bg-white">
-                        <label className="block text-[11px] font-bold text-gray-600 mb-2">Kurs Başlığı:</label>
-                        <input 
-                            autoFocus
-                            value={inputTitle}
-                            onChange={(e) => setInputTitle(e.target.value)}
-                            className="w-full border border-[#bdc7d8] p-1 text-sm outline-none focus:border-[#3b5998]"
-                            placeholder="Örn: Mutfak Hijyeni 101"
-                            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                        />
+                    <div className="p-4 bg-white space-y-4">
+                        <div>
+                            <label className="block text-[11px] font-bold text-gray-600 mb-1">Kurs Başlığı:</label>
+                            <input 
+                                autoFocus
+                                value={inputTitle}
+                                onChange={(e) => setInputTitle(e.target.value)}
+                                className="w-full border border-[#bdc7d8] p-1.5 text-sm outline-none focus:border-[#3b5998] font-bold text-[#333]"
+                                placeholder="Örn: Mutfak Hijyeni 101"
+                            />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-[11px] font-bold text-gray-600 mb-1 flex items-center gap-1">
+                                Açıklama <span className="text-gray-400 font-normal">(Boş bırakırsanız AI yazar)</span>
+                                {!inputDescription && modalMode === 'CREATE' && <Wand2 className="w-3 h-3 text-[#3b5998] animate-pulse" />}
+                            </label>
+                            <textarea 
+                                value={inputDescription}
+                                onChange={(e) => setInputDescription(e.target.value)}
+                                className="w-full border border-[#bdc7d8] p-1.5 text-xs outline-none focus:border-[#3b5998] resize-none h-20 text-[#333]"
+                                placeholder={modalMode === 'CREATE' ? "Örn: Temel mutfak kuralları... (veya boş bırakın)" : "Açıklama giriniz"}
+                            />
+                        </div>
                     </div>
 
                     {/* Footer */}
@@ -193,9 +233,10 @@ export const CourseManager: React.FC = () => {
                         <button 
                             onClick={handleSubmit}
                             disabled={!inputTitle.trim() || isProcessing}
-                            className="bg-[#3b5998] border border-[#29447e] text-white px-4 py-1 text-[11px] font-bold disabled:opacity-50"
+                            className="bg-[#3b5998] border border-[#29447e] text-white px-4 py-1 text-[11px] font-bold disabled:opacity-50 flex items-center gap-1"
                         >
-                            {isProcessing ? 'Kaydediliyor...' : 'Kaydet'}
+                            {isProcessing && <Loader2 className="w-3 h-3 animate-spin" />}
+                            {isProcessing ? 'İşleniyor...' : 'Kaydet'}
                         </button>
                         <button 
                             onClick={() => setShowModal(false)}
