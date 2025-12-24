@@ -16,10 +16,11 @@ import {
   runTransaction,
   setDoc,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  documentId
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Course, Task, Issue, Category, CareerPath, FeedPost, Organization, Membership, JoinRequest, OrganizationSector, PageRole, PermissionType, ChannelStoryData } from '../types';
+import { User, Course, Task, Issue, Category, CareerPath, FeedPost, Organization, Membership, JoinRequest, OrganizationSector, PageRole, PermissionType, ChannelStoryData, Channel } from '../types';
 import { SyncService } from './syncService';
 
 // Collection References
@@ -95,12 +96,6 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
             
             if (subbedChannels.length > 0) {
                 // Fetch content from subscribed channels in joined orgs
-                // Support both legacy `channelId` and new `targetChannelIds`
-                // Note: Firestore 'in' query works on single fields. For array-contains-any on targetChannelIds, we might need separate query.
-                // Simplified: We query courses in user's ORG and filter in memory or rely on 'channelId' primary.
-                
-                // Better approach: Query by Org + Filter by Channel locally or improved index.
-                // For this implementation, let's assume `targetChannelIds` contains the channel ID.
                 const workQ = query(
                     coursesRef,
                     where('organizationId', 'in', user.joinedPageIds.slice(0, 10)),
@@ -239,6 +234,46 @@ export const getOrganizationDetails = async (orgId: string): Promise<Organizatio
         const snap = await getDoc(doc(db, 'organizations', orgId));
         return snap.exists() ? { id: snap.id, ...snap.data() } as Organization : null;
     } catch (e) { return null; }
+};
+
+/**
+ * NEW: Get enriched details for user's channel subscriptions.
+ * Maps simple IDs to { ChannelName, OrgName, OrgLogo } structure.
+ */
+export const getSubscribedChannelsDetails = async (user: User): Promise<{
+    channel: Channel;
+    organization: { id: string; name: string; logoUrl: string };
+}[]> => {
+    if (!user.channelSubscriptions || user.channelSubscriptions.length === 0) return [];
+    if (!user.joinedPageIds || user.joinedPageIds.length === 0) return [];
+
+    try {
+        // Fetch details of all joined organizations
+        const orgsQ = query(orgsRef, where(documentId(), 'in', user.joinedPageIds));
+        const orgsSnap = await getDocs(orgsQ);
+        
+        const results: { channel: Channel; organization: { id: string; name: string; logoUrl: string } }[] = [];
+
+        orgsSnap.forEach(doc => {
+            const org = doc.data() as Organization;
+            const orgInfo = { id: doc.id, name: org.name, logoUrl: org.logoUrl };
+            
+            // Find subscribed channels within this org
+            org.channels?.forEach(channel => {
+                if (user.channelSubscriptions.includes(channel.id)) {
+                    results.push({
+                        channel,
+                        organization: orgInfo
+                    });
+                }
+            });
+        });
+
+        return results;
+    } catch (e) {
+        console.error("Get Subscribed Channels Error:", e);
+        return [];
+    }
 };
 
 export const updateCourse = async (courseId: string, data: Partial<Course>): Promise<boolean> => {
