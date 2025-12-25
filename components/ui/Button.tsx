@@ -23,25 +23,29 @@ export const Button: React.FC<ButtonProps> = ({
     ...props 
 }) => {
     
-    const baseStyles = "inline-flex items-center justify-center font-bold transition-all duration-300 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+    // Classic 2008 Style: Sharp corners, 1px borders, subtle vertical gradient or solid
+    const baseStyles = "inline-flex items-center justify-center font-bold border cursor-pointer active:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed leading-normal";
     
     const variants = {
-        primary: "bg-primary text-white hover:bg-primary-hover shadow-lg hover:shadow-xl hover:shadow-primary/20 focus:ring-primary/50 border border-transparent",
-        secondary: "bg-secondary text-primary hover:bg-secondary-dark focus:ring-secondary/50 border border-transparent",
-        outline: "bg-transparent border-2 border-gray-200 text-gray-600 hover:border-primary hover:text-primary focus:ring-gray-200",
-        ghost: "bg-transparent text-gray-500 hover:bg-gray-100 hover:text-primary shadow-none",
+        // The classic "Facebook Blue" button
+        primary: "bg-[#3b5998] border-[#29447e] text-white hover:bg-[#3b5998]/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]",
+        // The "Gray" button (Cancel, etc.)
+        secondary: "bg-[#f5f6f7] border-[#d8dfea] text-[#333] hover:bg-[#ebedef] shadow-sm",
+        // Simple outline
+        outline: "bg-white border-[#999] text-[#333] hover:bg-[#f9f9f9]",
+        // Ghost link
+        ghost: "bg-transparent border-transparent text-[#3b5998] hover:underline hover:bg-[#eff0f2]",
     };
 
     const sizes = {
-        sm: "text-xs px-4 py-2 gap-1.5",
-        md: "text-sm px-6 py-3 gap-2",
-        lg: "text-base px-8 py-4 gap-2.5",
+        sm: "text-[11px] px-2 py-1 gap-1",
+        md: "text-[13px] px-4 py-1.5 gap-2",
+        lg: "text-[14px] px-6 py-2 gap-2",
     };
 
     return (
         <motion.button
-            whileHover={!disabled && !isLoading ? { scale: 1.02, y: -2 } : {}}
-            whileTap={!disabled && !isLoading ? { scale: 0.98 } : {}}
+            // Removing spring animations for a snappier, older feel
             className={`
                 ${baseStyles}
                 ${variants[variant]}
@@ -52,7 +56,7 @@ export const Button: React.FC<ButtonProps> = ({
             disabled={disabled || isLoading}
             {...props}
         >
-            {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+            {isLoading && <Loader2 className="w-3 h-3 animate-spin mr-1" />}
             {!isLoading && icon && <span className="shrink-0">{icon}</span>}
             <span>{children}</span>
         </motion.button>

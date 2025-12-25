@@ -54,10 +54,8 @@ export const ExplorePage: React.FC = () => {
       setIsSearching(true);
       setHasSearched(true);
 
-      // 1. Track Query
       trackSearch(query);
 
-      // 2. Perform Global Search (Courses + Orgs + Users + Semantic)
       const results = await performGlobalSearch(query);
       setSearchResults(results);
       
@@ -66,68 +64,71 @@ export const ExplorePage: React.FC = () => {
 
   if (contentLoading) {
       return (
-          <div className="h-screen flex items-center justify-center bg-gray-50">
-              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+          <div className="h-screen flex items-center justify-center bg-[#eff0f2]">
+              <Loader2 className="w-8 h-8 animate-spin text-[#3b5998]" />
           </div>
       );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="bg-[#eff0f2] min-h-screen">
         
-        {/* HERO SEARCH SECTION */}
-        <div className="relative bg-white pb-6 pt-4 rounded-b-[2.5rem] shadow-sm border-b border-gray-100 z-30">
-            <div className="px-4 mb-4">
+        {/* CLASSIC SEARCH HEADER */}
+        <div className="bg-[#3b5998] p-4 border-b border-[#29487d] shadow-sm">
+            <div className="max-w-[980px] mx-auto">
                 <SearchOmniBox 
                     value={searchQuery}
                     onChange={setSearchQuery}
                     onSearch={handleSearch}
                     isSearching={isSearching}
                 />
+                
+                {/* Categories Bar */}
+                {!hasSearched && (
+                    <div className="flex gap-1 mt-3 overflow-x-auto no-scrollbar">
+                        <span className="text-[10px] font-bold text-[#98a9ca] uppercase py-1 mr-2">Göz At:</span>
+                        {categories.slice(0, 8).map(cat => (
+                            <button 
+                                key={cat.id}
+                                onClick={() => handleSearch(cat.title)}
+                                className="px-2 py-0.5 text-[10px] font-bold text-white hover:bg-white/10 rounded-sm border border-transparent hover:border-white/20 transition-colors whitespace-nowrap"
+                            >
+                                {cat.title}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
-            
-            {/* Categories (Only visible in discovery mode) */}
-            {!hasSearched && (
-                <div className="flex gap-2 overflow-x-auto no-scrollbar px-4 pb-2">
-                    {categories.slice(0, 6).map(cat => (
-                        <button 
-                            key={cat.id}
-                            onClick={() => handleSearch(cat.title)}
-                            className="px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap bg-gray-100 text-gray-600 border border-transparent hover:bg-gray-200 transition-all"
-                        >
-                            {cat.title}
-                        </button>
-                    ))}
-                </div>
-            )}
         </div>
 
         {/* MAIN CONTENT */}
-        <div className="p-4 flex flex-col gap-8 min-h-[500px]">
+        <div className="max-w-[980px] mx-auto p-4 flex flex-col gap-6">
             
             {/* CASE 1: SEARCHING... */}
             {isSearching && (
-                <div className="flex flex-col items-center justify-center pt-20 text-gray-400">
-                    <Loader2 className="w-10 h-10 animate-spin mb-4 text-primary" />
-                    <p className="text-sm font-medium animate-pulse">Arama sonuçları derleniyor...</p>
+                <div className="bg-white border border-[#d8dfea] p-10 text-center">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[#3b5998]" />
+                    <p className="text-xs font-bold text-gray-500">Veritabanı taranıyor...</p>
                 </div>
             )}
 
             {/* CASE 2: SEARCH RESULTS */}
             {!isSearching && hasSearched && (
-                <SearchResults results={searchResults} />
+                <div className="bg-white border border-[#d8dfea] p-4">
+                    <SearchResults results={searchResults} />
+                </div>
             )}
 
             {/* CASE 3: DISCOVERY MODE (Default) */}
             {!isSearching && !hasSearched && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 space-y-8">
+                <div className="space-y-6">
                     
                     {/* Hero Selection */}
                     {smartFeed.length > 0 && (
-                        <div className="flex flex-col gap-4">
-                            <div className="flex items-center gap-2 px-1">
-                                <Sparkles className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                                <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Günün Önerisi</span>
+                        <div className="bg-white border border-[#d8dfea] p-4">
+                            <div className="flex items-center gap-2 mb-3 border-b border-[#eee] pb-2">
+                                <Sparkles className="w-4 h-4 text-yellow-600" />
+                                <span className="text-xs font-bold text-[#333] uppercase">Editörün Seçimi</span>
                             </div>
                             <HeroCourseCard course={smartFeed[0]} />
                         </div>
@@ -135,15 +136,17 @@ export const ExplorePage: React.FC = () => {
 
                     {/* Trending Carousel */}
                     {smartFeed.length > 1 && (
-                        <TopicSection 
-                            title="Popüler Eğitimler" 
-                            courses={smartFeed.slice(1, 6)} 
-                        />
+                        <div className="bg-white border border-[#d8dfea] p-4">
+                            <TopicSection 
+                                title="Popüler Eğitimler" 
+                                courses={smartFeed.slice(1, 6)} 
+                            />
+                        </div>
                     )}
 
                     {/* Discovery Grid */}
-                    <div>
-                        <h3 className="text-lg font-bold text-gray-900 px-1 mb-4">Daha Fazla Keşfet</h3>
+                    <div className="bg-white border border-[#d8dfea] p-4">
+                        <h3 className="text-sm font-bold text-[#3b5998] mb-4 border-b border-[#eee] pb-2">Tüm Kataloğu Keşfet</h3>
                         <MasonryGrid courses={smartFeed.slice(6)} />
                     </div>
                 </div>

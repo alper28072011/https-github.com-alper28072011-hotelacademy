@@ -5,42 +5,50 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-slate-900 font-sans; /* Global: Koyu yazı, açık zemin */
-  }
-
-  /* Admin Paneli Özel Reset */
-  .admin-panel {
-    @apply text-slate-800 bg-[#eff0f2] h-full;
+    @apply bg-[#eff0f2] text-[#333] font-sans text-[11px] md:text-[13px];
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply text-slate-900 font-bold;
+    @apply text-[#333] font-bold tracking-tight;
   }
 
-  p, span, div, li, a, button {
-    @apply text-slate-700;
+  /* Make all inputs and buttons feel "clicky" and solid */
+  input, textarea, select {
+    @apply border border-[#bdc7d8] shadow-none rounded-none !important;
   }
   
-  /* Reset button specific text colors inside specialized components to allow overrides */
-  .btn-primary, .bg-primary {
-    @apply text-white;
+  /* Link hover style */
+  a:hover {
+    @apply underline decoration-[#3b5998];
   }
 }
 
-/* Custom Scrollbar */
+/* Specific Facebook 2008 Table Styles */
+.fb-table {
+    @apply w-full border-collapse;
+}
+.fb-table th {
+    @apply bg-[#f7f7f7] border-b border-[#d8dfea] p-2 text-left font-bold text-[#333];
+}
+.fb-table td {
+    @apply border-b border-[#e9e9e9] p-2 bg-white;
+}
+
+/* Custom Scrollbar - Boxy */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f0f0f0;
+  border-left: 1px solid #dcdcdc;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+  background: #cdcdcd;
+  border: 1px solid #fff;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #a6a6a6;
 }
 
 .no-scrollbar::-webkit-scrollbar {

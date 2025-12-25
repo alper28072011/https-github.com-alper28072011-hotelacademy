@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Building2, ArrowRight, Loader2, MapPin, Briefcase, Clock, X } from 'lucide-react';
+import { Plus, Search, Building2, ArrowRight, Loader2, MapPin, Briefcase, Clock, X, Globe, Users } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { createOrganization, searchOrganizations, getUserPendingRequests, cancelJoinRequest } from '../../services/db';
@@ -77,10 +76,7 @@ export const OrganizationLobby: React.FC = () => {
       const org = await createOrganization(newOrgName, newOrgSector, currentUser);
       
       if (org) {
-          // 1. Switch Organization Context
           await startOrganizationSession(org.id);
-          
-          // 2. CRITICAL: Manually update AuthStore User State
           const updatedUser: User = {
               ...currentUser,
               currentOrganizationId: org.id,
@@ -88,8 +84,6 @@ export const OrganizationLobby: React.FC = () => {
               department: 'management'
           };
           loginSuccess(updatedUser);
-
-          // 3. FORCE REDIRECT to Settings with Flag
           setTimeout(() => {
               navigate('/admin/settings', { state: { isNewOrg: true } });
           }, 100);
@@ -101,24 +95,17 @@ export const OrganizationLobby: React.FC = () => {
   const handleSelectMembership = async (orgId: string) => {
       if (switchingOrgId) return; 
       setSwitchingOrgId(orgId);
-      
       try {
           const result = await startOrganizationSession(orgId);
           if (result.success) {
-              navigate('/admin'); // Admin Layout will handle routing based on context
+              navigate('/admin'); 
           } else {
               setSwitchingOrgId(null);
-              alert("Giriş yapılamadı. Lütfen tekrar deneyin.");
+              alert("Giriş yapılamadı.");
           }
       } catch (error) {
-          console.error("Lobby Selection Error:", error);
           setSwitchingOrgId(null);
-          alert("Bir hata oluştu.");
       }
-  };
-
-  const goToPublicPage = (orgId: string) => {
-      navigate(`/org/${orgId}`);
   };
 
   const sectors: { id: OrganizationSector, label: string }[] = [
@@ -132,173 +119,180 @@ export const OrganizationLobby: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 relative overflow-hidden">
-        <div className="absolute inset-0 z-0">
-            <div className="absolute top-0 left-0 w-full h-96 bg-primary rounded-b-[3rem] shadow-2xl" />
-        </div>
-
-        <motion.div 
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`relative z-10 w-full max-w-4xl bg-white rounded-[2.5rem] shadow-2xl border border-white/20 overflow-hidden min-h-[600px] flex flex-col md:flex-row transition-all duration-300 ${switchingOrgId ? 'scale-95 opacity-80 blur-[1px]' : ''}`}
-        >
-            {/* Sidebar */}
-            <div className="md:w-1/3 bg-gray-50 border-r border-gray-100 p-6 flex flex-col">
-                <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center font-bold text-xl shadow-lg">H</div>
-                    <div>
-                        <h2 className="font-bold text-gray-800 leading-tight">Hotel Academy</h2>
-                        <p className="text-xs text-gray-400">Network Hub</p>
+    <div className="p-4 w-full max-w-[980px] mx-auto">
+        <div className="flex flex-col md:flex-row gap-4">
+            
+            {/* LEFT SIDEBAR: MY MEMBERSHIPS */}
+            <div className="w-full md:w-[240px] shrink-0 space-y-4">
+                
+                {/* My Groups Box */}
+                <div className="bg-white border border-[#d8dfea]">
+                    <div className="bg-[#f7f7f7] border-b border-[#d8dfea] p-2 font-bold text-[#3b5998] text-xs">
+                        Üyeliklerim
+                    </div>
+                    <div className="p-2 space-y-1">
+                        {myMemberships.map(mem => (
+                            <button 
+                                key={mem.id}
+                                onClick={() => handleSelectMembership(mem.organizationId)}
+                                disabled={!!switchingOrgId}
+                                className={`w-full flex items-center gap-2 p-2 border border-transparent hover:bg-[#eff0f5] text-left transition-colors ${switchingOrgId === mem.organizationId ? 'bg-[#fff9d7]' : ''}`}
+                            >
+                                <div className="w-6 h-6 bg-[#d8dfea] flex items-center justify-center border border-[#ccc]">
+                                    {switchingOrgId === mem.organizationId ? <Loader2 className="w-3 h-3 animate-spin" /> : <Building2 className="w-3 h-3 text-white" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-[#3b5998] text-[11px] truncate">
+                                        Org {mem.organizationId.substring(0,4)}...
+                                    </div>
+                                    <div className="text-[9px] text-gray-500 capitalize">{mem.role}</div>
+                                </div>
+                            </button>
+                        ))}
+                        {myMemberships.length === 0 && (
+                            <div className="p-4 text-center text-gray-400 text-[11px]">Henüz üyelik yok.</div>
+                        )}
                     </div>
                 </div>
 
-                <div className="flex-1 space-y-6 overflow-y-auto pr-2 custom-scrollbar">
-                    {/* MEMBERSHIPS */}
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Üyeliklerim</h3>
-                        <div className="space-y-3">
-                            {myMemberships.map(mem => (
-                                <button 
-                                    key={mem.id}
-                                    onClick={() => handleSelectMembership(mem.organizationId)}
-                                    disabled={!!switchingOrgId}
-                                    className={`w-full flex items-center gap-3 p-3 rounded-2xl border shadow-sm transition-all group relative overflow-hidden ${
-                                        switchingOrgId === mem.organizationId 
-                                        ? 'bg-green-50 border-green-500 shadow-green-200 ring-2 ring-green-200' 
-                                        : 'bg-white border-gray-100 hover:border-accent hover:shadow-md'
-                                    }`}
-                                >
-                                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
-                                        {switchingOrgId === mem.organizationId ? <Loader2 className="w-5 h-5 animate-spin text-green-600" /> : <Building2 className="w-5 h-5 text-gray-500" />}
-                                    </div>
-                                    <div className="text-left flex-1 min-w-0">
-                                        <div className="font-bold text-gray-800 truncate text-sm">Org {mem.organizationId.substring(0,4)}...</div>
-                                        <div className="text-xs text-gray-500 capitalize">{mem.role}</div>
-                                    </div>
-                                    {switchingOrgId !== mem.organizationId && <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-accent" />}
-                                </button>
-                            ))}
-                            {myMemberships.length === 0 && <div className="text-center py-4 text-gray-400 text-xs bg-white rounded-xl border border-dashed border-gray-200">Henüz bir kuruma üye değilsiniz.</div>}
+                {/* Pending Requests Box */}
+                {pendingRequests.length > 0 && (
+                    <div className="bg-white border border-[#dd3c10]">
+                        <div className="bg-[#ffebe8] border-b border-[#dd3c10] p-2 font-bold text-[#dd3c10] text-xs flex justify-between">
+                            <span>Bekleyenler</span>
+                            <span className="bg-white px-1.5 rounded text-[10px]">{pendingRequests.length}</span>
                         </div>
-                    </div>
-
-                    {/* PENDING REQUESTS (NEW) */}
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            Bekleyen Başvurular 
-                            <span className="bg-orange-100 text-orange-600 px-1.5 rounded text-[9px]">{pendingRequests.length}</span>
-                        </h3>
-                        <div className="space-y-3">
+                        <div className="p-2 space-y-2">
                             {pendingRequests.map(req => (
-                                <div key={req.id} className="bg-white p-3 rounded-xl border border-orange-100 shadow-sm relative group">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center text-orange-500">
-                                            <Clock className="w-4 h-4" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="font-bold text-gray-800 text-sm truncate">{req.orgName || 'Kurum Yükleniyor...'}</div>
-                                            <div className="text-xs text-gray-500 truncate">{req.requestedRoleTitle}</div>
-                                        </div>
+                                <div key={req.id} className="text-[11px] border-b border-[#eee] last:border-0 pb-1">
+                                    <div className="font-bold text-[#333] truncate">{req.orgName || 'Yükleniyor...'}</div>
+                                    <div className="flex justify-between items-center mt-1">
+                                        <span className="text-gray-500">{req.requestedRoleTitle}</span>
+                                        <button onClick={() => handleCancelRequest(req.id)} className="text-red-600 hover:underline text-[9px]">İptal</button>
                                     </div>
-                                    <button 
-                                        onClick={() => handleCancelRequest(req.id)}
-                                        className="w-full py-1.5 text-[10px] font-bold text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-1"
-                                    >
-                                        <X className="w-3 h-3" /> Başvuruyu İptal Et
-                                    </button>
                                 </div>
                             ))}
-                            {pendingRequests.length === 0 && <div className="text-center py-4 text-gray-400 text-xs bg-white rounded-xl border border-dashed border-gray-200">Bekleyen başvurunuz yok.</div>}
                         </div>
                     </div>
-                </div>
+                )}
             </div>
 
-            {/* Main Area */}
-            <div className="flex-1 p-8 md:p-12 flex flex-col">
-                <div className="flex gap-4 mb-8">
-                    <button onClick={() => setActiveTab('FIND')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'FIND' ? 'bg-primary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Kurum Bul</button>
-                    <button onClick={() => setActiveTab('CREATE')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === 'CREATE' ? 'bg-primary text-white shadow-lg' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>Kurum Oluştur</button>
+            {/* RIGHT MAIN: FIND / CREATE */}
+            <div className="flex-1 min-w-0">
+                
+                {/* TABS */}
+                <div className="flex items-end border-b border-[#899bc1] h-[29px] mb-4">
+                    <button 
+                        onClick={() => setActiveTab('FIND')}
+                        className={`px-3 py-1.5 text-xs font-bold border-t border-l border-r mr-1 outline-none ${activeTab === 'FIND' ? 'bg-white border-[#899bc1] text-[#333] mb-[-1px] pb-2' : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'}`}
+                    >
+                        <Search className="w-3 h-3 inline mr-1" /> Kurum Bul
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('CREATE')}
+                        className={`px-3 py-1.5 text-xs font-bold border-t border-l border-r mr-1 outline-none ${activeTab === 'CREATE' ? 'bg-white border-[#899bc1] text-[#333] mb-[-1px] pb-2' : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'}`}
+                    >
+                        <Plus className="w-3 h-3 inline mr-1" /> Yeni Oluştur
+                    </button>
                 </div>
 
-                <AnimatePresence mode="wait">
+                <div className="bg-white border border-[#d8dfea] min-h-[400px]">
                     {activeTab === 'FIND' ? (
-                        <motion.div key="find" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex-1 flex flex-col">
-                            <h2 className="text-2xl font-bold text-gray-800 mb-2">Çalışacağın Yeri Bul</h2>
-                            <p className="text-gray-500 text-sm mb-6">İsme veya koda göre arama yap.</p>
-
-                            <div className="relative mb-6">
-                                <Search className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-                                <input 
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Kurum Adı Ara..." 
-                                    className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 font-bold text-gray-800 focus:border-accent focus:outline-none transition-all"
-                                />
-                                {isSearching && <Loader2 className="absolute right-4 top-4 w-5 h-5 animate-spin text-accent" />}
+                        <div>
+                            {/* SEARCH BAR */}
+                            <div className="bg-[#f7f7f7] border-b border-[#e9e9e9] p-3 flex gap-2">
+                                <label className="text-xs font-bold text-gray-500 pt-1.5">Ara:</label>
+                                <div className="flex-1 relative">
+                                    <input 
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full border border-[#bdc7d8] p-1 text-xs"
+                                        placeholder="İsim veya kurum kodu..."
+                                    />
+                                    {isSearching && <Loader2 className="absolute right-2 top-1.5 w-3 h-3 animate-spin text-gray-400" />}
+                                </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-                                {searchResults.map(org => (
-                                    <div key={org.id} onClick={() => goToPublicPage(org.id)} className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 hover:border-primary cursor-pointer transition-all hover:shadow-lg group bg-white">
-                                        <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden shrink-0 border border-gray-200">
-                                            {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-full h-full p-4 text-gray-300" />}
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="font-bold text-gray-800 text-lg group-hover:text-primary transition-colors">{org.name}</h3>
-                                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                                                <MapPin className="w-3 h-3" /> {org.location || 'Konum belirtilmedi'}
+                            {/* RESULTS */}
+                            <div className="p-3">
+                                {searchResults.length > 0 ? (
+                                    <div className="grid grid-cols-1 gap-2">
+                                        {searchResults.map(org => (
+                                            <div key={org.id} className="flex gap-3 p-2 border border-[#e9e9e9] bg-white hover:bg-[#fff9d7] transition-colors">
+                                                <div className="w-16 h-16 bg-[#eee] border border-[#ccc] shrink-0">
+                                                    {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-full h-full p-4 text-gray-300" />}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between">
+                                                        <h3 className="text-sm font-bold text-[#3b5998]">
+                                                            <a href={`#/org/${org.id}`} className="hover:underline">{org.name}</a>
+                                                        </h3>
+                                                        <span className="text-[10px] text-gray-400 font-mono">{org.code}</span>
+                                                    </div>
+                                                    <div className="text-[11px] text-gray-600 mt-1 flex items-center gap-2">
+                                                        <Globe className="w-3 h-3 text-gray-400" /> {org.location || 'Global'}
+                                                        <span className="text-gray-300">|</span>
+                                                        <Users className="w-3 h-3 text-gray-400" /> {org.memberCount} Üye
+                                                    </div>
+                                                    <div className="mt-2">
+                                                        <button onClick={() => navigate(`/org/${org.id}`)} className="bg-[#f5f6f7] border border-[#d8dfea] text-[#3b5998] px-2 py-0.5 text-[10px] font-bold hover:bg-[#ebedef]">
+                                                            Profili Görüntüle
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <ArrowRight className="w-5 h-5 text-gray-300 group-hover:text-primary" />
+                                        ))}
                                     </div>
-                                ))}
-                                {searchTerm && searchResults.length === 0 && !isSearching && (
-                                    <div className="text-center text-gray-400 py-10">Sonuç bulunamadı.</div>
+                                ) : (
+                                    <div className="text-center py-10 text-gray-400 text-xs">
+                                        {searchTerm ? 'Sonuç bulunamadı.' : 'Aramak için yazmaya başlayın.'}
+                                    </div>
                                 )}
                             </div>
-                        </motion.div>
+                        </div>
                     ) : (
-                        <motion.div key="create" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex-1 flex flex-col">
-                            <h2 className="text-2xl font-bold text-gray-800 mb-2">Kendi Yapını Kur</h2>
-                            <p className="text-gray-500 text-sm mb-6">Yönetici paneline erişim sağla.</p>
+                        <div className="p-6 max-w-lg mx-auto">
+                            <h2 className="text-sm font-bold text-[#333] mb-4 border-b border-[#eee] pb-2">Yeni Kurum Kaydı</h2>
                             <div className="space-y-4">
-                                <input 
-                                    value={newOrgName}
-                                    onChange={(e) => setNewOrgName(e.target.value)}
-                                    placeholder="İşletme/Kurum Adı"
-                                    className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 px-4 font-bold text-gray-800 focus:border-accent focus:outline-none"
-                                />
-                                
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Faaliyet Sektörü</label>
-                                    <div className="relative">
-                                        <Briefcase className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-                                        <select 
-                                            value={newOrgSector}
-                                            onChange={(e) => setNewOrgSector(e.target.value as OrganizationSector)}
-                                            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl py-4 pl-12 pr-4 font-bold text-gray-800 focus:border-accent focus:outline-none appearance-none"
-                                        >
-                                            {sectors.map(s => (
-                                                <option key={s.id} value={s.id}>{s.label}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    <label className="block text-[11px] font-bold text-gray-500 mb-1">Kurum Adı</label>
+                                    <input 
+                                        value={newOrgName}
+                                        onChange={e => setNewOrgName(e.target.value)}
+                                        className="w-full border border-[#bdc7d8] p-1.5 text-sm"
+                                        placeholder="Örn: Grand Hotel Istanbul"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[11px] font-bold text-gray-500 mb-1">Sektör</label>
+                                    <select 
+                                        value={newOrgSector}
+                                        onChange={e => setNewOrgSector(e.target.value as any)}
+                                        className="w-full border border-[#bdc7d8] p-1.5 text-sm bg-white"
+                                    >
+                                        {sectors.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                                    </select>
+                                </div>
+                                
+                                <div className="bg-[#fff9d7] border border-[#e2c822] p-2 text-[11px] text-[#333]">
+                                    <span className="font-bold">Not:</span> Kurum oluşturduğunuzda otomatik olarak Yönetici (Admin) olursunuz.
                                 </div>
 
-                                <button 
-                                    onClick={handleCreate}
-                                    disabled={!newOrgName || isCreating}
-                                    className="w-full bg-primary hover:bg-primary-light text-white py-4 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2"
-                                >
-                                    {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Plus className="w-5 h-5" /> Oluştur</>}
-                                </button>
+                                <div className="flex justify-end pt-2">
+                                    <button 
+                                        onClick={handleCreate}
+                                        disabled={!newOrgName || isCreating}
+                                        className="bg-[#3b5998] border border-[#29447e] text-white px-4 py-1.5 text-xs font-bold hover:bg-[#2d4373] disabled:opacity-50"
+                                    >
+                                        {isCreating ? 'Oluşturuluyor...' : 'Kurumu Oluştur'}
+                                    </button>
+                                </div>
                             </div>
-                        </motion.div>
+                        </div>
                     )}
-                </AnimatePresence>
+                </div>
             </div>
-        </motion.div>
+        </div>
     </div>
   );
 };

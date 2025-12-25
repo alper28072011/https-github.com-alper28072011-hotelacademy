@@ -8,64 +8,54 @@ import { Loader2 } from 'lucide-react';
 export const AdminLayout: React.FC = () => {
   const { contextType, activeEntityId, activeEntityName, isHydrated } = useContextStore();
   const navigate = useNavigate();
-  const location = useLocation();
 
-  // 1. SECURITY CHECK
-  // If storage is loaded but we are in Personal mode, kick out immediately.
   useEffect(() => {
     if (isHydrated && contextType === 'PERSONAL') {
       navigate('/');
     }
   }, [contextType, isHydrated, navigate]);
 
-  // 2. LOADING STATE
-  // Show a simple loader while hydration happens.
   if (!isHydrated) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-100 text-slate-800">
-        <Loader2 className="w-8 h-8 animate-spin text-[#1a237e]" />
+        <Loader2 className="w-8 h-8 animate-spin text-[#3b5998]" />
       </div>
     );
   }
 
-  // 3. NUCLEAR RESET KEY
-  // This key forces React to DESTROY and RE-CREATE the DOM whenever the context or ID changes.
-  // It acts like a mini-F5 refresh for the Virtual DOM.
   const resetKey = `ADMIN-ROOT-${contextType}-${activeEntityId}`;
 
   return (
     <div 
       key={resetKey}
-      className="flex h-screen w-full overflow-hidden bg-[#f3f4f6]"
-      style={{ 
-        backgroundColor: '#f3f4f6', 
-        color: '#1f2937',
-        isolation: 'isolate' // CSS isolation to prevent bleed
-      }} 
+      className="flex h-screen w-full overflow-hidden bg-[#eff0f2]"
     >
-      {/* Sidebar - Fixed Width, Dark Theme */}
-      <aside className="w-64 flex-shrink-0 h-full bg-[#1a237e] text-white z-50">
+      {/* Sidebar - Legacy Style */}
+      <aside className="w-48 flex-shrink-0 h-full bg-[#f1f1f1] border-r border-[#d8dfea] z-50">
         <Sidebar />
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#f3f4f6] h-full overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         
-        {/* Top Header - Guaranteed Render */}
-        <header className="bg-white border-b border-gray-200 h-16 flex items-center px-6 shadow-sm z-40 flex-shrink-0">
+        {/* Top Header - White Box */}
+        <header className="bg-[#3b5998] border-b border-[#29487d] h-[42px] flex items-center px-4 shrink-0 justify-between">
            <div className="flex items-center gap-2">
-             <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider border border-blue-200">
-                Kurumsal
-             </span>
-             <h1 className="text-lg font-bold text-gray-800 truncate max-w-md">
+             <div className="bg-white/20 text-white text-[10px] font-bold px-1 rounded-sm">
+                YÖNETİM
+             </div>
+             <h1 className="text-sm font-bold text-white truncate max-w-md">
                {activeEntityName || 'Yönetim Paneli'}
              </h1>
            </div>
+           <button onClick={() => navigate('/')} className="text-[11px] text-white font-bold hover:underline">
+               Siteye Dön
+           </button>
         </header>
 
         {/* Dynamic Content - Scrollable */}
-        <main className="flex-1 overflow-y-auto p-6 relative z-0 scroll-smooth">
-          <div className="max-w-7xl mx-auto min-h-[500px] text-gray-900 pb-20">
+        <main className="flex-1 overflow-y-auto p-4 relative z-0 scroll-smooth">
+          <div className="max-w-5xl mx-auto min-h-[500px]">
              <Outlet />
           </div>
         </main>

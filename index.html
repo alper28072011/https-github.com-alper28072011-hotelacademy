@@ -12,46 +12,55 @@
           extend: {
             colors: {
               primary: {
-                DEFAULT: '#336699', // Professional Blue - Use sparingly
-                hover: '#28527a',
-                light: '#EBF1F6', // Very light blue for backgrounds
+                DEFAULT: '#3b5998', // Classic FB Blue
+                hover: '#2d4373',   // Darker FB Blue
+                light: '#eceff5',   // Very light blue highlight
               },
               surface: {
-                DEFAULT: '#FFFFFF',
-                subtle: '#F8FAFC', // Slate-50 (Main App Background)
+                DEFAULT: '#ffffff',
+                subtle: '#eff0f2',  // Classic Wall Background Gray
               },
               text: {
-                main: '#1E293B', // Slate-800
-                muted: '#64748B', // Slate-500
+                main: '#333333',    // Sharp Dark Gray
+                muted: '#666666',   // Muted Gray
+                link: '#3b5998',    // Link Blue
               },
               accent: {
-                DEFAULT: '#EAB308', // Soft Gold (Yellow-500) for rewards/stars
-                light: '#FEF9C3',
+                DEFAULT: '#5b74a8', // Secondary Blue
+                light: '#d8dfea',   // Border Color (Critical)
               },
+              border: {
+                DEFAULT: '#d8dfea', // The omnipresent border color
+              }
             },
             fontFamily: {
-              sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+              sans: ['"Lucida Grande"', 'Tahoma', 'Verdana', 'Arial', 'sans-serif'],
             },
             borderRadius: {
-              'xl': '12px',
-              '2xl': '20px',
-              '3xl': '24px',
-              '4xl': '32px',
+              'none': '0px',
+              'sm': '2px', // Only very slight rounding allowed
+              'md': '3px',
+              'lg': '4px', // Max rounding
+              'xl': '4px',
+              '2xl': '4px',
+              '3xl': '4px',
+              'full': '9999px', // Kept only for avatars
             },
             boxShadow: {
-              'soft': '0 10px 40px -10px rgba(0,0,0,0.05)',
-              'card': '0 2px 10px rgba(0,0,0,0.03)',
+              'none': 'none',
+              'sm': '0 1px 2px rgba(0, 0, 0, 0.05)',
+              'card': '0 1px 0 rgba(0,0,0,0.05)', // Very subtle divider-like shadow
             }
           },
         },
       }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
       body {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        background-color: #F8FAFC;
-        color: #1E293B;
+        font-family: 'Lucida Grande', Tahoma, Verdana, Arial, sans-serif;
+        background-color: #eff0f2; /* The classic gray background */
+        color: #333333;
+        font-size: 13px; /* Smaller base font size */
         -webkit-tap-highlight-color: transparent;
       }
       /* Hide scrollbar for horizontal scrolling areas */
@@ -61,6 +70,11 @@
       .no-scrollbar {
           -ms-overflow-style: none;
           scrollbar-width: none;
+      }
+      
+      /* Reset heavy animations for a snappier feel */
+      * {
+        transition-duration: 100ms !important;
       }
     </style>
   <script type="importmap">
