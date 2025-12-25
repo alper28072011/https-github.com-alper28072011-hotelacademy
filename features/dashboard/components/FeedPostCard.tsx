@@ -46,14 +46,14 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
   const timeString = new Date(post.createdAt).toLocaleDateString();
 
   return (
-    <div className="bg-white border border-[#d8dfea] mb-3 p-3">
+    <div className="bg-white border border-[#d8dfea] mb-3 p-3 rounded-md shadow-sm">
         {/* Header */}
         <div className="flex gap-2 mb-2">
-            <div className="w-10 h-10 border border-[#ccc] bg-[#f7f7f7] p-0.5">
-                <Avatar src={authorAvatar} alt={authorName} size="md" className="rounded-none" />
+            <div className="w-9 h-9 border border-[#ccc] bg-[#f7f7f7] p-0.5 rounded-sm overflow-hidden">
+                <Avatar src={authorAvatar} alt={authorName} size="md" className="rounded-none w-full h-full" />
             </div>
             <div>
-                <div className="font-bold text-[#3b5998] text-sm cursor-pointer hover:underline">
+                <div className="font-bold text-[#3b5998] text-sm cursor-pointer hover:underline leading-tight">
                     {authorName}
                 </div>
                 <div className="text-[10px] text-[#999]">
@@ -65,25 +65,25 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
         {/* Content */}
         <div className="mb-2">
             {!isCourse && (
-                <div className="text-[13px] text-[#333] mb-2 font-normal">
+                <div className="text-[13px] text-[#333] mb-2 font-normal leading-relaxed">
                     {(post as FeedPost).caption}
                 </div>
             )}
             
             {/* Media Box */}
-            <div className="border border-[#ccc] bg-[#f7f7f7] p-1">
+            <div className="border border-[#ccc] bg-[#f7f7f7] p-1 rounded-sm">
                 {isCourse ? (
                     <div className="flex gap-2 cursor-pointer" onClick={() => navigate(`/course/${post.id}`)}>
-                        <div className="w-24 h-16 bg-black shrink-0 relative">
+                        <div className="w-24 h-16 bg-black shrink-0 relative border border-[#999]">
                             <img src={post.thumbnailUrl} className="w-full h-full object-cover" />
                             <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                                <Play className="w-6 h-6 text-white fill-white" />
+                                <Play className="w-6 h-6 text-white fill-white drop-shadow-md" />
                             </div>
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="font-bold text-[#3b5998] text-sm truncate">{getLocalizedContent((post as Course).title)}</div>
-                            <div className="text-[11px] text-[#666] line-clamp-2">{getLocalizedContent((post as Course).description)}</div>
-                            <div className="text-[10px] text-[#999] mt-1">{(post as Course).duration} dk • {(post as Course).xpReward} XP</div>
+                            <div className="font-bold text-[#3b5998] text-sm truncate hover:underline">{getLocalizedContent((post as Course).title)}</div>
+                            <div className="text-[11px] text-[#666] line-clamp-2 leading-tight">{getLocalizedContent((post as Course).description)}</div>
+                            <div className="text-[10px] text-[#999] mt-1 font-bold">{(post as Course).duration} dk • {(post as Course).xpReward} XP</div>
                         </div>
                     </div>
                 ) : (
@@ -105,7 +105,7 @@ export const FeedPostCard: React.FC<FeedPostCardProps> = ({ post }) => {
                     <button className="hover:underline">Paylaş</button>
                 </div>
                 {likeCount > 0 && (
-                    <div className="mt-2 flex items-center gap-1 text-[11px] text-[#666] bg-[#f7f7f7] p-1 border-t border-[#e9e9e9]">
+                    <div className="mt-2 flex items-center gap-1 text-[11px] text-[#666] bg-[#f7f7f7] p-1 border-t border-[#e9e9e9] rounded-sm">
                         <ThumbsUp className="w-3 h-3 text-[#3b5998] fill-[#3b5998]" />
                         {liked ? `Sen ve ${likeCount - 1} kişi daha beğendi` : `${likeCount} kişi beğendi`}
                     </div>

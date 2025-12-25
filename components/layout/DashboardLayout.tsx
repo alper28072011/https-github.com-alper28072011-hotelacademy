@@ -56,7 +56,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const handleSearchSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (globalSearchTerm.trim()) {
-          // Navigate to explore with query, passing state to force refresh/filter
           navigate('/explore', { state: { query: globalSearchTerm } });
       }
   };
@@ -67,8 +66,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       { label: 'Gruplar', icon: Building2, path: '/lobby' },
   ];
 
-  // Calculate XP Progress
-  const nextLevelXp = 1000; // Mock threshold
+  const nextLevelXp = 1000;
   const currentXp = currentUser?.xp || 0;
   const progressPercent = Math.min((currentXp / nextLevelXp) * 100, 100);
 
@@ -87,77 +85,77 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
           )}
       </AnimatePresence>
 
-      {/* 1. GLOBAL HEADER BAR (Fixed & Centered Search) */}
-      <div className="bg-[#3b5998] border-b border-[#29487d] h-[50px] fixed top-0 w-full z-50 shadow-md flex justify-center">
-          <div className="w-[980px] flex justify-between items-center px-2 md:px-0 h-full">
+      {/* 1. GLOBAL HEADER BAR (Fixed & Grid Aligned) */}
+      <div className="bg-[#3b5998] border-b border-[#29487d] h-[48px] fixed top-0 w-full z-50 shadow-sm flex justify-center">
+          <div className="w-[980px] grid grid-cols-[180px_530px_240px] gap-3 px-0 h-full">
               
-              {/* Left: Logo */}
-              <div className="flex items-center gap-4 shrink-0 w-[200px]">
+              {/* Left: Logo (Aligned with Sidebar) */}
+              <div className="flex items-center h-full">
                   <div onClick={() => navigate('/')} className="cursor-pointer flex items-center gap-1 group">
-                      <span className="text-white font-bold text-2xl tracking-tighter group-hover:opacity-90 transition-opacity">Corbit</span>
+                      <span className="text-white font-bold text-3xl tracking-tighter group-hover:opacity-90 transition-opacity pb-1">Corbit</span>
                   </div>
               </div>
               
-              {/* Center: Global Search */}
-              <div className="flex-1 max-w-xl mx-4 relative h-full flex items-center">
+              {/* Center: Global Search (Aligned with Content) */}
+              <div className="flex items-center h-full w-full">
                   <form onSubmit={handleSearchSubmit} className="w-full relative">
                       <input 
                           value={globalSearchTerm}
                           onChange={(e) => setGlobalSearchTerm(e.target.value)}
                           placeholder="Eğitim, kişi veya grup ara..." 
-                          className="w-full h-[30px] pl-8 pr-4 text-[13px] border-none rounded-full bg-[#2a4478] text-white placeholder-blue-200 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner"
+                          className="w-full h-[28px] pl-7 pr-4 text-[12px] border border-[#233a66] rounded-sm bg-[#223966] text-white placeholder-blue-300 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner font-medium"
                       />
-                      <Search className="w-3.5 h-3.5 absolute left-3 top-2 text-blue-200 pointer-events-none" />
+                      <Search className="w-3.5 h-3.5 absolute left-2 top-[7px] text-blue-300 pointer-events-none" />
                   </form>
               </div>
 
-              {/* Right: User Nav */}
-              <div className="flex items-center justify-end gap-2 w-[200px] text-white text-[12px] font-bold shrink-0">
+              {/* Right: User Nav (Aligned with Right Sidebar) */}
+              <div className="flex items-center justify-end gap-3 h-full">
                   <div 
                     onClick={() => navigate('/profile')}
-                    className="flex items-center gap-2 cursor-pointer hover:bg-black/10 px-2 py-1 rounded-full transition-colors"
+                    className="flex items-center gap-2 cursor-pointer hover:bg-[#00000010] px-2 py-1 rounded-sm transition-colors"
                   >
-                      <div className="w-6 h-6 rounded-full bg-gray-300 overflow-hidden border border-white/20">
-                          <Avatar src={currentUser?.avatar} alt={currentUser?.name || ''} size="sm" className="w-full h-full" />
+                      <div className="w-6 h-6 rounded-sm bg-gray-300 overflow-hidden border border-[#29487d]">
+                          <Avatar src={currentUser?.avatar} alt={currentUser?.name || ''} size="sm" className="w-full h-full rounded-none" />
                       </div>
-                      <span className="hidden md:inline">{currentUser?.name?.split(' ')[0]}</span>
+                      <span className="hidden md:inline text-white text-[11px] font-bold">{currentUser?.name?.split(' ')[0]}</span>
                   </div>
                   
-                  <div className="h-4 w-px bg-[#29487d] mx-1" />
+                  <div className="h-4 w-px bg-[#29487d]" />
                   
                   {/* Context Menu */}
                   <div className="relative">
                       <button 
                         onClick={() => setIsContextOpen(!isContextOpen)}
-                        className="p-1 hover:bg-black/10 rounded-full transition-colors"
+                        className="text-white text-[11px] font-bold hover:opacity-80 transition-opacity flex items-center gap-1"
                       >
-                          <ChevronDown className="w-4 h-4" />
+                          Hesap <ChevronDown className="w-3 h-3" />
                       </button>
 
                       {isContextOpen && (
                           <>
                             <div className="fixed inset-0 z-40 cursor-default" onClick={() => setIsContextOpen(false)} />
-                            <div className="absolute top-10 right-0 w-60 bg-white border border-[#ddd] shadow-xl z-50 rounded-lg overflow-hidden animate-in fade-in zoom-in duration-200 origin-top-right">
-                                <div className="py-2">
-                                    <div className="px-3 py-1.5 text-[11px] font-bold text-gray-500 uppercase">Hesaplar</div>
+                            <div className="absolute top-8 right-0 w-60 bg-white border border-[#899bc1] shadow-xl z-50 rounded-sm overflow-hidden animate-in fade-in zoom-in duration-200 origin-top-right">
+                                <div className="py-1">
+                                    <div className="px-2 py-1 text-[9px] font-bold text-[#999] uppercase border-b border-[#eee]">Hesaplar</div>
                                     {managedOrgs.map(org => (
                                         <button 
                                             key={org.id}
                                             onClick={() => handleContextSwitch(org)}
-                                            className="w-full text-left px-3 py-2 hover:bg-[#3b5998] hover:text-white flex items-center gap-3 text-[13px] font-medium text-[#1c1e21] transition-colors"
+                                            className="w-full text-left px-2 py-1.5 hover:bg-[#3b5998] hover:text-white flex items-center gap-2 text-[11px] font-bold text-[#333] transition-colors"
                                         >
-                                            <div className="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden shrink-0 border border-gray-300">
+                                            <div className="w-4 h-4 bg-gray-200 flex items-center justify-center overflow-hidden shrink-0 border border-gray-300">
                                                 {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-3 h-3 text-gray-500" />}
                                             </div>
                                             <span className="truncate">{org.name}</span>
                                         </button>
                                     ))}
-                                    <div className="border-t border-[#eee] my-1"></div>
-                                    <button onClick={() => { setIsContextOpen(false); navigate('/profile'); }} className="w-full text-left px-3 py-2 hover:bg-[#eff0f5] text-[13px] text-[#1c1e21] flex items-center gap-2">
+                                    <div className="border-t border-[#ccc] my-1"></div>
+                                    <button onClick={() => { setIsContextOpen(false); navigate('/profile'); }} className="w-full text-left px-2 py-1.5 hover:bg-[#3b5998] hover:text-white text-[11px] font-bold text-[#333] flex items-center gap-2">
                                         Ayarlar
                                     </button>
-                                    <button onClick={() => { setIsContextOpen(false); logout(); }} className="w-full text-left px-3 py-2 hover:bg-[#eff0f5] text-[13px] text-[#1c1e21] flex items-center gap-2">
-                                        <LogOut className="w-4 h-4" /> Çıkış Yap
+                                    <button onClick={() => { setIsContextOpen(false); logout(); }} className="w-full text-left px-2 py-1.5 hover:bg-[#3b5998] hover:text-white text-[11px] font-bold text-[#333] flex items-center gap-2">
+                                        <LogOut className="w-3 h-3" /> Çıkış Yap
                                     </button>
                                 </div>
                             </div>
@@ -169,88 +167,81 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       </div>
       
       {/* 2. MAIN GRID CONTAINER (Fixed 980px, 3 Columns) */}
-      <div className="w-[980px] mx-auto mt-[65px] grid grid-cols-[180px_530px_240px] gap-3 pb-20">
+      <div className="w-[980px] mx-auto mt-[60px] grid grid-cols-[180px_530px_240px] gap-3 pb-20">
             
-            {/* COL 1: LEFT SIDEBAR (Navigation) */}
-            <div className="flex flex-col gap-2 sticky top-[65px] h-fit">
-                {/* Main Menu */}
-                <div className="space-y-1">
+            {/* COL 1: LEFT SIDEBAR */}
+            <div className="flex flex-col gap-2 sticky top-[60px] h-fit">
+                <div className="space-y-0.5">
                     {menuItems.map(item => {
                         const isActive = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path);
                         return (
                             <button 
                                 key={item.label} 
                                 onClick={() => navigate(item.path)} 
-                                className={`w-full flex items-center gap-3 px-2 py-2 text-[13px] transition-all rounded-md ${
+                                className={`w-full flex items-center gap-2 px-2 py-1.5 text-[11px] transition-all rounded-sm ${
                                     isActive 
-                                    ? 'bg-[#e4e6eb] font-bold text-[#1c1e21]' 
-                                    : 'text-[#606770] hover:bg-[#e4e6eb] hover:text-[#1c1e21] font-medium'
+                                    ? 'bg-[#d8dfea] font-bold text-[#1c1e21]' 
+                                    : 'text-[#333] hover:bg-[#eff0f5] font-medium'
                                 }`}
                             >
-                                <item.icon className={`w-5 h-5 ${isActive ? 'text-[#3b5998]' : 'text-gray-500'}`} /> 
+                                <item.icon className={`w-4 h-4 ${isActive ? 'text-[#333]' : 'text-gray-500'}`} /> 
                                 {item.label}
                             </button>
                         );
                     })}
                 </div>
 
-                <div className="border-t border-[#ddd] my-2 mx-2"></div>
+                <div className="border-t border-[#d8dfea] my-2 mx-2"></div>
 
-                {/* Shortcuts */}
                 <div>
-                    <h4 className="text-[#65676b] text-[11px] font-bold uppercase mb-2 px-2 tracking-wider">Kısayollar</h4>
-                    <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#e4e6eb] rounded-md text-[13px] text-[#333] transition-colors">
-                        <div className="w-6 h-6 bg-gradient-to-br from-blue-400 to-blue-600 rounded-md flex items-center justify-center text-white text-[10px] font-bold">HK</div>
+                    <h4 className="text-[#999] text-[10px] font-bold uppercase mb-1 px-2">Kısayollar</h4>
+                    <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#eff0f5] rounded-sm text-[11px] text-[#333] transition-colors">
+                        <div className="w-4 h-4 bg-blue-500 rounded-sm flex items-center justify-center text-white text-[8px] font-bold">HK</div>
                         <span className="truncate">Housekeeping 101</span>
                     </button>
-                    <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#e4e6eb] rounded-md text-[13px] text-[#333] transition-colors">
-                        <div className="w-6 h-6 bg-gradient-to-br from-orange-400 to-red-500 rounded-md flex items-center justify-center text-white text-[10px] font-bold">PD</div>
+                    <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#eff0f5] rounded-sm text-[11px] text-[#333] transition-colors">
+                        <div className="w-4 h-4 bg-orange-500 rounded-sm flex items-center justify-center text-white text-[8px] font-bold">PD</div>
                         <span className="truncate">Personel Duyuruları</span>
                     </button>
                 </div>
             </div>
 
-            {/* COL 2: MAIN CONTENT (Feed / Page Content) */}
+            {/* COL 2: MAIN CONTENT */}
             <div className="min-w-0">
-                {/* Smooth Transition Wrapper */}
                 <motion.div
                     key={location.pathname}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
                 >
                     {children}
                 </motion.div>
             </div>
 
-            {/* COL 3: RIGHT SIDEBAR (Journey & Ads) */}
-            <div className="flex flex-col gap-4 sticky top-[65px] h-fit">
+            {/* COL 3: RIGHT SIDEBAR */}
+            <div className="flex flex-col gap-3 sticky top-[60px] h-fit">
                 
-                {/* CAREER JOURNEY WIDGET */}
-                <div className="bg-white border border-[#ddd] rounded-lg shadow-sm overflow-hidden">
-                    <div className="bg-gradient-to-r from-[#3b5998] to-[#4e69a2] p-3">
-                        <h3 className="text-white font-bold text-[12px] flex items-center gap-2">
-                            <MapPin className="w-3.5 h-3.5" /> Kariyer Yolculuğum
+                {/* CAREER JOURNEY */}
+                <div className="bg-white border border-[#d8dfea] rounded-md shadow-sm overflow-hidden">
+                    <div className="bg-[#f7f7f7] border-b border-[#e9e9e9] p-2">
+                        <h3 className="text-[#333] font-bold text-[11px] flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-gray-500" /> Kariyer Yolculuğum
                         </h3>
                     </div>
-                    <div className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-[12px] font-bold text-[#333]">{currentUser?.creatorLevel}</span>
-                            <span className="text-[11px] text-gray-500 font-mono">{currentXp} / {nextLevelXp} XP</span>
+                    <div className="p-3">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-bold text-[#333]">{currentUser?.creatorLevel}</span>
+                            <span className="text-[10px] text-gray-500 font-mono">{currentXp} / {nextLevelXp} XP</span>
                         </div>
-                        {/* XP Bar */}
-                        <div className="w-full h-2 bg-[#f0f2f5] rounded-full overflow-hidden mb-4">
-                            <div className="h-full bg-gradient-to-r from-green-400 to-green-500" style={{ width: `${progressPercent}%` }}></div>
+                        <div className="w-full h-1.5 bg-[#f0f2f5] rounded-full overflow-hidden mb-3">
+                            <div className="h-full bg-[#69a74e]" style={{ width: `${progressPercent}%` }}></div>
                         </div>
                         
-                        <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-yellow-50 border border-yellow-200 rounded-full flex items-center justify-center text-yellow-600 shadow-sm">
-                                <Star className="w-4 h-4 fill-current" />
-                            </div>
+                        <div className="flex items-start gap-2">
+                            <Star className="w-4 h-4 text-yellow-500 fill-current mt-0.5" />
                             <div className="flex-1">
-                                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wide">Sıradaki Hedef</div>
-                                <div className="text-[12px] font-bold text-[#1c1e21] leading-tight">
+                                <div className="text-[9px] text-gray-400 font-bold uppercase">Sıradaki Hedef</div>
+                                <div className="text-[11px] font-bold text-[#333] leading-tight">
                                     {currentUser?.roleTitle || 'Personel'} &rarr; {currentUser?.targetCareerPathId ? 'Uzman' : 'Belirlenmedi'}
                                 </div>
                             </div>
@@ -258,28 +249,28 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
                         <button 
                             onClick={() => navigate('/journey')}
-                            className="w-full mt-4 bg-[#f0f2f5] hover:bg-[#e4e6eb] text-[#1c1e21] text-[12px] font-bold py-2 rounded-md transition-colors"
+                            className="w-full mt-3 bg-[#f5f6f7] border border-[#d8dfea] hover:bg-[#e9e9e9] text-[#333] text-[10px] font-bold py-1.5 rounded-sm transition-colors"
                         >
                             Haritayı Görüntüle
                         </button>
                     </div>
                 </div>
 
-                {/* SUGGESTIONS / ADS */}
-                <div className="bg-white border border-[#ddd] rounded-lg shadow-sm p-3">
-                    <h4 className="text-[#65676b] text-[11px] font-bold uppercase mb-3">Sponsorlu</h4>
-                    <div className="flex gap-3 mb-2 group cursor-pointer">
-                        <div className="w-20 h-14 bg-gray-100 rounded-md overflow-hidden shrink-0">
+                {/* ADS / PROMO */}
+                <div className="bg-white border border-[#d8dfea] rounded-md shadow-sm p-3">
+                    <h4 className="text-[#999] text-[10px] font-bold uppercase mb-2">Sponsorlu</h4>
+                    <div className="flex gap-2 mb-2 group cursor-pointer">
+                        <div className="w-16 h-12 bg-gray-100 border border-[#eee] overflow-hidden shrink-0">
                             <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=200" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                         </div>
                         <div className="flex-1">
-                            <div className="font-bold text-[#1c1e21] text-[12px] leading-tight mb-1 group-hover:text-[#3b5998]">Otel Ekipmanları</div>
-                            <div className="text-[11px] text-gray-500 leading-snug">Profesyonel mutfak gereçlerinde %20 indirim.</div>
+                            <div className="font-bold text-[#3b5998] text-[11px] leading-tight mb-0.5 hover:underline">Otel Ekipmanları</div>
+                            <div className="text-[10px] text-gray-500 leading-tight">Profesyonel mutfak gereçlerinde %20 indirim.</div>
                         </div>
                     </div>
                 </div>
 
-                <div className="text-[11px] text-gray-400 px-1 text-center">
+                <div className="text-[10px] text-gray-400 px-1 text-center">
                     Corbit © 2025 <span className="mx-1">·</span> Gizlilik <span className="mx-1">·</span> Şartlar
                 </div>
 
@@ -287,7 +278,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
       </div>
 
-      {/* Drawers */}
       <AnimatePresence>
         {isSettingsOpen && (
             <SettingsDrawer onClose={() => setIsSettingsOpen(false)} />
