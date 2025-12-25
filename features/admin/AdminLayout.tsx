@@ -12,9 +12,9 @@ import { Avatar } from '../../components/ui/Avatar';
 
 export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
-  const { contextType, activeEntityId, activeEntityName, isHydrated, switchToPersonal } = useContextStore();
+  const { contextType, activeEntityId, isHydrated, switchToPersonal } = useContextStore();
   const { currentUser, logout } = useAuthStore();
-  const { startOrganizationSession, isSwitching } = useOrganizationStore();
+  const { startOrganizationSession, isSwitching, currentOrganization } = useOrganizationStore();
 
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [managedOrgs, setManagedOrgs] = useState<Organization[]>([]);
@@ -54,17 +54,13 @@ export const AdminLayout: React.FC = () => {
   };
 
   const handleContextSwitch = async (target: Organization) => {
-      // If already in this org, do nothing
       if (target.id === activeEntityId) {
           setIsContextOpen(false);
           return;
       }
-      
       setIsContextOpen(false);
-      // Switch Admin Session
       const result = await startOrganizationSession(target.id);
       if (result.success) {
-          // Force reload/redirect to refresh admin views
           navigate('/admin');
       }
   };
@@ -80,110 +76,130 @@ export const AdminLayout: React.FC = () => {
   const resetKey = `ADMIN-ROOT-${contextType}-${activeEntityId}`;
 
   return (
-    <div key={resetKey} className="flex flex-col h-screen w-full overflow-hidden bg-[#eff0f2]">
+    <div key={resetKey} className="min-h-screen bg-[#eff0f2] font-sans text-[#333] overflow-y-scroll">
       
-      {/* 1. GLOBAL BLUE HEADER (Matches Dashboard) */}
-      <div className="bg-[#3b5998] border-b border-[#29487d] h-[42px] shrink-0 z-[60] flex items-center justify-between px-2 md:px-20 shadow-sm relative">
-          
-          {/* Left: Logo & Search */}
-          <div className="flex items-center gap-2">
-              <div onClick={handleGoHome} className="cursor-pointer bg-[#3b5998] p-1">
-                  <span className="text-white font-bold text-lg tracking-tighter">facebook<span className="opacity-50 text-[10px] font-normal tracking-normal ml-1">admin</span></span>
-              </div>
+      {/* 1. GLOBAL BLUE HEADER (Fixed) */}
+      <div className="bg-[#3b5998] border-b border-[#29487d] h-[42px] fixed top-0 w-full z-50 shadow-sm flex justify-center">
+          <div className="w-[980px] flex justify-between items-center px-0">
               
-              {/* Minimal Search Bar */}
-              <div className="relative hidden md:block ml-2">
-                  <input 
-                      placeholder="Yönetim panelinde ara..." 
-                      className="h-[24px] w-[250px] pl-2 pr-6 text-xs border border-[#20365F] rounded-sm focus:outline-none focus:bg-white"
-                  />
-                  <Search className="w-3 h-3 absolute right-2 top-1.5 text-gray-400" />
+              {/* Left: Logo & Search */}
+              <div className="flex items-center gap-2">
+                  <div onClick={handleGoHome} className="cursor-pointer bg-[#3b5998] p-1">
+                      <span className="text-white font-bold text-2xl tracking-tighter hover:opacity-80">facebook<span className="font-normal opacity-70 text-sm ml-0.5">pro</span></span>
+                  </div>
+                  
+                  {/* Minimal Search Bar */}
+                  <div className="relative ml-2">
+                      <input 
+                          placeholder="Yönetim panelinde ara..." 
+                          className="h-[26px] w-[300px] pl-2 pr-6 text-[11px] border border-[#20365F] rounded-sm focus:outline-none focus:bg-white"
+                      />
+                      <Search className="w-3 h-3 absolute right-2 top-2 text-gray-400" />
+                  </div>
               </div>
-          </div>
 
-          {/* Right: Nav Links */}
-          <div className="flex items-center gap-4 text-white text-xs font-bold">
-              <button onClick={handleGoHome} className="hover:bg-[#4b67a1] px-2 py-1 rounded-sm flex items-center gap-1">
-                  <Home className="w-3 h-3" /> Ana Sayfa
-              </button>
-              <button onClick={handleGoProfile} className="hover:bg-[#4b67a1] px-2 py-1 rounded-sm flex items-center gap-1">
-                  <User className="w-3 h-3" /> Profil
-              </button>
-              <div className="h-4 w-px bg-[#29487d] mx-1" />
-              
-              {/* Context Switcher */}
-              <div className="relative">
-                  <button 
-                    onClick={() => setIsContextOpen(!isContextOpen)}
-                    className="hover:bg-[#4b67a1] px-2 py-1 rounded-sm flex items-center gap-1"
-                  >
-                      Hesap <ChevronDown className="w-3 h-3" />
+              {/* Right: Nav Links */}
+              <div className="flex items-center gap-4 text-white text-[11px] font-bold">
+                  <button onClick={handleGoHome} className="hover:bg-[#4b67a1] px-2 py-1 rounded-sm flex items-center gap-1">
+                      <Home className="w-3 h-3" /> Ana Sayfa
                   </button>
+                  <button onClick={handleGoProfile} className="hover:bg-[#4b67a1] px-2 py-1 rounded-sm flex items-center gap-1">
+                      <User className="w-3 h-3" /> Profil
+                  </button>
+                  <div className="h-4 w-px bg-[#29487d] mx-1" />
+                  
+                  {/* Context Switcher */}
+                  <div className="relative">
+                      <button 
+                        onClick={() => setIsContextOpen(!isContextOpen)}
+                        className="hover:bg-[#4b67a1] px-2 py-1 rounded-sm flex items-center gap-1"
+                      >
+                          Hesap <ChevronDown className="w-3 h-3" />
+                      </button>
 
-                  {/* Dropdown */}
-                  {isContextOpen && (
-                      <>
-                        <div className="fixed inset-0 z-40" onClick={() => setIsContextOpen(false)} />
-                        <div className="absolute top-[35px] right-0 w-64 bg-white border border-[#899bc1] shadow-lg z-50 rounded-sm">
-                            <div className="p-1">
-                                <div className="text-[10px] text-[#999] uppercase px-2 py-1 font-bold border-b border-[#eee]">Hesap Değiştir</div>
-                                
-                                {/* Personal Account Option */}
-                                <button 
-                                    onClick={handleGoHome}
-                                    className="w-full text-left px-2 py-1.5 hover:bg-[#3b5998] hover:text-white flex items-center gap-2 text-xs font-bold text-[#333]"
-                                >
-                                    <div className="w-4 h-4 bg-gray-200 border border-gray-300 overflow-hidden">
-                                        <Avatar src={currentUser?.avatar} alt={currentUser?.name || ''} size="sm" className="rounded-none" />
-                                    </div>
-                                    {currentUser?.name} (Kişisel)
-                                </button>
-
-                                <div className="border-t border-[#ccc] my-1"></div>
-                                <div className="text-[10px] text-[#999] uppercase px-2 py-1 font-bold">Yönetilen Sayfalar</div>
-
-                                {managedOrgs.map(org => (
+                      {isContextOpen && (
+                          <>
+                            <div className="fixed inset-0 z-40 cursor-default" onClick={() => setIsContextOpen(false)} />
+                            <div className="absolute top-8 right-0 w-64 bg-white border border-[#899bc1] shadow-xl z-50 rounded-sm">
+                                <div className="py-1">
+                                    <div className="text-[10px] text-[#999] uppercase px-2 py-1 font-bold border-b border-[#eee]">Hesap Değiştir</div>
+                                    
                                     <button 
-                                        key={org.id}
-                                        onClick={() => handleContextSwitch(org)}
-                                        className={`w-full text-left px-2 py-1.5 flex items-center gap-2 text-xs font-bold ${
-                                            activeEntityId === org.id 
-                                            ? 'bg-[#d8dfea] text-[#3b5998] cursor-default' 
-                                            : 'hover:bg-[#3b5998] hover:text-white text-[#333]'
-                                        }`}
+                                        onClick={handleGoHome}
+                                        className="w-full text-left px-2 py-1.5 hover:bg-[#3b5998] hover:text-white flex items-center gap-2 text-[11px] font-bold text-[#333]"
                                     >
-                                        <div className="w-4 h-4 bg-gray-200 border border-gray-300 flex items-center justify-center overflow-hidden">
-                                            {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-3 h-3 text-gray-400" />}
+                                        <div className="w-4 h-4 bg-gray-200 border border-gray-300 overflow-hidden">
+                                            <Avatar src={currentUser?.avatar} alt={currentUser?.name || ''} size="sm" className="rounded-none" />
                                         </div>
-                                        {org.name}
+                                        {currentUser?.name} (Kişisel)
                                     </button>
-                                ))}
-                                
-                                <div className="border-t border-[#ccc] my-1"></div>
-                                <button onClick={() => { setIsContextOpen(false); logout(); }} className="w-full text-left px-2 py-1.5 hover:bg-[#3b5998] hover:text-white text-xs text-[#333] flex items-center gap-2">
-                                    <LogOut className="w-3 h-3" /> Çıkış Yap
-                                </button>
+
+                                    <div className="border-t border-[#ccc] my-1"></div>
+                                    <div className="text-[10px] text-[#999] uppercase px-2 py-1 font-bold">Yönetilen Sayfalar</div>
+
+                                    {managedOrgs.map(org => (
+                                        <button 
+                                            key={org.id}
+                                            onClick={() => handleContextSwitch(org)}
+                                            className={`w-full text-left px-2 py-1.5 flex items-center gap-2 text-[11px] font-bold ${
+                                                activeEntityId === org.id 
+                                                ? 'bg-[#d8dfea] text-[#333] cursor-default' 
+                                                : 'hover:bg-[#3b5998] hover:text-white text-[#333]'
+                                            }`}
+                                        >
+                                            <div className="w-4 h-4 bg-gray-200 border border-gray-300 flex items-center justify-center overflow-hidden">
+                                                {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <Building2 className="w-3 h-3 text-gray-400" />}
+                                            </div>
+                                            {org.name}
+                                        </button>
+                                    ))}
+                                    
+                                    <div className="border-t border-[#ccc] my-1"></div>
+                                    <button onClick={() => { setIsContextOpen(false); logout(); }} className="w-full text-left px-2 py-1.5 hover:bg-[#3b5998] hover:text-white text-[11px] text-[#333] flex items-center gap-2">
+                                        <LogOut className="w-3 h-3" /> Çıkış Yap
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                      </>
-                  )}
+                          </>
+                      )}
+                  </div>
               </div>
           </div>
       </div>
 
-      {/* 2. ADMIN CONTENT LAYOUT (Sidebar + Main) */}
-      <div className="flex flex-1 overflow-hidden">
-          {/* Legacy Sidebar */}
-          <aside className="w-64 flex-shrink-0 h-full bg-[#f7f7f7] border-r border-[#d8dfea] z-40 overflow-y-auto">
-            <Sidebar />
-          </aside>
+      {/* 2. ADMIN GRID CONTAINER (Fixed 980px, 2 Columns) */}
+      <div className="w-[980px] mx-auto mt-[54px] grid grid-cols-[180px_1fr] gap-3 pb-20">
+          
+          {/* COL 1: LEFT SIDEBAR (Contextual Navigation) */}
+          <div className="flex flex-col gap-4">
+              
+              {/* Org Identity Card (Tiny) */}
+              {currentOrganization && (
+                  <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 bg-white border border-[#ccc] p-0.5 shrink-0">
+                          {currentOrganization.logoUrl ? (
+                              <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" />
+                          ) : (
+                              <div className="w-full h-full bg-[#eee] flex items-center justify-center text-gray-400 font-bold">{currentOrganization.name[0]}</div>
+                          )}
+                      </div>
+                      <div className="leading-tight overflow-hidden">
+                          <div className="font-bold text-[#333] text-[11px] truncate">{currentOrganization.name}</div>
+                          <div className="text-[9px] text-gray-500">Yönetim Paneli</div>
+                      </div>
+                  </div>
+              )}
 
-          {/* Main Content Area */}
-          <main className="flex-1 overflow-y-auto relative z-0 scroll-smooth bg-[#eff0f2]">
-            <div className="p-4 max-w-5xl mx-auto min-h-[500px]">
-               <Outlet />
-            </div>
-          </main>
+              {/* Navigation Links */}
+              <Sidebar />
+
+          </div>
+
+          {/* COL 2: MAIN ADMIN CONTENT */}
+          <div className="min-w-0">
+             <Outlet />
+          </div>
+
       </div>
 
     </div>
