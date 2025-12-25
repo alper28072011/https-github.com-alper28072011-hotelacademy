@@ -127,7 +127,13 @@ export const AdminLayout: React.FC = () => {
   ];
 
   return (
-    <div className="flex h-screen bg-[#eff0f2] text-slate-900 admin-panel overflow-hidden">
+    // CRITICAL FIX: The `key` prop here forces React to destroy and recreate the entire layout when switching entities.
+    // This prevents CSS bleeding from the previous page (Ghost UI issue).
+    <div 
+        key={activeEntityId} 
+        className="flex h-screen bg-[#eff0f2] text-slate-900 admin-panel overflow-hidden"
+        style={{ isolation: 'isolate' }} // Creates a new stacking context for robust Z-indexing
+    >
       
       {/* MOBILE HEADER */}
       <div className="md:hidden bg-[#3b5998] p-3 flex justify-between items-center fixed top-0 left-0 right-0 z-50 shadow-md">
