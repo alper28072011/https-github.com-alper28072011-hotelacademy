@@ -218,7 +218,6 @@ export const ContentStudio: React.FC = () => {
 
         {/* WORKSPACE */}
         <div className="flex flex-1 overflow-hidden">
-            {/* ... (Editor Layout remains same) ... */}
             {/* LIST */}
             <div className="w-72 bg-white border-r border-[#d8dfea] flex flex-col z-10">
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -226,20 +225,20 @@ export const ContentStudio: React.FC = () => {
                         <div 
                             key={card.id}
                             onClick={() => setActiveCardId(card.id)}
-                            className={`p-3 rounded-lg cursor-pointer flex items-center gap-3 border transition-all ${
+                            className={`p-2 rounded-sm cursor-pointer flex items-center gap-3 border transition-all ${
                                 activeCardId === card.id 
-                                ? 'bg-[#3b5998] border-[#3b5998] text-white shadow-md' 
-                                : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-700'
+                                ? 'bg-[#d8dfea] border-[#bdc7d8] text-[#3b5998] font-bold' 
+                                : 'bg-white border-white hover:bg-[#eff0f5] text-[#333]'
                             }`}
                         >
-                            <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold shrink-0 ${activeCardId === card.id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                            <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold shrink-0 ${activeCardId === card.id ? 'bg-white text-[#3b5998] border border-[#ccc]' : 'bg-gray-100 text-gray-500'}`}>
                                 {idx + 1}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <div className="text-xs font-bold truncate">{getLocalizedContent(card.title) || 'Başlıksız'}</div>
-                                <div className={`text-[10px] capitalize ${activeCardId === card.id ? 'text-white/70' : 'text-gray-400'}`}>{card.type}</div>
+                                <div className="text-xs truncate">{getLocalizedContent(card.title) || 'Başlıksız'}</div>
+                                <div className={`text-[10px] capitalize font-normal ${activeCardId === card.id ? 'text-[#3b5998]/70' : 'text-gray-400'}`}>{card.type}</div>
                             </div>
-                            {activeCardId === card.id && <ChevronRight className="w-4 h-4 text-white/50" />}
+                            {activeCardId === card.id && <ChevronRight className="w-4 h-4 text-[#3b5998]" />}
                         </div>
                     ))}
                     

@@ -52,6 +52,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       }
   };
 
+  const menuItems = [
+      { label: 'Haber Kaynağı', icon: Home, path: '/' },
+      { label: 'Keşfet', icon: Globe, path: '/explore' },
+      { label: 'Gruplar', icon: Building2, path: '/lobby' },
+  ];
+
   return (
     <div className="flex flex-col h-screen w-full bg-[#eff0f2] overflow-hidden">
       
@@ -152,15 +158,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                 </div>
                 
                 <div className="space-y-1">
-                    {[
-                        { label: 'Haber Kaynağı', icon: Home, path: '/' },
-                        { label: 'Keşfet', icon: Globe, path: '/explore' },
-                        { label: 'Gruplar', icon: Building2, path: '/lobby' },
-                    ].map(item => (
-                        <button key={item.label} onClick={() => navigate(item.path)} className="w-full flex items-center gap-2 px-1 py-1 hover:bg-[#eff0f2] text-[#333] text-xs font-medium">
-                            <item.icon className="w-4 h-4 text-gray-500" /> {item.label}
-                        </button>
-                    ))}
+                    {menuItems.map(item => {
+                        const isActive = item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path);
+                        return (
+                            <button 
+                                key={item.label} 
+                                onClick={() => navigate(item.path)} 
+                                className={`w-full flex items-center gap-2 px-2 py-1.5 mb-1 text-xs transition-colors rounded-sm ${
+                                    isActive 
+                                    ? 'bg-[#d8dfea] text-[#3b5998] font-bold' 
+                                    : 'text-[#333] hover:bg-[#eff0f5] font-medium'
+                                }`}
+                            >
+                                <item.icon className={`w-4 h-4 ${isActive ? 'text-[#3b5998]' : 'text-gray-500'}`} /> 
+                                {item.label}
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 
