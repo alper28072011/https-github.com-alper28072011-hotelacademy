@@ -11,7 +11,7 @@ import { Organization, OrganizationSector, User, JoinRequest } from '../../types
 export const OrganizationLobby: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, loginSuccess } = useAuthStore();
-  const { switchToOrganizationAction, fetchMemberships, myMemberships } = useOrganizationStore();
+  const { startOrganizationSession, loadUserMemberships, myMemberships } = useOrganizationStore();
   const [activeTab, setActiveTab] = useState<'FIND' | 'CREATE'>('FIND');
   
   // Search State
@@ -32,7 +32,7 @@ export const OrganizationLobby: React.FC = () => {
 
   useEffect(() => {
       if (currentUser) {
-          fetchMemberships(currentUser.id);
+          loadUserMemberships(currentUser.id);
           fetchPendingRequests();
       }
   }, [currentUser]);
@@ -78,7 +78,7 @@ export const OrganizationLobby: React.FC = () => {
       
       if (org) {
           // 1. Switch Organization Context
-          await switchToOrganizationAction(org.id);
+          await startOrganizationSession(org.id);
           
           // 2. CRITICAL: Manually update AuthStore User State
           const updatedUser: User = {
@@ -103,9 +103,9 @@ export const OrganizationLobby: React.FC = () => {
       setSwitchingOrgId(orgId);
       
       try {
-          const success = await switchToOrganizationAction(orgId);
-          if (success) {
-              navigate('/');
+          const result = await startOrganizationSession(orgId);
+          if (result.success) {
+              navigate('/admin'); // Admin Layout will handle routing based on context
           } else {
               setSwitchingOrgId(null);
               alert("Giriş yapılamadı. Lütfen tekrar deneyin.");

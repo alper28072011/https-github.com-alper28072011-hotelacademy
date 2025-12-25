@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-type ContextType = 'PERSONAL' | 'ORGANIZATION';
+export type ContextType = 'PERSONAL' | 'ORGANIZATION';
 
 interface ContextState {
   contextType: ContextType;
@@ -10,7 +10,7 @@ interface ContextState {
   activeEntityName: string | null;
   activeEntityAvatar: string | null;
   activeEntityRole: string | null;
-  isHydrated: boolean; // Storage'dan veri okundu mu?
+  isHydrated: boolean; // Storage yüklendi mi?
 
   switchToPersonal: (userId: string, userName: string, userAvatar: string) => void;
   switchToOrganization: (orgId: string, orgName: string, orgAvatar: string, role: string) => void;
@@ -46,7 +46,7 @@ export const useContextStore = create<ContextState>()(
       setHydrated: () => set({ isHydrated: true })
     }),
     {
-      name: 'app-context-stable',
+      name: 'app-context-v2', // Version bumped to clear old bad cache
       storage: createJSONStorage(() => localStorage),
       onRehydrateStorage: () => (state) => {
         state?.setHydrated();

@@ -5,11 +5,13 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Play, Clock, Zap, Loader2, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useContentStore } from '../../stores/useContentStore';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { getLocalizedContent } from '../../i18n/config';
 
 export const LibraryPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { currentUser } = useAuthStore();
   const { 
     courses, 
     categories, 
@@ -22,8 +24,8 @@ export const LibraryPage: React.FC = () => {
   } = useContentStore();
 
   useEffect(() => {
-    fetchContent();
-  }, [fetchContent]);
+    fetchContent(currentUser?.currentOrganizationId || '');
+  }, [fetchContent, currentUser?.currentOrganizationId]);
 
   const featuredCourse = getFeaturedCourse() || courses[0];
 

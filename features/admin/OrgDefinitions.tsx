@@ -17,7 +17,7 @@ interface OrgDefinitionsProps {
 }
 
 export const OrgDefinitions: React.FC<OrgDefinitionsProps> = ({ organization }) => {
-    const { switchToOrganizationAction } = useOrganizationStore();
+    const { startOrganizationSession } = useOrganizationStore();
     
     // --- STATE ---
     const [departments, setDepartments] = useState<OrgDepartmentDefinition[]>(organization.definitions?.departments || []);
@@ -124,7 +124,7 @@ export const OrgDefinitions: React.FC<OrgDefinitionsProps> = ({ organization }) 
         setIsSaving(true);
         const success = await saveOrganizationDefinitions(organization.id, departments, prototypes);
         if (success) {
-            await switchToOrganizationAction(organization.id);
+            await startOrganizationSession(organization.id);
             alert("Organizasyon yapısı başarıyla güncellendi!");
         } else {
             alert("Kaydetme başarısız.");

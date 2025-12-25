@@ -1,32 +1,31 @@
 
 import React, { useEffect, useState } from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from './stores/useAppStore';
 import { useAuthStore } from './stores/useAuthStore';
 import { useContextStore } from './stores/useContextStore';
 import { useTelemetry } from './hooks/useTelemetry';
 
+// Feature Imports
 import { LoginPage } from './features/auth/LoginPage';
-import { OrganizationLobby } from './features/organization/OrganizationLobby';
-import { OrganizationProfile } from './features/organization/OrganizationProfile';
-import { OrganizationSettings } from './features/organization/OrganizationSettings';
+import { DashboardLayout } from './components/layout/DashboardLayout';
+import { AdminLayout } from './features/admin/AdminLayout';
+
+// User Pages
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ProfilePage } from './features/profile/ProfilePage';
 import { PublicProfilePage } from './features/profile/PublicProfilePage';
 import { OperationsPage } from './features/operations/OperationsPage';
 import { ReportPage } from './features/issues/ReportPage';
 import { ExplorePage } from './features/explore/ExplorePage'; 
-import { DashboardLayout } from './components/layout/DashboardLayout';
+import { OrganizationLobby } from './features/organization/OrganizationLobby';
+import { OrganizationProfile } from './features/organization/OrganizationProfile';
 import { CoursePlayerPage } from './features/player/CoursePlayerPage';
 import { CourseIntroPage } from './features/course/CourseIntroPage'; 
 import { JourneyMap } from './features/career/JourneyMap';
-import { Loader2 } from 'lucide-react';
-import ScrollToTop from './components/utils/ScrollToTop';
-import { AdminBreadcrumbs } from './components/layout/AdminBreadcrumbs';
 
-// Admin Imports
-import { AdminLayout } from './features/admin/AdminLayout';
+// Admin Pages
 import { OrganizationManager } from './features/admin/OrganizationManager'; 
 import { TeamRequests } from './features/admin/TeamRequests'; 
 import { ContentStudio } from './features/admin/ContentStudio';
@@ -35,7 +34,12 @@ import { CourseDetail } from './features/admin/CourseDetail';
 import { TopicManager } from './features/admin/TopicManager';
 import { CareerBuilder } from './features/admin/CareerBuilder';
 import { TalentRadar } from './features/admin/TalentRadar';
+import { OrganizationSettings } from './features/admin/OrganizationSettings';
 import { SuperAdminDashboard } from './features/superadmin/SuperAdminDashboard';
+
+import { AdminBreadcrumbs } from './components/layout/AdminBreadcrumbs';
+import ScrollToTop from './components/utils/ScrollToTop';
+import { Loader2 } from 'lucide-react';
 
 const PageTransition: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "w-full h-full" }) => (
     <motion.div
@@ -49,143 +53,19 @@ const PageTransition: React.FC<{ children: React.ReactNode; className?: string }
     </motion.div>
 );
 
-const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return (
-    <div className="min-h-screen bg-surface-subtle flex flex-col items-center justify-center p-4">
-      {children}
-      <footer className="mt-8 text-center text-text-muted text-xs opacity-60">
-          <p>&copy; 2024 Hotel Academy &bull; Global Standard</p>
-      </footer>
-    </div>
-  );
-};
-
 const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { currentUser } = useAuthStore();
-    const isSuper = currentUser?.role === 'super_admin';
-    if (!isSuper) return <Navigate to="/" replace />;
-    return <>{children}</>;
+    return currentUser?.role === 'super_admin' ? <>{children}</> : <Navigate to="/" replace />;
 };
-
-// --- STRICT CONTEXT GUARDS ---
-// Prevents "Ghost UI" by ensuring URL matches Context Store
 
 const RequireAdminContext: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { contextType } = useContextStore();
-    if (contextType !== 'ORGANIZATION') {
-        return <Navigate to="/" replace />;
-    }
-    return <>{children}</>;
-};
-
-const RequireUserContext: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { contextType } = useContextStore();
-    if (contextType === 'ORGANIZATION') {
-        return <Navigate to="/admin" replace />;
-    }
-    return <>{children}</>;
+    return contextType === 'ORGANIZATION' ? <>{children}</> : <Navigate to="/" replace />;
 };
 
 const TelemetryProvider = () => {
     useTelemetry(); 
     return null;
-};
-
-const AnimatedRoutes = () => {
-    const location = useLocation();
-    const { isAuthenticated } = useAuthStore();
-
-    return (
-        <>
-            <TelemetryProvider />
-            <AnimatePresence mode="wait">
-                <Routes location={location} key={location.pathname}>
-                    {isAuthenticated ? (
-                       <>
-                          {/* PUBLIC / SHARED ROUTES (Accessible in both modes, but usually personal) */}
-                          <Route path="/org/:orgId" element={<PageTransition><OrganizationProfile /></PageTransition>} />
-                          <Route path="/hotel/:orgId" element={<Navigate to={`/org/${window.location.hash.split('/').pop()}`} replace />} />
-                          <Route path="/course/:courseId" element={<CourseIntroPage />} />
-                          <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
-                          
-                          {/* 
-                              ADMIN ROUTES - Strictly Guarded
-                              If you are NOT in Organization context, you get kicked to /
-                          */}
-                          <Route path="/admin" element={
-                              <RequireAdminContext>
-                                  <AdminLayout />
-                              </RequireAdminContext>
-                          }>
-                              <Route index element={<PageTransition><OrganizationManager /></PageTransition>} /> 
-                              <Route path="organization" element={<PageTransition><OrganizationManager /></PageTransition>} />
-                              <Route path="requests" element={<PageTransition><TeamRequests /></PageTransition>} />
-                              <Route path="career" element={<PageTransition><CareerBuilder /></PageTransition>} />
-                              
-                              <Route path="courses" element={
-                                  <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><CourseManager /></PageTransition></div>
-                              } />
-                              <Route path="courses/:courseId" element={
-                                  <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><CourseDetail /></PageTransition></div>
-                              } />
-                              <Route path="courses/:courseId/topics/:topicId" element={
-                                  <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><TopicManager /></PageTransition></div>
-                              } />
-                              <Route path="modules/:moduleId/edit" element={
-                                  <div className="flex flex-col h-full"><AdminBreadcrumbs /><PageTransition><ContentStudio /></PageTransition></div>
-                              } />
-                              
-                              <Route path="content" element={<Navigate to="courses" replace />} /> 
-                              <Route path="reports" element={<PageTransition><TalentRadar /></PageTransition>} />
-                              <Route path="settings" element={<PageTransition><OrganizationSettings /></PageTransition>} /> 
-                          </Route>
-
-                          {/* SUPER ADMIN ROUTES */}
-                          <Route path="/super-admin" element={
-                              <SuperAdminGuard>
-                                  <PageTransition><SuperAdminDashboard /></PageTransition>
-                              </SuperAdminGuard>
-                          } />
-
-                          {/* 
-                              USER APP ROUTES - Strictly Guarded
-                              If you ARE in Organization context, you get kicked to /admin
-                          */}
-                          <Route 
-                            path="/*" 
-                            element={
-                            <RequireUserContext>
-                                <DashboardLayout>
-                                    <Routes>
-                                        <Route path="/" element={<PageTransition><DashboardPage /></PageTransition>} />
-                                        <Route path="/journey" element={<PageTransition><JourneyMap /></PageTransition>} />
-                                        <Route path="/profile" element={<PageTransition><ProfilePage /></PageTransition>} />
-                                        <Route path="/user/:userId" element={<PageTransition><PublicProfilePage /></PageTransition>} />
-                                        <Route path="/operations" element={<PageTransition><OperationsPage /></PageTransition>} />
-                                        <Route path="/report" element={<PageTransition><ReportPage /></PageTransition>} />
-                                        <Route path="/explore" element={<PageTransition><ExplorePage /></PageTransition>} />
-                                        <Route path="/lobby" element={<PageTransition><OrganizationLobby /></PageTransition>} /> 
-                                        <Route path="*" element={<Navigate to="/" replace />} />
-                                    </Routes>
-                                </DashboardLayout>
-                            </RequireUserContext>
-                            } 
-                        />
-                       </>
-                    ) : (
-                       <Route 
-                         path="/*" 
-                         element={
-                           <LoginLayout>
-                             <PageTransition className="w-full"><LoginPage /></PageTransition>
-                           </LoginLayout>
-                         } 
-                       />
-                    )}
-                </Routes>
-            </AnimatePresence>
-        </>
-    );
 };
 
 const App: React.FC = () => {
@@ -200,16 +80,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
       fetchSystemSettings();
-      // Simulate quick hydration check
       setTimeout(() => setIsHydrating(false), 500);
   }, []);
 
-  if (isHydrating && isAuthenticated) {
+  if (isHydrating) {
       return (
-          <div className="h-screen flex items-center justify-center bg-surface-subtle">
-              <div className="text-center">
-                  <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto mb-4" />
-              </div>
+          <div className="h-screen flex items-center justify-center bg-gray-50">
+              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
           </div>
       );
   }
@@ -217,7 +94,66 @@ const App: React.FC = () => {
   return (
     <HashRouter>
       <ScrollToTop />
-      <AnimatedRoutes />
+      <TelemetryProvider />
+      
+      <Routes>
+        {/* 1. PUBLIC / AUTH ROUTES */}
+        {!isAuthenticated && (
+            <Route path="/*" element={<LoginPage />} />
+        )}
+
+        {/* 2. AUTHENTICATED ROUTES */}
+        {isAuthenticated && (
+            <>
+                {/* --- A. ADMIN ROUTES (ISOLATED) --- */}
+                <Route path="/admin" element={
+                    <RequireAdminContext>
+                        <AdminLayout />
+                    </RequireAdminContext>
+                }>
+                    <Route index element={<OrganizationManager />} />
+                    <Route path="organization" element={<OrganizationManager />} />
+                    <Route path="requests" element={<TeamRequests />} />
+                    <Route path="career" element={<CareerBuilder />} />
+                    <Route path="reports" element={<TalentRadar />} />
+                    <Route path="settings" element={<OrganizationSettings />} />
+                    
+                    {/* Nested Admin Routes */}
+                    <Route path="courses" element={<><AdminBreadcrumbs /><CourseManager /></>} />
+                    <Route path="courses/:courseId" element={<><AdminBreadcrumbs /><CourseDetail /></>} />
+                    <Route path="courses/:courseId/topics/:topicId" element={<><AdminBreadcrumbs /><TopicManager /></>} />
+                    <Route path="modules/:moduleId/edit" element={<><AdminBreadcrumbs /><ContentStudio /></>} />
+                </Route>
+
+                {/* --- B. SUPER ADMIN --- */}
+                <Route path="/super-admin" element={
+                    <SuperAdminGuard>
+                        <SuperAdminDashboard />
+                    </SuperAdminGuard>
+                } />
+
+                {/* --- C. USER APP ROUTES (DEFAULT) --- */}
+                <Route path="/" element={<DashboardLayout><Outlet /></DashboardLayout>}>
+                    <Route index element={<DashboardPage />} />
+                    <Route path="journey" element={<JourneyMap />} />
+                    <Route path="profile" element={<ProfilePage />} />
+                    <Route path="user/:userId" element={<PublicProfilePage />} />
+                    <Route path="operations" element={<OperationsPage />} />
+                    <Route path="report" element={<ReportPage />} />
+                    <Route path="explore" element={<ExplorePage />} />
+                    <Route path="lobby" element={<OrganizationLobby />} />
+                    <Route path="org/:orgId" element={<OrganizationProfile />} />
+                </Route>
+
+                {/* --- D. STANDALONE PLAYER ROUTES --- */}
+                <Route path="/course/:courseId" element={<CourseIntroPage />} />
+                <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
+
+                {/* --- E. FALLBACK --- */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </>
+        )}
+      </Routes>
     </HashRouter>
   );
 };

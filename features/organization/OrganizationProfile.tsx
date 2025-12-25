@@ -36,7 +36,7 @@ export const OrganizationProfile: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
   const { currentUser, updateCurrentUser } = useAuthStore();
-  const { switchToOrganizationAction } = useOrganizationStore(); 
+  const { startOrganizationSession } = useOrganizationStore(); 
   const { logEvent } = useTelemetry();
   
   const [org, setOrg] = useState<Organization | null>(null);

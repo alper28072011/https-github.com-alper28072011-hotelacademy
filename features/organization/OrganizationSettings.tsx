@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 export const OrganizationSettings: React.FC = () => {
-  const { currentOrganization, switchOrganization } = useOrganizationStore();
+  const { currentOrganization, startOrganizationSession } = useOrganizationStore();
   const { currentUser } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -106,7 +106,7 @@ export const OrganizationSettings: React.FC = () => {
 
       await updateOrganization(currentOrganization.id, updates);
       await updateJoinConfig(currentOrganization.id, joinConfig);
-      await switchOrganization(currentOrganization.id);
+      await startOrganizationSession(currentOrganization.id);
       
       setIsSaving(false);
       if (showWelcome) setShowWelcome(false);
@@ -116,7 +116,7 @@ export const OrganizationSettings: React.FC = () => {
   const handleChannelUpdate = async (channelId: string, updates: Partial<Channel>) => {
       if (!currentOrganization) return;
       await updateChannelConfig(currentOrganization.id, channelId, updates);
-      await switchOrganization(currentOrganization.id); // Refresh
+      await startOrganizationSession(currentOrganization.id); // Refresh
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,7 +124,7 @@ export const OrganizationSettings: React.FC = () => {
           setIsSaving(true);
           const url = await uploadFile(e.target.files[0], 'org_logos');
           await updateOrganization(currentOrganization.id, { logoUrl: url });
-          await switchOrganization(currentOrganization.id);
+          await startOrganizationSession(currentOrganization.id);
           setIsSaving(false);
       }
   };
@@ -134,7 +134,7 @@ export const OrganizationSettings: React.FC = () => {
           setIsUploadingCover(true);
           try {
               await updateOrganizationCover(currentOrganization.id, e.target.files[0]);
-              await switchOrganization(currentOrganization.id); 
+              await startOrganizationSession(currentOrganization.id); 
           } catch (error) {
               alert("Kapak fotoğrafı güncellenemedi.");
           } finally {
@@ -148,7 +148,7 @@ export const OrganizationSettings: React.FC = () => {
           setIsUploadingCover(true);
           try {
               await removeOrganizationCover(currentOrganization.id);
-              await switchOrganization(currentOrganization.id);
+              await startOrganizationSession(currentOrganization.id);
           } catch (error) {
               alert("İşlem başarısız.");
           } finally {
@@ -206,7 +206,7 @@ export const OrganizationSettings: React.FC = () => {
 
       if (success) {
           alert("Devir işlemi başarılı. Sahiplik aktarıldı.");
-          await switchOrganization(currentOrganization.id); // Refresh roles
+          await startOrganizationSession(currentOrganization.id); // Refresh roles
           navigate('/admin');
       } else {
           alert("Devir işlemi başarısız.");

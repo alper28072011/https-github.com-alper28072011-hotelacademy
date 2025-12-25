@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,7 +19,7 @@ export const OperationsPage: React.FC = () => {
   // Sync tasks on mount
   useEffect(() => {
     if (currentUser?.department) {
-        fetchTasks(currentUser.department);
+        fetchTasks(currentUser.department, currentUser.currentOrganizationId || '');
     }
   }, [currentUser, fetchTasks]);
 

@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { User, AuthMode } from '../types';
-import { logoutUser } from '../services/authService';
+import { logoutUser, loginUser } from '../services/authService';
 import { getUserById } from '../services/db';
 import { useContextStore } from './useContextStore';
 
@@ -13,6 +13,11 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   
+  // Legacy / Wizard Props
+  stage: 'DEPARTMENT_SELECT' | 'PIN_ENTRY' | 'SUCCESS';
+  enteredPin: string;
+  department: string | null;
+
   // Actions
   setAuthMode: (mode: AuthMode) => void;
   setLoading: (loading: boolean) => void;
@@ -21,6 +26,13 @@ interface AuthState {
   logout: () => void;
   refreshProfile: () => Promise<void>;
   updateCurrentUser: (updates: Partial<User>) => void;
+  
+  // Legacy Actions
+  setDepartment: (dept: string) => void;
+  appendPin: (digit: string) => void;
+  deletePin: () => void;
+  goBack: () => void;
+  loginAsAdmin: (email: string, pass: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -31,6 +43,11 @@ export const useAuthStore = create<AuthState>()(
       authMode: 'LOGIN',
       isLoading: false,
       error: null,
+      
+      // Default wizard state
+      stage: 'DEPARTMENT_SELECT',
+      enteredPin: '',
+      department: null,
 
       setAuthMode: (mode) => set({ authMode: mode, error: null }),
       setLoading: (isLoading) => set({ isLoading }),
@@ -50,7 +67,6 @@ export const useAuthStore = create<AuthState>()(
         
         // 2. CONTEXT'i Zorla "PERSONAL" Yap
         // Bu işlem UI'ın admin modunda açılmasını engeller.
-        // FIX: Pass individual arguments instead of the user object
         useContextStore.getState().switchToPersonal(
             sanitizedUser.id,
             sanitizedUser.name,
@@ -91,14 +107,13 @@ export const useAuthStore = create<AuthState>()(
           console.error("Logout error", e);
         }
         localStorage.clear(); // Tam temizlik
-        // useContextStore usually has a reset or we can force personal with dummy data to clear, 
-        // but since we cleared localStorage, it should be fine on reload. 
-        // However, explicit reset is safer if we implemented it.
-        // Since we removed resetContext from useContextStore in the Unbreakable update, we rely on page reload or store reset.
         set({
           isAuthenticated: false,
           currentUser: null,
-          error: null
+          error: null,
+          stage: 'DEPARTMENT_SELECT',
+          enteredPin: '',
+          department: null
         });
         window.location.href = '/';
       },
@@ -113,6 +128,24 @@ export const useAuthStore = create<AuthState>()(
               }
           } catch (e) {
               console.error("Auto-refresh profile failed:", e);
+          }
+      },
+
+      // --- Legacy Wizard Actions ---
+      setDepartment: (dept) => set({ department: dept, stage: 'PIN_ENTRY', enteredPin: '' }),
+      appendPin: (digit) => set(state => ({ enteredPin: state.enteredPin + digit })),
+      deletePin: () => set(state => ({ enteredPin: state.enteredPin.slice(0, -1) })),
+      goBack: () => set(state => {
+          if (state.stage === 'PIN_ENTRY') return { stage: 'DEPARTMENT_SELECT', enteredPin: '', department: null };
+          return {};
+      }),
+      loginAsAdmin: async (email, pass) => {
+          set({ isLoading: true, error: null });
+          try {
+              const user = await loginUser(email, pass);
+              get().loginSuccess(user);
+          } catch (e: any) {
+              set({ error: e.message || 'Login failed', isLoading: false });
           }
       }
     }),
