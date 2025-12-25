@@ -84,14 +84,13 @@ export const useOrganizationStore = create<OrganizationState>()(
             // 3. Persist to DB (User Profile)
             await switchUserActiveOrganization(currentUser.id, orgId);
 
-            // 4. Update Auth Store User (Important for Routing & Guards!)
-            const updatedUser: User = { 
-                ...currentUser, 
+            // 4. Update Auth Store User (Important: Use updateCurrentUser to PRESERVE Context)
+            // Do NOT use loginSuccess here as it resets context to PERSONAL default.
+            authStore.updateCurrentUser({
                 currentOrganizationId: orgId,
                 role: role,
                 department: dept
-            };
-            authStore.loginSuccess(updatedUser);
+            });
 
             // 5. Update Org Store
             set({ currentOrganization: org, isLoading: false });

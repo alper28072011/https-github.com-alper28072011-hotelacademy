@@ -26,15 +26,18 @@ export const AdminLayout: React.FC = () => {
 
   // --- SECURITY WALL: ENFORCE ORGANIZATION CONTEXT ---
   useEffect(() => {
+      let isMounted = true;
+
       const enforceContext = async () => {
           if (!currentUser) return;
 
           // 1. If already in Organization Mode -> Ensure Store is Synced
           if (contextType === 'ORGANIZATION' && activeEntityId) {
               if (currentOrganization?.id !== activeEntityId) {
+                  console.log("AdminLayout: Syncing Organization Store...");
                   await switchOrganization(activeEntityId);
               }
-              setIsCheckingContext(false);
+              if (isMounted) setIsCheckingContext(false);
               return;
           }
 
@@ -48,7 +51,7 @@ export const AdminLayout: React.FC = () => {
                   const target = managedPages[0];
                   switchToOrganization(target.id, target.name, target.logoUrl);
                   await switchOrganization(target.id);
-                  setIsCheckingContext(false);
+                  if (isMounted) setIsCheckingContext(false);
               } else {
                   // No Pages to Manage -> Kick out
                   alert("Yönetim paneline erişmek için bir işletme hesabınız olmalıdır.");
@@ -58,6 +61,8 @@ export const AdminLayout: React.FC = () => {
       };
 
       enforceContext();
+      
+      return () => { isMounted = false; };
   }, [contextType, currentUser, activeEntityId]);
 
   // Fetch Badge Counts
