@@ -10,61 +10,50 @@ import {
     query, 
     where, 
     getDocs,
-    deleteDoc,
-    writeBatch
+    deleteDoc
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { EmailAuthProvider, reauthenticateWithCredential, deleteUser } from 'firebase/auth';
 import { User, Organization } from '../types';
 import { deleteFileByUrl, uploadFile, replaceFile, deleteFolder } from './storage';
 import { StoragePaths } from '../utils/storagePaths';
+import { followEntity, unfollowEntity } from './socialService';
 
-// ... (Existing functions like followUser, unfollowUser kept same, just ensuring types match)
-
-/**
- * Follow a user.
- */
+// Legacy wrappers to redirect to socialService
 export const followUser = async (currentUserId: string, targetUserId: string): Promise<boolean> => {
-    try {
-        await runTransaction(db, async (transaction) => {
-            const currentUserRef = doc(db, 'users', currentUserId);
-            const targetUserRef = doc(db, 'users', targetUserId);
-
-            const targetSnap = await transaction.get(targetUserRef);
-            if (!targetSnap.exists()) throw new Error("User does not exist");
-
-            transaction.update(currentUserRef, { following: arrayUnion(targetUserId) });
-            transaction.update(targetUserRef, { followers: arrayUnion(currentUserId) });
-        });
-        return true;
-    } catch (e) { return false; }
+    const res = await followEntity(currentUserId, targetUserId, 'USER');
+    return res.success;
 };
 
 export const unfollowUser = async (currentUserId: string, targetUserId: string): Promise<boolean> => {
-    try {
-        await runTransaction(db, async (transaction) => {
-            const currentUserRef = doc(db, 'users', currentUserId);
-            const targetUserRef = doc(db, 'users', targetUserId);
-            transaction.update(currentUserRef, { following: arrayRemove(targetUserId) });
-            transaction.update(targetUserRef, { followers: arrayRemove(currentUserId) });
-        });
-        return true;
-    } catch (e) { return false; }
+    return await unfollowEntity(currentUserId, targetUserId, 'USER');
 };
 
+/**
+ * Fetches followed organizations by querying the sub-collection `users/{id}/following`.
+ */
 export const getFollowedPages = async (userId: string): Promise<Organization[]> => {
     try {
-        const userRef = doc(db, 'users', userId);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) return [];
-        const userData = userSnap.data() as User;
-        const pageIds = userData.followedPageIds || [];
-        if (pageIds.length === 0) return [];
-        const safeIds = pageIds.slice(0, 10);
-        const q = query(collection(db, 'organizations'), where('__name__', 'in', safeIds));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Organization));
-    } catch (e) { return []; }
+        // Query Sub-collection for items where type == 'ORGANIZATION'
+        const followingRef = collection(db, `users/${userId}/following`);
+        const q = query(followingRef, where('type', '==', 'ORGANIZATION'));
+        const snap = await getDocs(q);
+        
+        if (snap.empty) return [];
+
+        const pageIds = snap.docs.map(d => d.id);
+        const safeIds = pageIds.slice(0, 10); // Firestore 'in' limit is 10-30 depending on query
+        
+        if (safeIds.length === 0) return [];
+
+        const orgsQ = query(collection(db, 'organizations'), where('__name__', 'in', safeIds));
+        const orgSnap = await getDocs(orgsQ);
+        
+        return orgSnap.docs.map(d => ({ id: d.id, ...d.data() } as Organization));
+    } catch (e) { 
+        console.error("Get Followed Pages Error:", e);
+        return []; 
+    }
 };
 
 export const updateUserPreferences = async (userId: string, data: any) => {
@@ -108,9 +97,6 @@ export const deleteUserSmart = async (user: User, password?: string): Promise<{ 
     }
 };
 
-/**
- * Sets the Primary Network for a user (Identity Shift).
- */
 export const setPrimaryNetwork = async (userId: string, networkId: string, role: 'ADMIN' | 'MEMBER' | 'ALUMNI' = 'MEMBER') => {
     try {
         await updateDoc(doc(db, 'users', userId), {
@@ -125,9 +111,6 @@ export const setPrimaryNetwork = async (userId: string, networkId: string, role:
     }
 };
 
-/**
- * Sets the Vision (Career Path) for a user.
- */
 export const setCareerVision = async (userId: string, pathId: string) => {
     try {
         await updateDoc(doc(db, 'users', userId), {

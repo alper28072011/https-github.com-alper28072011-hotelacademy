@@ -12,7 +12,8 @@ import {
     runTransaction,
     getDoc,
     serverTimestamp,
-    arrayRemove
+    arrayRemove,
+    limit
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Organization, Position, RolePermissions, OrgDepartmentDefinition, PositionPrototype, PageRole, JoinConfig, User, Channel } from '../types';
@@ -39,8 +40,6 @@ export const createPage = async (
             location: 'Global',
             ownerId: userId,
             admins: [userId],
-            followers: [userId], 
-            members: [userId],   
             followersCount: 1,
             memberCount: 1,
             createdAt: Date.now(),
@@ -70,7 +69,7 @@ export const createPage = async (
         await updateDoc(userRef, {
             managedPageIds: arrayUnion(docRef.id),
             joinedPageIds: arrayUnion(docRef.id), 
-            followingPages: arrayUnion(docRef.id),
+            followingPages: arrayUnion(docRef.id), // Legacy support for now, can be migrated to subcollection later
             [`pageRoles.${docRef.id}`]: { role: 'ADMIN', title: 'Kurucu' },
             channelSubscriptions: arrayUnion(`ch_${Date.now()}_1`)
         });
@@ -325,12 +324,8 @@ export const kickMember = async (orgId: string, userId: string): Promise<boolean
         });
         
         // 3. Update Org Counts
-        const orgRef = doc(db, 'organizations', orgId);
-        await updateDoc(orgRef, {
-            members: arrayRemove(userId)
-            // Ideally decrement memberCount too, but Firestore increment(-1) is safer
-        });
-
+        // NOTE: Since 'members' array is removed, we just ensure data consistency elsewhere or decrement counter.
+        // Here we won't try to remove from 'members' array since it's deprecated.
         return true;
     } catch (e) {
         console.error("Kick Member Error:", e);
@@ -350,24 +345,34 @@ export const banMember = async (orgId: string, userId: string): Promise<boolean>
 
 export const getRecruitableFollowers = async (orgId: string): Promise<User[]> => {
     try {
-        const orgRef = doc(db, 'organizations', orgId);
-        const orgSnap = await getDoc(orgRef);
-        if(!orgSnap.exists()) return [];
+        // 1. Get Members IDs from memberships collection
+        const memQ = query(collection(db, 'memberships'), where('organizationId', '==', orgId));
+        const memSnap = await getDocs(memQ);
+        const memberIds = new Set(memSnap.docs.map(d => d.data().userId));
+
+        // 2. Get Followers IDs from sub-collection
+        const followersRef = collection(db, `organizations/${orgId}/followers`);
+        const followersQ = query(followersRef, limit(50)); // Limit for performance
+        const followersSnap = await getDocs(followersQ);
         
-        const orgData = orgSnap.data() as Organization;
-        const followers = orgData.followers || [];
-        const members = orgData.members || [];
-        
-        // Filter: Users who follow BUT are NOT members
-        const potentialIds = followers.filter(id => !members.includes(id));
+        const potentialIds: string[] = [];
+        followersSnap.forEach(doc => {
+            if (!memberIds.has(doc.id)) {
+                potentialIds.push(doc.id);
+            }
+        });
         
         if(potentialIds.length === 0) return [];
 
-        const q = query(collection(db, 'users'), where('__name__', 'in', potentialIds.slice(0, 10))); // Limit 10 for safety
+        // 3. Fetch User Details
+        const q = query(collection(db, 'users'), where('__name__', 'in', potentialIds.slice(0, 10))); 
         const snap = await getDocs(q);
         
         return snap.docs.map(d => ({id: d.id, ...d.data()} as User));
-    } catch (e) { return []; }
+    } catch (e) { 
+        console.error("getRecruitableFollowers Error:", e);
+        return []; 
+    }
 };
 
 export const inviteUserToOrg = async (orgId: string, userId: string, orgName: string) => {

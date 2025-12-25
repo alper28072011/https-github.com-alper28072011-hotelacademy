@@ -116,25 +116,27 @@ export interface User {
   // VISION
   targetCareerPathId: string | null; 
   
-  followingUsers: string[]; 
-  followingPages: string[]; 
-  followedTags: string[];   
+  // SCALABILITY UPDATE: Arrays removed. Use sub-collections.
+  // followingUsers: string[]; // REMOVED
+  // followingPages: string[]; // REMOVED
+  // followers: string[];      // REMOVED
   
-  followers: string[]; 
+  followedTags: string[]; // Kept for simple interest matching (low cardinality usually)
+  
   followersCount: number;
   followingCount: number;
   
   isPrivate: boolean; 
   
-  joinedPageIds: string[]; 
-  managedPageIds: string[]; 
-  channelSubscriptions: string[]; 
+  joinedPageIds: string[]; // Kept for fast permission checks (usually < 10)
+  managedPageIds: string[]; // Kept for fast permission checks
+  channelSubscriptions: string[]; // Kept for notification routing
   
   pageRoles: Record<string, PageRole | { role: PageRole; title: string }>; 
   
-  following?: string[]; 
-  followedPageIds?: string[];
-  subscribedChannelIds?: string[]; 
+  // following?: string[]; // REMOVED
+  // followedPageIds?: string[]; // REMOVED
+  // subscribedChannelIds?: string[]; // Deprecated, mapped to channelSubscriptions
   
   xp: number;
   creatorLevel: CreatorLevel;
@@ -146,7 +148,7 @@ export interface User {
   joinDate: number;
   isSuperAdmin?: boolean;
   
-  completedCourses: string[];
+  completedCourses: string[]; // Kept for progress tracking (grow slowly)
   startedCourses: string[]; 
   savedCourses: string[]; 
   completedTasks: string[];
@@ -212,8 +214,9 @@ export interface Organization {
   ownerId: string; 
   admins: string[]; 
   
-  followers: string[]; 
-  members: string[];   
+  // SCALABILITY UPDATE: Arrays removed
+  // followers: string[]; // REMOVED
+  // members: string[];   // REMOVED
   
   createdAt: number; 
   channels: Channel[];
@@ -243,8 +246,8 @@ export interface Channel {
   description?: string;
   icon?: string;
   isPrivate: boolean; 
-  isMandatory?: boolean; // NEW: Auto-subscribe logic
-  managerIds?: string[]; // NEW: Specific managers for this channel
+  isMandatory?: boolean; 
+  managerIds?: string[]; 
   createdAt: number;
 }
 
@@ -269,7 +272,7 @@ export interface CareerPath {
     targetRole: string; 
     department: DepartmentType;
     targetAudience?: string; 
-    courseIds: string[]; // Ordered list of course IDs
+    courseIds: string[]; 
     aiPrompt?: string; 
     createdAt?: number;
     updatedAt?: number;
@@ -280,19 +283,16 @@ export interface Course {
   id: string;
   
   // NEW PUBLISHER MODEL (Context Aware)
-  publisherId: string; // ID of the Entity (User or Org)
-  publisherType: AppContextType; // 'PERSONAL' or 'ORGANIZATION'
+  publisherId: string; 
+  publisherType: AppContextType; 
   publisherName: string;
   publisherAvatar?: string;
 
-  // AUDIT TRAIL (Who actually clicked the button)
-  authorId: string; // The User ID
-  
-  // Organization Context (If applicable)
+  authorId: string; 
   organizationId?: string; 
   
-  channelId?: string; // Primary channel (Legacy support)
-  targetChannelIds?: string[]; // NEW: Multi-channel publishing
+  channelId?: string; 
+  targetChannelIds?: string[]; 
   categoryId?: string;
   
   visibility: 'PUBLIC' | 'PRIVATE' | 'FOLLOWERS_ONLY';
@@ -302,14 +302,12 @@ export interface Course {
   coverQuote?: LocalizedString;
   thumbnailUrl: string;
   
-  // HIERARCHY LINKS
   careerPathIds?: string[]; 
-  topicIds: string[]; // NEW: Ordered list of Topic IDs
+  topicIds: string[]; 
   
-  // Legacy/Computed fields for Feed Display
   duration: number;
   xpReward: number;
-  steps: StoryCard[]; // Deprecated: Only used for legacy flat courses
+  steps: StoryCard[]; 
   
   tags?: string[]; 
   topics?: string[];
@@ -340,35 +338,32 @@ export interface Course {
   
   // Deprecated
   modules?: CourseModule[]; 
-  authorName?: string; // Legacy
-  authorAvatarUrl?: string; // Legacy
-  authorType?: AuthorType; // Legacy
+  authorName?: string; 
+  authorAvatarUrl?: string; 
+  authorType?: AuthorType; 
 }
 
-// 3. LAYER: TOPIC (NEW) - E.g. "Week 1: Introduction"
 export interface CourseTopic {
     id: string;
     courseId: string;
     title: LocalizedString;
     summary: LocalizedString;
-    moduleIds: string[]; // Ordered list of Module IDs
+    moduleIds: string[]; 
     createdAt: number;
 }
 
-// 4. LAYER: LEARNING MODULE (ATOMIC UNIT) - E.g. "Video Lecture"
 export interface LearningModule {
     id: string;
     topicId: string;
-    courseId: string; // Redundant but useful for queries
+    courseId: string; 
     title: LocalizedString;
     type: 'VIDEO' | 'QUIZ' | 'READING' | 'FLASHCARD' | 'MIXED';
-    content: StoryCard[]; // The actual slides
-    duration: number; // minutes
+    content: StoryCard[]; 
+    duration: number; 
     xp: number;
     createdAt: number;
 }
 
-// Deprecated type, mapped to LearningModule
 export interface CourseModule {
     id: string;
     title: LocalizedString;
@@ -401,15 +396,11 @@ export interface StoryCard {
 
 export interface FeedPost { 
     id: string; 
-    
-    // NEW PUBLISHER MODEL
     publisherId: string;
     publisherType: AppContextType;
     publisherName: string;
     publisherAvatar?: string;
-
-    authorId: string; // Audit
-    
+    authorId: string; 
     organizationId?: string; 
     
     type: 'image' | 'video' | 'kudos' | 'course'; 
@@ -419,8 +410,7 @@ export interface FeedPost {
     commentsCount: number;
     createdAt: number; 
     kudosData?: { badgeType: KudosType; recipientId: string; recipientName: string; }; 
-    likes?: Record<string, any>;
-    targetChannelIds?: string[]; // NEW
+    targetChannelIds?: string[]; 
     
     // Legacy mapping
     authorType?: AuthorType;

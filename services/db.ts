@@ -17,7 +17,8 @@ import {
   setDoc,
   deleteDoc,
   writeBatch,
-  documentId
+  documentId,
+  orderBy
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { User, Course, Task, Issue, Category, CareerPath, FeedPost, Organization, Membership, JoinRequest, OrganizationSector, PageRole, PermissionType, ChannelStoryData, Channel } from '../types';
@@ -36,8 +37,6 @@ const sanitizeData = (data: any): any => {
     return JSON.parse(JSON.stringify(data));
 };
 
-// ... (Existing exports like getAdminCourses, getDashboardFeed etc. preserved) ...
-
 export const getAdminCourses = async (userId: string, orgId?: string | null): Promise<Course[]> => {
     try {
         let q;
@@ -54,11 +53,9 @@ export const getAdminCourses = async (userId: string, orgId?: string | null): Pr
 };
 
 /**
- * COMPOSITE FEED ALGORITHM
- * Aggregates content from 3 sources:
- * 1. Social Follows (People & Public Pages)
- * 2. Workspace Memberships (Internal Channels)
- * 3. Tag Interests
+ * COMPOSITE FEED ALGORITHM (Scalable Version)
+ * 1. Fetches IDs from `users/{id}/following` sub-collection first.
+ * 2. Fetches content based on those IDs.
  */
 export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[]> => {
     try {
@@ -68,11 +65,26 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
         const myQ = query(coursesRef, where('authorId', '==', user.id), limit(5));
         promises.push(getDocs(myQ));
 
+        // --- PRE-FETCH FOLLOWING IDS ---
+        // Since we removed arrays from User doc, we must query the sub-collection.
+        const followingRef = collection(db, `users/${user.id}/following`);
+        // Limit to recent 30 to avoid 'in' query limit explosion
+        const followingSnap = await getDocs(query(followingRef, orderBy('createdAt', 'desc'), limit(30)));
+        
+        const followingUserIds: string[] = [];
+        const followingPageIds: string[] = [];
+
+        followingSnap.forEach(doc => {
+            const data = doc.data();
+            if (data.type === 'USER') followingUserIds.push(doc.id);
+            if (data.type === 'ORGANIZATION') followingPageIds.push(doc.id);
+        });
+
         // 2. SOCIAL: PEOPLE I FOLLOW
-        if (user.followingUsers && user.followingUsers.length > 0) {
+        if (followingUserIds.length > 0) {
             const peopleQ = query(
                 coursesRef, 
-                where('authorId', 'in', user.followingUsers.slice(0, 10)), 
+                where('authorId', 'in', followingUserIds), 
                 where('visibility', 'in', ['PUBLIC', 'FOLLOWERS_ONLY']), 
                 limit(15)
             );
@@ -80,10 +92,10 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
         }
 
         // 3. SOCIAL: PAGES I FOLLOW (Public Content Only)
-        if (user.followingPages && user.followingPages.length > 0) {
+        if (followingPageIds.length > 0) {
             const publicPageQ = query(
                 coursesRef,
-                where('organizationId', 'in', user.followingPages.slice(0, 10)),
+                where('organizationId', 'in', followingPageIds),
                 where('visibility', '==', 'PUBLIC'),
                 limit(15)
             );
@@ -103,15 +115,6 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
                     limit(20)
                 );
                 promises.push(getDocs(workQ));
-                
-                // Fallback for legacy
-                const legacyWorkQ = query(
-                    coursesRef,
-                    where('organizationId', 'in', user.joinedPageIds.slice(0, 10)),
-                    where('channelId', 'in', subbedChannels.slice(0, 10)), 
-                    limit(20)
-                );
-                promises.push(getDocs(legacyWorkQ));
             }
         }
 
@@ -150,7 +153,6 @@ export const getDashboardFeed = async (user: User): Promise<(Course | FeedPost)[
 };
 
 export const getChannelStories = async (user: User): Promise<ChannelStoryData[]> => {
-    // Only fetch stories for joined orgs and subscribed channels
     if (!user.currentOrganizationId || !user.channelSubscriptions || user.channelSubscriptions.length === 0) {
         return [];
     }
@@ -163,11 +165,9 @@ export const getChannelStories = async (user: User): Promise<ChannelStoryData[]>
         const allOrgCourses = coursesSnap.docs.map(d => ({id: d.id, ...d.data()} as Course));
 
         const storyData: ChannelStoryData[] = [];
-        // Only show subscribed channels
         const relevantChannels = org.channels.filter(c => user.channelSubscriptions.includes(c.id));
 
         for (const channel of relevantChannels) {
-            // Updated to check targetChannelIds array
             const channelCourses = allOrgCourses.filter(c => c.targetChannelIds?.includes(channel.id) || c.channelId === channel.id);
             
             let status: 'HAS_NEW' | 'IN_PROGRESS' | 'ALL_CAUGHT_UP' | 'EMPTY' = 'EMPTY';
@@ -214,7 +214,6 @@ export const getChannelStories = async (user: User): Promise<ChannelStoryData[]>
     } catch (e) { return []; }
 };
 
-// ... [Standard getters] ...
 export const getCourse = async (courseId: string): Promise<Course | null> => {
     try {
       const snap = await getDoc(doc(db, 'courses', courseId));
@@ -236,10 +235,6 @@ export const getOrganizationDetails = async (orgId: string): Promise<Organizatio
     } catch (e) { return null; }
 };
 
-/**
- * NEW: Get enriched details for user's channel subscriptions.
- * Maps simple IDs to { ChannelName, OrgName, OrgLogo } structure.
- */
 export const getSubscribedChannelsDetails = async (user: User): Promise<{
     channel: Channel;
     organization: { id: string; name: string; logoUrl: string };
@@ -248,7 +243,6 @@ export const getSubscribedChannelsDetails = async (user: User): Promise<{
     if (!user.joinedPageIds || user.joinedPageIds.length === 0) return [];
 
     try {
-        // Fetch details of all joined organizations
         const orgsQ = query(orgsRef, where(documentId(), 'in', user.joinedPageIds));
         const orgsSnap = await getDocs(orgsQ);
         
@@ -258,7 +252,6 @@ export const getSubscribedChannelsDetails = async (user: User): Promise<{
             const org = doc.data() as Organization;
             const orgInfo = { id: doc.id, name: org.name, logoUrl: org.logoUrl };
             
-            // Find subscribed channels within this org
             org.channels?.forEach(channel => {
                 if (user.channelSubscriptions.includes(channel.id)) {
                     results.push({
@@ -338,20 +331,26 @@ export const createOrganization = async (name: string, sector: OrganizationSecto
             { id: 'ch_general', name: 'Genel Duyurular', description: 'Tüm personel için', isPrivate: false, managerIds: [owner.id], createdAt: Date.now(), isMandatory: true },
             { id: 'ch_welcome', name: 'Oryantasyon', description: 'Aramıza hoş geldin!', isPrivate: false, managerIds: [owner.id], createdAt: Date.now(), isMandatory: true }
         ];
+        // Remove arrays from Org init too
         const newOrg: Organization = {
             id: orgId, name, sector, logoUrl: '', location: 'Global', ownerId: owner.id, code, createdAt: Date.now(),
             settings: { allowStaffContentCreation: false, primaryColor: '#0B1E3B' },
             followersCount: 0, memberCount: 1, status: 'ACTIVE', channels: defaultChannels,
             type: 'PUBLIC',
             admins: [owner.id],
-            followers: [owner.id],
-            members: [owner.id],
-        };
+            // members: [owner.id], // REMOVED (Use Membership collection)
+            // followers: [owner.id], // REMOVED
+        } as any; 
+        
         await setDoc(doc(db, 'organizations', orgId), newOrg);
+        
+        // Membership
         const membershipId = `${owner.id}_${orgId}`;
         await setDoc(doc(db, 'memberships', membershipId), {
             id: membershipId, userId: owner.id, organizationId: orgId, role: 'ADMIN', status: 'ACTIVE', joinedAt: Date.now()
         });
+        
+        // Update User
         await updateDoc(doc(db, 'users', owner.id), {
             currentOrganizationId: orgId, organizationHistory: arrayUnion(orgId), [`pageRoles.${orgId}`]: 'ADMIN',
             joinedPageIds: arrayUnion(orgId),
@@ -365,7 +364,6 @@ export const switchUserActiveOrganization = async (userId: string, orgId: string
     try { await updateDoc(doc(db, 'users', userId), { currentOrganizationId: orgId }); return true; } catch (e) { return false; }
 };
 
-// ... [Existing Learning Functions (startCourse, saveCourseProgress, completeCourse) Preserved] ...
 export const startCourse = async (userId: string, courseId: string) => {
     try { await updateDoc(doc(db, 'users', userId), { startedCourses: arrayUnion(courseId) }); } catch (e) { }
 };
@@ -454,7 +452,6 @@ export const subscribeToLeaderboard = (dept: string, orgId: string, callback: (u
     });
 };
 
-// ... [Existing Request Logic] ...
 export const sendJoinRequest = async (userId: string, orgId: string): Promise<{ success: boolean; message?: string }> => {
     try {
         const q = query(requestsRef, where('userId', '==', userId), where('organizationId', '==', orgId), where('status', '==', 'PENDING'));
@@ -495,13 +492,9 @@ export const getJoinRequests = async (orgId: string, departmentFilter?: string):
     } catch (e) { return []; }
 };
 
-/**
- * UPDATED: Approve Request with Auto-Subscription for Mandatory Channels
- */
 export const approveJoinRequest = async (requestId: string, request: JoinRequest, roleTitle?: string, permissions?: PermissionType[]) => {
     try {
         return await runTransaction(db, async (transaction) => {
-            // 1. Get Org Channels to find Mandatory ones
             const orgRef = doc(db, 'organizations', request.organizationId);
             const orgSnap = await transaction.get(orgRef);
             if (!orgSnap.exists()) throw new Error("Org missing");
@@ -509,26 +502,23 @@ export const approveJoinRequest = async (requestId: string, request: JoinRequest
             
             const mandatoryChannels = orgData.channels.filter(c => c.isMandatory).map(c => c.id);
 
-            // 2. Create Membership
             const membershipId = `${request.userId}_${request.organizationId}`;
             const memRef = doc(db, 'memberships', membershipId);
             transaction.set(memRef, { id: membershipId, userId: request.userId, organizationId: request.organizationId, role: 'MEMBER', status: 'ACTIVE', joinedAt: Date.now() });
             
-            // 3. Update User (Add Org & Channels)
             const userRef = doc(db, 'users', request.userId);
             transaction.update(userRef, { 
                 currentOrganizationId: request.organizationId, 
                 [`pageRoles.${request.organizationId}`]: 'MEMBER',
                 joinedPageIds: arrayUnion(request.organizationId),
-                channelSubscriptions: arrayUnion(...mandatoryChannels) // Auto Subscribe
+                channelSubscriptions: arrayUnion(...mandatoryChannels) 
             });
             
-            // 4. Update Request Status
             const reqRef = doc(db, 'requests', requestId);
             transaction.update(reqRef, { status: 'APPROVED' });
             
-            // 5. Update Org Count
-            transaction.update(orgRef, { memberCount: increment(1), members: arrayUnion(request.userId) });
+            // Only increment counter, do not use arrayUnion for members array
+            transaction.update(orgRef, { memberCount: increment(1) });
             
             return true;
         });
@@ -539,7 +529,7 @@ export const rejectJoinRequest = async (requestId: string) => {
     try { await updateDoc(doc(db, 'requests', requestId), { status: 'REJECTED' }); return true; } catch (e) { return false; }
 };
 
-// ... [Existing Operational Logic] ...
+// ... [Task, Issue, Career Path Logic Preserved] ...
 export const getDailyTasks = async (dept: string, orgId: string): Promise<Task[]> => {
     try {
         const q = query(collection(db, 'tasks'), where('organizationId', '==', orgId));
@@ -561,7 +551,6 @@ export const createIssue = async (issue: Issue): Promise<boolean> => {
 
 export const getOrganizationUsers = async (orgId: string): Promise<User[]> => {
     try {
-        // Query users where joinedPageIds contains orgId
         const usersQ = query(usersRef, where('joinedPageIds', 'array-contains', orgId));
         const usersSnap = await getDocs(usersQ);
         return usersSnap.docs.map(d => ({id: d.id, ...d.data()} as User));
@@ -600,7 +589,6 @@ export const getCareerPathByDepartment = async (dept: string, orgId: string): Pr
 
 export const getUsersByDepartment = async (dept: string, orgId: string): Promise<User[]> => {
     try {
-        // Filter within current org context
         const q = query(usersRef, where('currentOrganizationId', '==', orgId), where('department', '==', dept));
         const snap = await getDocs(q);
         return snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
@@ -618,8 +606,6 @@ export const updateOrganization = async (orgId: string, data: Partial<Organizati
     try { await updateDoc(doc(db, 'organizations', orgId), data); return true; } catch (e) { return false; }
 };
 
-// --- NEW: INVITATION SYSTEM ---
-
 export const getPendingInvites = async (userId: string): Promise<any[]> => {
     try {
         const q = query(collection(db, `users/${userId}/notifications`), where('type', '==', 'INVITE'));
@@ -629,7 +615,6 @@ export const getPendingInvites = async (userId: string): Promise<any[]> => {
 };
 
 export const acceptOrgInvite = async (userId: string, notificationId: string, link: string): Promise<boolean> => {
-    // Extract OrgId from link string "/org/{id}"
     const orgId = link.split('/org/')[1];
     if (!orgId) return false;
 
@@ -646,7 +631,6 @@ export const acceptOrgInvite = async (userId: string, notificationId: string, li
             const userRef = doc(db, 'users', userId);
             const notifRef = doc(db, `users/${userId}/notifications`, notificationId);
 
-            // 1. Create Membership
             transaction.set(memRef, {
                 id: membershipId,
                 userId: userId,
@@ -656,7 +640,6 @@ export const acceptOrgInvite = async (userId: string, notificationId: string, li
                 joinedAt: Date.now()
             });
 
-            // 2. Update User (Auto-switch to new org + Subscribe)
             transaction.update(userRef, {
                 currentOrganizationId: orgId,
                 [`pageRoles.${orgId}`]: 'MEMBER',
@@ -664,13 +647,11 @@ export const acceptOrgInvite = async (userId: string, notificationId: string, li
                 channelSubscriptions: arrayUnion(...mandatoryChannels)
             });
 
-            // 3. Update Org
+            // Only increment counter, don't use arrayUnion
             transaction.update(orgRef, {
-                memberCount: increment(1),
-                members: arrayUnion(userId)
+                memberCount: increment(1)
             });
 
-            // 4. Delete Notification
             transaction.delete(notifRef);
         });
         return true;
