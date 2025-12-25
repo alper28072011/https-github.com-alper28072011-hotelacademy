@@ -1,13 +1,10 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-    Building2, Camera, Trash2, Loader2, Settings2, 
-    ShieldCheck
-} from 'lucide-react';
+import { ShieldCheck, Camera, Edit3 } from 'lucide-react';
 import { User, Organization } from '../../../types';
 import { getOrganizationDetails } from '../../../services/db';
-import { updateProfilePhoto, removeProfilePhoto } from '../../../services/userService';
+import { updateProfilePhoto } from '../../../services/userService';
 import { useAuthStore } from '../../../stores/useAuthStore';
 import { Avatar } from '../../../components/ui/Avatar';
 
@@ -41,70 +38,84 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
       fetchIdentity();
   }, [user.primaryNetworkId, user.currentOrganizationId]);
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          try {
+              await updateProfilePhoto(user.id, e.target.files[0], user.avatar);
+              await refreshProfile();
+          } catch (error) {
+              alert("Fotoğraf yüklenemedi.");
+          }
+      }
+  };
+
   return (
-    <div className="mb-4">
-        <div className="flex gap-4">
-            
-            {/* 1. PROFILE PICTURE BOX */}
-            <div className="w-[180px] shrink-0">
-                <div className="p-1 bg-white border border-[#ccc]">
-                    <Avatar 
-                        src={user.avatar} 
-                        alt={user.name} 
-                        size="2xl" 
-                        className="w-full h-auto rounded-none aspect-square"
-                    />
-                </div>
+    <div className="flex gap-4">
+        {/* LEFT: AVATAR BOX */}
+        <div className="w-[140px] shrink-0">
+            <div className="p-1 bg-white border border-[#ccc] relative group">
+                <Avatar 
+                    src={user.avatar} 
+                    alt={user.name} 
+                    size="2xl" 
+                    className="w-full h-auto rounded-none aspect-square bg-[#eff0f5]"
+                />
+                
                 {isOwnProfile && (
-                    <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="mt-2 w-full text-center text-[11px] text-[#3b5998] hover:underline"
-                    >
-                        Fotoğrafı Değiştir
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" />
-                    </button>
+                    <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-1 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                        <div className="bg-black/50 text-white text-[9px] px-2 py-0.5 mb-1 flex items-center gap-1">
+                            <Camera className="w-3 h-3" /> Değiştir
+                        </div>
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
+                    </div>
                 )}
             </div>
+        </div>
 
-            {/* 2. INFO AREA */}
-            <div className="flex-1 pt-1">
-                <h1 className="text-[20px] font-bold text-[#333] mb-2 flex items-center gap-2">
+        {/* RIGHT: INFO */}
+        <div className="flex-1 pt-1 min-w-0">
+            <div className="flex justify-between items-start mb-2">
+                <h1 className="text-[18px] font-bold text-[#333] flex items-center gap-1 leading-tight">
                     {user.name}
                     {user.role === 'super_admin' && <ShieldCheck className="w-4 h-4 text-[#3b5998]" />}
                 </h1>
                 
-                <div className="border-t border-b border-[#e9e9e9] py-2 mb-3">
-                    <div className="grid grid-cols-[100px_1fr] gap-1 text-[11px]">
-                        <div className="text-[#999] font-bold">Ağ:</div>
-                        <div>
-                            {network ? (
-                                <a href={`#/org/${network.id}`} className="text-[#3b5998] hover:underline font-bold">
-                                    {network.name}
-                                </a>
-                            ) : (
-                                <span className="text-[#666]">Bağımsız</span>
-                            )}
-                        </div>
-                        
-                        <div className="text-[#999] font-bold">Ünvan:</div>
-                        <div className="text-[#333]">{user.roleTitle || 'Personel'}</div>
-                        
-                        <div className="text-[#999] font-bold">Durum:</div>
-                        <div className="text-[#333]">{user.bio || 'Mesaj yok.'}</div>
-                    </div>
-                </div>
-
-                {/* Actions */}
                 {isOwnProfile && (
-                    <div className="flex gap-2">
-                        <button 
-                            onClick={onEditClick}
-                            className="bg-[#f5f6f7] border border-[#d8dfea] text-[#333] font-bold px-3 py-1 text-[11px] hover:bg-[#ebedef]"
-                        >
-                            Bilgileri Düzenle
-                        </button>
-                    </div>
+                    <button 
+                        onClick={onEditClick}
+                        className="bg-[#f5f6f7] border border-[#ccc] text-[#333] font-bold px-2 py-1 text-[10px] hover:bg-[#e9e9e9] flex items-center gap-1"
+                    >
+                        <Edit3 className="w-3 h-3" /> Düzenle
+                    </button>
                 )}
+            </div>
+
+            <div className="border-t border-b border-[#e9e9e9] py-2 mb-2 bg-[#f9f9f9]">
+                <div className="grid grid-cols-[80px_1fr] gap-1 text-[11px] px-2">
+                    <div className="text-[#999] font-bold text-right pr-2">Ağ:</div>
+                    <div className="truncate">
+                        {network ? (
+                            <span 
+                                onClick={() => navigate(`/org/${network.id}`)}
+                                className="text-[#3b5998] font-bold hover:underline cursor-pointer"
+                            >
+                                {network.name}
+                            </span>
+                        ) : (
+                            <span className="text-gray-500 italic">Bağımsız</span>
+                        )}
+                    </div>
+
+                    <div className="text-[#999] font-bold text-right pr-2">Ünvan:</div>
+                    <div className="text-[#333] truncate">{user.roleTitle || 'Personel'}</div>
+
+                    <div className="text-[#999] font-bold text-right pr-2">Seviye:</div>
+                    <div className="text-[#333]">{user.creatorLevel}</div>
+                </div>
+            </div>
+
+            <div className="text-[11px] text-[#333] px-1 italic">
+                "{user.bio || 'Merhaba, ben buradayım!'}"
             </div>
         </div>
     </div>

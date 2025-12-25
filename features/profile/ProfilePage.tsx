@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { 
     Grid, Building2, 
-    Plus, ExternalLink, Hash, X, Network, Tv, CheckCircle2, LogOut, Loader2, AlertCircle
+    ExternalLink, Hash, X, Network, Tv, CheckCircle2, LogOut, Loader2, AlertCircle, ArrowRight
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -21,7 +21,7 @@ export const ProfilePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser, refreshProfile, updateCurrentUser } = useAuthStore();
-  const { contextType } = useContextStore(); // Use Context to check mode
+  const { contextType } = useContextStore(); 
   
   // UI State
   const [activeTab, setActiveTab] = useState<'INTERESTS' | 'POSTS'>('INTERESTS');
@@ -35,7 +35,6 @@ export const ProfilePage: React.FC = () => {
   const [subscribedChannels, setSubscribedChannels] = useState<{ channel: Channel, organization: { id: string, name: string, logoUrl: string } }[]>([]);
 
   useEffect(() => {
-      // Safety Check: If in Org mode, don't load personal data
       if (contextType === 'ORGANIZATION') return;
       loadProfileData();
   }, [currentUser?.id, contextType]);
@@ -97,221 +96,189 @@ export const ProfilePage: React.FC = () => {
       }
   };
 
-  // --- RENDER SAFEGUARDS ---
   if (!currentUser) return null;
 
   if (contextType === 'ORGANIZATION') {
       return (
-          <div className="flex flex-col items-center justify-center min-h-[50vh] p-6 text-center bg-white text-slate-900">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
-                  <AlertCircle className="w-8 h-8 text-orange-500" />
-              </div>
-              <h2 className="text-xl font-bold text-slate-800">Hesap Modu Hatası</h2>
-              <p className="text-sm text-slate-500 mt-2 mb-6">
-                  Kişisel profilinizi görüntülerken Kurumsal Moddasınız. Lütfen kişisel hesabınıza geçiş yapın.
+          <div className="bg-white border border-[#dd3c10] p-4 m-4 text-center">
+              <div className="font-bold text-[#dd3c10] mb-2">Hesap Modu Hatası</div>
+              <p className="text-xs text-gray-600 mb-4">
+                  Kişisel profilinizi görüntülerken Kurumsal Moddasınız.
               </p>
               <button 
                 onClick={() => window.location.reload()} 
-                className="bg-primary text-white px-6 py-2 rounded-xl font-bold text-sm"
+                className="bg-[#3b5998] text-white px-4 py-1 text-xs font-bold"
               >
-                  Sayfayı Yenile
+                  Modu Değiştir
               </button>
           </div>
       );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24 pt-4 px-2 md:px-4 text-slate-900">
-        <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            {/* HEADER */}
-            <div className="p-4">
-                <ProfileHeader 
-                    user={currentUser}
-                    isOwnProfile={true}
-                    onEditClick={() => setIsEditing(true)}
-                    followersCount={currentUser.followersCount || 0}
-                    followingCount={currentUser.followingCount || 0}
-                    postCount={myPosts.length}
+    <div className="flex flex-col gap-4">
+        
+        {/* HEADER SECTION */}
+        <div className="bg-white border border-[#bdc7d8] p-4">
+            <ProfileHeader 
+                user={currentUser}
+                isOwnProfile={true}
+                onEditClick={() => setIsEditing(true)}
+                followersCount={currentUser.followersCount || 0}
+                followingCount={currentUser.followingCount || 0}
+                postCount={myPosts.length}
+            />
+        </div>
+
+        {/* EDIT MODAL */}
+        <AnimatePresence>
+            {isEditing && (
+                <EditProfileModal 
+                    user={currentUser} 
+                    onClose={() => setIsEditing(false)} 
                 />
-            </div>
+            )}
+        </AnimatePresence>
 
-            {/* EDIT PROFILE MODAL */}
-            <AnimatePresence>
-                {isEditing && (
-                    <EditProfileModal 
-                        user={currentUser} 
-                        onClose={() => setIsEditing(false)} 
-                    />
-                )}
-            </AnimatePresence>
-
-            {/* TABS */}
-            <div className="sticky top-[60px] bg-white z-30 border-b border-gray-200 flex justify-around mt-2">
+        {/* TABS & CONTENT */}
+        <div>
+            {/* CLASSIC TABS */}
+            <div className="flex items-end border-b border-[#899bc1] h-[29px] pl-2 mb-2">
                 <button 
                     onClick={() => setActiveTab('INTERESTS')}
-                    className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 ${activeTab === 'INTERESTS' ? 'border-primary text-primary' : 'border-transparent text-gray-400'}`}
+                    className={`px-3 py-1.5 text-[11px] font-bold border-t border-l border-r mr-1 focus:outline-none flex items-center gap-2 ${activeTab === 'INTERESTS' ? 'bg-white border-[#899bc1] text-[#333] mb-[-1px] pb-2' : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'}`}
                 >
-                    <Network className="w-5 h-5" />
-                    <span className="text-xs font-bold">Ağım & İlgi Alanlarım</span>
+                    <Network className="w-3 h-3" /> Ağım & İlgi Alanlarım
                 </button>
                 <button 
                     onClick={() => setActiveTab('POSTS')}
-                    className={`py-3 px-4 border-b-2 transition-all flex items-center gap-2 ${activeTab === 'POSTS' ? 'border-primary text-primary' : 'border-transparent text-gray-400'}`}
+                    className={`px-3 py-1.5 text-[11px] font-bold border-t border-l border-r mr-1 focus:outline-none flex items-center gap-2 ${activeTab === 'POSTS' ? 'bg-white border-[#899bc1] text-[#333] mb-[-1px] pb-2' : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'}`}
                 >
-                    <Grid className="w-5 h-5" />
-                    <span className="text-xs font-bold">Paylaşımlar</span>
+                    <Grid className="w-3 h-3" /> Paylaşımlar
                 </button>
             </div>
 
-            {/* CONTENT */}
-            <div className="p-4 min-h-[300px] bg-gray-50">
-                
-                {loading ? (
-                    <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
-                ) : (
-                    <>
-                        {/* TAB: NETWORK & INTERESTS */}
-                        {activeTab === 'INTERESTS' && (
-                            <div className="space-y-8">
-                                
-                                {/* 1. MEMBERSHIPS (Workspaces) */}
-                                <section className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2 text-sm border-b border-gray-100 pb-2">
-                                        <Building2 className="w-4 h-4 text-primary" /> Üyesi Olduğum Kurumlar
-                                    </h3>
-                                    <div className="space-y-3">
-                                        {managedPages.length > 0 ? managedPages.map(org => (
-                                            <div key={org.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
-                                                <div className="flex items-center gap-3" onClick={() => navigate(`/org/${org.id}`)}>
-                                                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center font-bold text-gray-500 overflow-hidden border border-gray-200">
-                                                        {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover"/> : org.name[0]}
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-bold text-sm text-gray-900">{org.name}</div>
-                                                        <div className="text-[10px] text-green-600 font-bold uppercase flex items-center gap-1">
-                                                            <CheckCircle2 className="w-3 h-3" /> Üye
-                                                        </div>
+            {loading ? (
+                <div className="flex justify-center py-10 bg-white border border-[#bdc7d8]"><Loader2 className="w-5 h-5 animate-spin text-[#3b5998]" /></div>
+            ) : (
+                <div className="space-y-4">
+                    {/* TAB: NETWORK & INTERESTS */}
+                    {activeTab === 'INTERESTS' && (
+                        <>
+                            {/* 1. MEMBERSHIPS */}
+                            <div className="bg-white border border-[#bdc7d8]">
+                                <div className="bg-[#f7f7f7] border-b border-[#e9e9e9] p-2 text-[11px] font-bold text-[#3b5998] flex items-center gap-2">
+                                    <Building2 className="w-3 h-3" /> Üyesi Olduğum Kurumlar
+                                </div>
+                                <div className="p-2 space-y-1">
+                                    {managedPages.length > 0 ? managedPages.map(org => (
+                                        <div key={org.id} className="flex items-center justify-between p-2 hover:bg-[#eff0f5] border-b border-[#eee] last:border-0">
+                                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(`/org/${org.id}`)}>
+                                                <div className="w-8 h-8 bg-white border border-[#ccc] flex items-center justify-center overflow-hidden">
+                                                    {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover"/> : <Building2 className="w-4 h-4 text-gray-400" />}
+                                                </div>
+                                                <div>
+                                                    <div className="font-bold text-[11px] text-[#3b5998] hover:underline">{org.name}</div>
+                                                    <div className="text-[9px] text-green-600 font-bold uppercase flex items-center gap-1">
+                                                        <CheckCircle2 className="w-2.5 h-2.5" /> Üye
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button onClick={() => navigate(`/org/${org.id}`)} className="text-xs font-bold text-gray-600 hover:text-primary">Git</button>
-                                                    <div className="w-px h-3 bg-gray-300"></div>
-                                                    <button onClick={() => handleLeaveOrganization(org.id)} className="text-xs font-bold text-red-400 hover:text-red-600" title="Ayrıl">
-                                                        <LogOut className="w-4 h-4" />
-                                                    </button>
-                                                </div>
                                             </div>
-                                        )) : (
-                                            <div className="text-center py-4">
-                                                <p className="text-xs text-gray-400 mb-2">Henüz bir işletmeye üye değilsiniz.</p>
-                                                <button onClick={() => navigate('/lobby')} className="text-xs font-bold text-primary border border-primary px-3 py-1.5 rounded-lg hover:bg-primary/5">
-                                                    İşletme Bul / Kur
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </section>
-
-                                {/* 2. SUBSCRIBED CHANNELS */}
-                                <section className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2 text-sm border-b border-gray-100 pb-2">
-                                        <Tv className="w-4 h-4 text-purple-500" /> Kanal Abonelikleri
-                                    </h3>
-                                    <div className="space-y-3">
-                                        {subscribedChannels.length > 0 ? subscribedChannels.map(item => (
-                                            <div key={item.channel.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center font-bold overflow-hidden border border-purple-200">
-                                                        <Hash className="w-5 h-5" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-bold text-sm text-gray-900">{item.channel.name}</div>
-                                                        <div className="text-[10px] text-gray-500 flex items-center gap-1">
-                                                            {item.organization.name}
-                                                            {item.channel.isMandatory && <span className="text-red-500 font-bold">(Zorunlu)</span>}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                {!item.channel.isMandatory ? (
-                                                    <button onClick={() => handleUnsubscribeChannel(item.channel.id)} className="text-xs font-bold text-gray-400 hover:text-red-500 border border-gray-300 px-2 py-1 rounded bg-white">
-                                                        Ayrıl
-                                                    </button>
-                                                ) : (
-                                                    <span className="text-[10px] text-gray-400 italic">Kilitli</span>
-                                                )}
-                                            </div>
-                                        )) : (
-                                            <p className="text-xs text-gray-400 text-center py-2">Hiçbir kanala abone değilsiniz.</p>
-                                        )}
-                                    </div>
-                                </section>
-
-                                {/* 3. FOLLOWED PAGES (Social) */}
-                                <section className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2 text-sm border-b border-gray-100 pb-2">
-                                        <ExternalLink className="w-4 h-4 text-blue-500" /> Takip Edilen Sayfalar (Public)
-                                    </h3>
-                                    <div className="space-y-3">
-                                        {followedPages.length > 0 ? followedPages.map(page => (
-                                            <div key={page.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-200">
-                                                <div className="flex items-center gap-3" onClick={() => navigate(`/org/${page.id}`)}>
-                                                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center font-bold text-gray-500 overflow-hidden border border-gray-200">
-                                                        {page.logoUrl ? <img src={page.logoUrl} className="w-full h-full object-cover"/> : page.name[0]}
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-bold text-sm text-gray-900">{page.name}</div>
-                                                        <div className="text-[10px] text-blue-500 font-bold uppercase">Takipçi</div>
-                                                    </div>
-                                                </div>
-                                                <button onClick={() => handleUnfollowPage(page.id)} className="text-xs font-bold text-gray-400 hover:text-red-500 border border-gray-300 px-2 py-1 rounded bg-white">
-                                                    Çıkar
-                                                </button>
-                                            </div>
-                                        )) : (
-                                            <div className="text-center py-4">
-                                                <p className="text-xs text-gray-400 mb-2">Henüz herkese açık bir sayfayı takip etmiyorsunuz.</p>
-                                                <button onClick={() => navigate('/explore')} className="text-xs font-bold text-blue-500 border border-blue-500 px-3 py-1.5 rounded-lg hover:bg-blue-50">
-                                                    Keşfet
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </section>
-
-                                {/* 4. FOLLOWED TOPICS (Tags) */}
-                                <section className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2 text-sm border-b border-gray-100 pb-2">
-                                        <Hash className="w-4 h-4 text-orange-500" /> Takip Edilen Konular
-                                    </h3>
-                                    <div className="flex flex-wrap gap-2">
-                                        {currentUser.followedTags && currentUser.followedTags.length > 0 ? currentUser.followedTags.map(tag => (
-                                            <span key={tag} className="bg-orange-50 border border-orange-100 text-orange-800 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2">
-                                                #{tag}
-                                                <button onClick={() => handleRemoveTag(tag)} className="text-orange-400 hover:text-red-500"><X className="w-3 h-3" /></button>
-                                            </span>
-                                        )) : (
-                                            <p className="text-xs text-gray-400 w-full text-center py-2">Konu takibi yapmıyorsunuz.</p>
-                                        )}
-                                    </div>
-                                </section>
-
+                                            <button onClick={() => handleLeaveOrganization(org.id)} className="text-[10px] text-[#999] hover:text-red-600 font-bold">
+                                                Ayrıl
+                                            </button>
+                                        </div>
+                                    )) : (
+                                        <div className="text-center py-4 text-[11px] text-gray-400">
+                                            Henüz bir işletmeye üye değilsiniz. <span onClick={() => navigate('/lobby')} className="text-[#3b5998] cursor-pointer hover:underline">Grup Bul.</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        )}
 
-                        {/* TAB: POSTS */}
-                        {activeTab === 'POSTS' && (
+                            {/* 2. CHANNELS */}
+                            <div className="bg-white border border-[#bdc7d8]">
+                                <div className="bg-[#f7f7f7] border-b border-[#e9e9e9] p-2 text-[11px] font-bold text-[#3b5998] flex items-center gap-2">
+                                    <Tv className="w-3 h-3" /> Kanal Abonelikleri
+                                </div>
+                                <div className="p-2 space-y-1">
+                                    {subscribedChannels.length > 0 ? subscribedChannels.map(item => (
+                                        <div key={item.channel.id} className="flex items-center justify-between p-2 hover:bg-[#eff0f5] border-b border-[#eee] last:border-0">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-6 h-6 bg-[#d8dfea] flex items-center justify-center text-[#3b5998]">
+                                                    <Hash className="w-3 h-3" />
+                                                </div>
+                                                <div>
+                                                    <div className="font-bold text-[11px] text-[#333]">{item.channel.name}</div>
+                                                    <div className="text-[9px] text-gray-500">{item.organization.name}</div>
+                                                </div>
+                                            </div>
+                                            {!item.channel.isMandatory && (
+                                                <button onClick={() => handleUnsubscribeChannel(item.channel.id)} className="text-[9px] text-[#999] hover:text-red-500 font-bold">x</button>
+                                            )}
+                                        </div>
+                                    )) : (
+                                        <div className="text-center py-4 text-[11px] text-gray-400">Hiçbir kanala abone değilsiniz.</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 3. FOLLOWED PAGES */}
+                            <div className="bg-white border border-[#bdc7d8]">
+                                <div className="bg-[#f7f7f7] border-b border-[#e9e9e9] p-2 text-[11px] font-bold text-[#3b5998] flex items-center gap-2">
+                                    <ExternalLink className="w-3 h-3" /> Takip Edilen Sayfalar
+                                </div>
+                                <div className="p-2 space-y-1">
+                                    {followedPages.length > 0 ? followedPages.map(page => (
+                                        <div key={page.id} className="flex items-center justify-between p-2 hover:bg-[#eff0f5] border-b border-[#eee] last:border-0">
+                                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(`/org/${page.id}`)}>
+                                                <div className="w-8 h-8 bg-white border border-[#ccc] flex items-center justify-center overflow-hidden">
+                                                    {page.logoUrl ? <img src={page.logoUrl} className="w-full h-full object-cover"/> : <Building2 className="w-4 h-4 text-gray-400" />}
+                                                </div>
+                                                <div className="font-bold text-[11px] text-[#3b5998] hover:underline">{page.name}</div>
+                                            </div>
+                                            <button onClick={() => handleUnfollowPage(page.id)} className="text-[10px] text-[#999] hover:text-red-600 font-bold">
+                                                Takibi Bırak
+                                            </button>
+                                        </div>
+                                    )) : (
+                                        <div className="text-center py-4 text-[11px] text-gray-400">Takip edilen sayfa yok.</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 4. TAGS */}
+                            <div className="bg-white border border-[#bdc7d8] p-3">
+                                <h4 className="text-[11px] font-bold text-gray-500 mb-2 uppercase">İlgi Alanları</h4>
+                                <div className="flex flex-wrap gap-1">
+                                    {currentUser.followedTags && currentUser.followedTags.length > 0 ? currentUser.followedTags.map(tag => (
+                                        <span key={tag} className="bg-[#eff0f5] border border-[#d8dfea] text-[#3b5998] px-2 py-1 text-[10px] font-bold flex items-center gap-1 group cursor-default">
+                                            #{tag}
+                                            <button onClick={() => handleRemoveTag(tag)} className="text-[#999] hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-2.5 h-2.5" /></button>
+                                        </span>
+                                    )) : (
+                                        <span className="text-[11px] text-gray-400 italic">Etiket takip etmiyorsunuz.</span>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* TAB: POSTS */}
+                    {activeTab === 'POSTS' && (
+                        <div className="bg-white border border-[#bdc7d8] p-2">
                             <div className="grid grid-cols-3 gap-1">
                                 {myPosts.map(post => (
-                                    <div key={post.id} className="aspect-square bg-gray-200 relative">
+                                    <div key={post.id} className="aspect-square bg-[#eee] relative border border-[#ccc]">
                                         <img src={post.mediaUrl} className="w-full h-full object-cover" />
                                     </div>
                                 ))}
-                                {myPosts.length === 0 && <div className="col-span-3 text-center py-20 text-gray-400 text-sm">Henüz gönderi yok.</div>}
+                                {myPosts.length === 0 && <div className="col-span-3 text-center py-10 text-gray-400 text-xs">Henüz gönderi yok.</div>}
                             </div>
-                        )}
-                    </>
-                )}
-            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     </div>
   );
