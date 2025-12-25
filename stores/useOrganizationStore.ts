@@ -86,9 +86,8 @@ export const useOrganizationStore = create<OrganizationState>()(
                   return false;
               }
 
-              // 4. UPDATE ALL STORES AT ONCE (Synchronous-like)
-              set({ currentOrganization: org, myMemberships: memberships, isLoading: false });
-              
+              // 4. UPDATE STORES IN STRICT ORDER
+              // Update context FIRST so App.tsx guards are happy, but keep loading true in OrgStore
               contextStore.setContext('ORGANIZATION', org.id, org.name, org.logoUrl);
 
               authStore.updateCurrentUser({
@@ -99,6 +98,13 @@ export const useOrganizationStore = create<OrganizationState>()(
                       ...currentUser.pageRoles, 
                       [orgId]: { role: pageRole, title: role === 'manager' ? 'Yönetici' : 'Personel' } 
                   }
+              });
+
+              // Finally update the Organization Store data and release loading lock
+              set({ 
+                  currentOrganization: org, 
+                  myMemberships: memberships, 
+                  isLoading: false 
               });
 
               // 5. Persist to DB (Background)
