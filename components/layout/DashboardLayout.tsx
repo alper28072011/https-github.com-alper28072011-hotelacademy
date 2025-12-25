@@ -85,8 +85,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
           )}
       </AnimatePresence>
 
-      {/* 1. GLOBAL HEADER BAR (Fixed & Grid Aligned) */}
-      <div className="bg-[#3b5998] border-b border-[#29487d] h-[48px] fixed top-0 w-full z-50 shadow-sm flex justify-center">
+      {/* 1. GLOBAL HEADER BAR (Sticky for Perfect Alignment) */}
+      <div className="bg-[#3b5998] border-b border-[#29487d] h-[48px] sticky top-0 w-full z-50 shadow-sm flex justify-center">
           <div className="w-[980px] grid grid-cols-[180px_530px_240px] gap-3 px-0 h-full">
               
               {/* Left: Logo (Aligned with Sidebar) */}
@@ -103,9 +103,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                           value={globalSearchTerm}
                           onChange={(e) => setGlobalSearchTerm(e.target.value)}
                           placeholder="Eğitim, kişi veya grup ara..." 
-                          className="w-full h-[28px] pl-7 pr-4 text-[12px] border border-[#233a66] rounded-sm bg-[#223966] text-white placeholder-blue-300 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner font-medium"
+                          className="w-full h-[28px] pl-7 pr-4 text-[12px] border border-[#233a66] rounded-sm bg-[#223966] text-white placeholder-blue-300 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner font-medium block"
                       />
-                      <Search className="w-3.5 h-3.5 absolute left-2 top-[7px] text-blue-300 pointer-events-none" />
+                      <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-blue-300 pointer-events-none" />
                   </form>
               </div>
 
@@ -167,7 +167,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       </div>
       
       {/* 2. MAIN GRID CONTAINER (Fixed 980px, 3 Columns) */}
-      <div className="w-[980px] mx-auto mt-[60px] grid grid-cols-[180px_530px_240px] gap-3 pb-20">
+      <div className="w-[980px] mx-auto mt-[12px] grid grid-cols-[180px_530px_240px] gap-3 pb-20">
             
             {/* COL 1: LEFT SIDEBAR */}
             <div className="flex flex-col gap-2 sticky top-[60px] h-fit">

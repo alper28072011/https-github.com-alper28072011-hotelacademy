@@ -80,8 +80,8 @@ export const AdminLayout: React.FC = () => {
   return (
     <div key={resetKey} className="min-h-screen bg-[#eff0f2] font-sans text-[#1c1e21] overflow-y-scroll">
       
-      {/* 1. GLOBAL HEADER (Fixed & Aligned) */}
-      <div className="bg-[#1c1e21] border-b border-[#333] h-[48px] fixed top-0 w-full z-50 shadow-sm flex justify-center">
+      {/* 1. GLOBAL HEADER (Sticky & Aligned) */}
+      <div className="bg-[#1c1e21] border-b border-[#333] h-[48px] sticky top-0 w-full z-50 shadow-sm flex justify-center">
           <div className="w-[980px] grid grid-cols-[180px_1fr_200px] gap-3 px-0 h-full">
               
               {/* Left: Logo */}
@@ -103,7 +103,7 @@ export const AdminLayout: React.FC = () => {
                           placeholder="Yönetim panelinde ara..." 
                           className="w-full h-[28px] pl-8 pr-4 text-[12px] border border-[#333] rounded-sm bg-[#333] text-white placeholder-gray-500 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner"
                       />
-                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-[7px] text-gray-500 pointer-events-none" />
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
                   </div>
               </div>
 
@@ -174,7 +174,7 @@ export const AdminLayout: React.FC = () => {
       </div>
 
       {/* 2. ADMIN GRID CONTAINER (Fixed 980px, 2 Columns) */}
-      <div className="w-[980px] mx-auto mt-[60px] grid grid-cols-[180px_1fr] gap-4 pb-20">
+      <div className="w-[980px] mx-auto mt-[12px] grid grid-cols-[180px_1fr] gap-4 pb-20">
           
           {/* COL 1: LEFT SIDEBAR (Contextual Navigation) */}
           <div className="flex flex-col gap-4 sticky top-[60px] h-fit">
