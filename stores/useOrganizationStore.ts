@@ -13,7 +13,10 @@ interface OrganizationState {
 
   // Actions
   fetchMemberships: (userId: string) => Promise<void>;
-  switchOrganization: (orgId: string) => Promise<boolean>;
+  
+  // ATOMIC SWITCHERS
+  switchToOrganizationAction: (orgId: string) => Promise<boolean>;
+  switchToPersonalAction: () => Promise<void>;
   
   // Optimistic UI Actions
   addLocalChannel: (channel: Channel) => void;
@@ -36,11 +39,9 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
 
       /**
-       * ATOMIC SWITCHING LOGIC (Facebook Style)
-       * This function orchestrates the entire context switch.
-       * It ensures User Role, Auth Context, and Org Data are 100% synced before returning true.
+       * MASTER SWITCH: PERSONAL -> ORGANIZATION
        */
-      switchOrganization: async (orgId: string): Promise<boolean> => {
+      switchToOrganizationAction: async (orgId: string): Promise<boolean> => {
         set({ isLoading: true });
         
         const authStore = useAuthStore.getState();
@@ -53,32 +54,28 @@ export const useOrganizationStore = create<OrganizationState>()(
         }
 
         try {
-            console.log(`[Switch] Starting atomic switch to Org: ${orgId}`);
+            console.log(`[Switch] Initializing Organization Mode: ${orgId}`);
 
-            // 1. FETCH FRESH DATA (Blocking)
+            // 1. Fetch Fresh Data
             const org = await getOrganizationDetails(orgId);
             if (!org) {
-                console.error("[Switch] Organization not found in DB.");
+                console.error("[Switch] Organization not found.");
                 set({ isLoading: false });
                 return false;
             }
 
-            // 2. DETERMINE ROLE & PERMISSIONS (Security Check)
+            // 2. Determine Role & Context
             let role: UserRole = 'staff';
             let dept: DepartmentType = 'housekeeping';
             let pageRole = 'MEMBER';
 
-            // Priority A: Are you the Owner?
             if (org.ownerId === currentUser.id) {
                 role = 'manager';
                 dept = 'management';
                 pageRole = 'ADMIN';
             } else {
-                // Priority B: Check cached memberships first, then fetch if missing
                 let membership = get().myMemberships.find(m => m.organizationId === orgId);
-                
                 if (!membership) {
-                    // Critical: Fetch fresh memberships to ensure we aren't using stale cache
                     const freshMemberships = await getMyMemberships(currentUser.id);
                     set({ myMemberships: freshMemberships });
                     membership = freshMemberships.find(m => m.organizationId === orgId);
@@ -86,71 +83,94 @@ export const useOrganizationStore = create<OrganizationState>()(
 
                 if (membership) {
                     pageRole = membership.role;
-                    // Map PageRole to Global Role context
                     if (membership.role === 'ADMIN') role = 'manager';
-                    else if (membership.role === 'MODERATOR') role = 'manager'; // Mods access admin too
+                    else if (membership.role === 'MODERATOR') role = 'manager';
                     else role = 'staff';
-                    
                     dept = membership.department;
                 } else {
-                    // Security Fallback: User has no relation to this org?
-                    console.error("[Switch] User is not a member of this organization.");
+                    console.error("[Switch] No membership found.");
                     set({ isLoading: false });
                     return false;
                 }
             }
 
-            // 3. PERSIST STATE TO DB (Server-side Session)
+            // 3. Update DB (Session Persistence)
+            // We fire this but don't await strictly if we want speed, but for safety we await
             await switchUserActiveOrganization(currentUser.id, orgId);
 
-            // 4. UPDATE LOCAL STORES (Client-side Session)
-            
-            // A. Update Org Store
+            // 4. ATOMIC STORE UPDATES
+            // A. Set Org Data
             set({ currentOrganization: org, isLoading: false });
 
-            // B. Update Context Store (The Visual Context)
+            // B. Update Context (Visuals)
             contextStore.switchToOrganization(org.id, org.name, org.logoUrl);
 
-            // C. Update Auth Store (The User Identity)
+            // C. Update Auth User (Permissions/Role)
             authStore.updateCurrentUser({
                 currentOrganizationId: orgId,
                 role: role,
                 department: dept,
-                // Also update legacy pageRoles map locally to prevent flicker
                 pageRoles: { 
                     ...currentUser.pageRoles, 
                     [orgId]: { role: pageRole as any, title: role === 'manager' ? 'Yönetici' : 'Personel' } 
                 }
             });
 
-            console.log("[Switch] Atomic switch complete.");
             return true;
 
         } catch (e) {
-            console.error("[Switch] Failed critical switch operation:", e);
+            console.error("[Switch] Error:", e);
             set({ isLoading: false });
             return false;
         }
       },
 
+      /**
+       * MASTER SWITCH: ORGANIZATION -> PERSONAL
+       */
+      switchToPersonalAction: async () => {
+          set({ isLoading: true });
+          const authStore = useAuthStore.getState();
+          const contextStore = useContextStore.getState();
+          const currentUser = authStore.currentUser;
+
+          if (!currentUser) return;
+
+          console.log("[Switch] Reverting to Personal Mode");
+
+          // 1. Update DB (Clear Active Org)
+          await switchUserActiveOrganization(currentUser.id, '');
+
+          // 2. Clear Org Store
+          set({ currentOrganization: null, isLoading: false });
+
+          // 3. Reset Context (Visuals)
+          contextStore.switchToPersonal(currentUser);
+
+          // 4. Reset User State (Permissions)
+          authStore.updateCurrentUser({
+              currentOrganizationId: null,
+              role: 'staff', // Default personal role
+              department: null
+          });
+      },
+
       addLocalChannel: (channel: Channel) => set((state) => {
           if (!state.currentOrganization) return {};
-          const newChannels = [channel, ...(state.currentOrganization.channels || [])];
           return {
               currentOrganization: {
                   ...state.currentOrganization,
-                  channels: newChannels
+                  channels: [channel, ...(state.currentOrganization.channels || [])]
               }
           };
       }),
 
       removeLocalChannel: (channelId: string) => set((state) => {
           if (!state.currentOrganization) return {};
-          const newChannels = (state.currentOrganization.channels || []).filter(c => c.id !== channelId);
           return {
               currentOrganization: {
                   ...state.currentOrganization,
-                  channels: newChannels
+                  channels: (state.currentOrganization.channels || []).filter(c => c.id !== channelId)
               }
           };
       }),
@@ -158,7 +178,7 @@ export const useOrganizationStore = create<OrganizationState>()(
       reset: () => set({ currentOrganization: null, myMemberships: [] })
     }),
     {
-      name: 'hotel-academy-org-v1',
+      name: 'hotel-academy-org-v2',
       storage: createJSONStorage(() => localStorage),
     }
   )

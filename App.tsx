@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from './stores/useAppStore';
 import { useAuthStore } from './stores/useAuthStore';
 import { useOrganizationStore } from './stores/useOrganizationStore';
-import { useTelemetry } from './hooks/useTelemetry'; // Telemetry Import
+import { useTelemetry } from './hooks/useTelemetry';
 
 import { LoginPage } from './features/auth/LoginPage';
 import { OrganizationLobby } from './features/organization/OrganizationLobby';
@@ -37,7 +37,6 @@ import { CareerBuilder } from './features/admin/CareerBuilder';
 import { TalentRadar } from './features/admin/TalentRadar';
 import { SuperAdminDashboard } from './features/superadmin/SuperAdminDashboard';
 
-// --- PAGE TRANSITION WRAPPER ---
 const PageTransition: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "w-full h-full" }) => (
     <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -50,7 +49,6 @@ const PageTransition: React.FC<{ children: React.ReactNode; className?: string }
     </motion.div>
 );
 
-// --- CLEAN LOGIN LAYOUT ---
 const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="min-h-screen bg-surface-subtle flex flex-col items-center justify-center p-4">
@@ -62,7 +60,6 @@ const LoginLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   );
 };
 
-// --- SUPER ADMIN GUARD ---
 const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { currentUser } = useAuthStore();
     const isSuper = currentUser?.role === 'super_admin';
@@ -70,10 +67,8 @@ const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return <>{children}</>;
 };
 
-// --- TELEMETRY WRAPPER ---
-// Separate component to use hooks inside Router context
 const TelemetryProvider = () => {
-    useTelemetry(); // Initializes page view tracking
+    useTelemetry(); 
     return null;
 };
 
@@ -94,7 +89,7 @@ const AnimatedRoutes = () => {
                           <Route path="/course/:courseId" element={<CourseIntroPage />} />
                           <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
                           
-                          {/* ADMIN ROUTES - Wrapped in DashboardLayout for Header */}
+                          {/* ADMIN ROUTES */}
                           <Route path="/admin" element={
                               <DashboardLayout>
                                   <AdminLayout />
@@ -119,7 +114,6 @@ const AnimatedRoutes = () => {
                               } />
                               
                               <Route path="content" element={<Navigate to="courses" replace />} /> 
-
                               <Route path="reports" element={<PageTransition><TalentRadar /></PageTransition>} />
                               <Route path="settings" element={<PageTransition><OrganizationSettings /></PageTransition>} /> 
                           </Route>
@@ -169,8 +163,7 @@ const AnimatedRoutes = () => {
 
 const App: React.FC = () => {
   const { currentLanguage, fetchSystemSettings } = useAppStore();
-  const { isAuthenticated, currentUser } = useAuthStore();
-  const { currentOrganization, switchOrganization } = useOrganizationStore();
+  const { isAuthenticated } = useAuthStore();
   const [isHydrating, setIsHydrating] = useState(true);
 
   useEffect(() => {
@@ -180,17 +173,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
       fetchSystemSettings();
+      // Simulate quick hydration check (no heavy syncing here anymore)
+      setTimeout(() => setIsHydrating(false), 500);
   }, []);
-
-  useEffect(() => {
-      const sync = async () => {
-          if (isAuthenticated && currentUser?.currentOrganizationId && !currentOrganization) {
-              await switchOrganization(currentUser.currentOrganizationId);
-          }
-          setIsHydrating(false);
-      };
-      sync();
-  }, [isAuthenticated, currentUser]); 
 
   if (isHydrating && isAuthenticated) {
       return (

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, ArrowLeft, Menu, ChevronDown, Check, Building2, User, RefreshCw, LayoutDashboard, LogOut, Plus, Loader2 } from 'lucide-react';
+import { Bell, ArrowLeft, Menu, ChevronDown, Check, Building2, User, LayoutDashboard, LogOut, Plus, Loader2 } from 'lucide-react';
 import { BottomNavigation } from './BottomNavigation';
 import { SettingsDrawer } from '../../features/profile/components/SettingsDrawer';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -20,22 +20,29 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuthStore();
-  const { contextType, activeEntityId, activeEntityName, activeEntityAvatar, switchToPersonal, ensureContext } = useContextStore();
-  const { switchOrganization } = useOrganizationStore();
+  
+  // Use Context Store for Display
+  const { contextType, activeEntityId, activeEntityName, activeEntityAvatar, ensureContext } = useContextStore();
+  
+  // Use Organization Store for Actions
+  const { switchToOrganizationAction, switchToPersonalAction } = useOrganizationStore();
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [managedOrgs, setManagedOrgs] = useState<Organization[]>([]);
   
-  // New: Global Switching State
+  // UI State
   const [isSwitching, setIsSwitching] = useState(false);
   const [targetName, setTargetName] = useState('');
 
-  // 1. Ensure Context & Fetch Managed Pages (The Truth Source)
+  // 1. Initial Load & Hydration
   useEffect(() => {
       const initLayout = async () => {
           if (currentUser) {
+              // Ensure we have a valid visual context (defaults to Personal if none)
               ensureContext(currentUser);
+              
+              // Load selectable organizations (Workspaces)
               try {
                   const orgs = await getUserManagedPages(currentUser.id);
                   setManagedOrgs(orgs);
@@ -48,46 +55,47 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       initLayout();
   }, [currentUser?.id]);
 
-  // 2. ROBUST CONTEXT SWITCH HANDLER
+  // 2. ATOMIC CONTEXT SWITCH HANDLER
   const handleContextSwitch = async (target: 'PERSONAL' | Organization) => {
       if (!currentUser || isSwitching) return;
       
-      // Close dropdown
+      // Close dropdown immediately
       setIsContextOpen(false);
 
       if (target === 'PERSONAL') {
-          if (contextType === 'PERSONAL') return; // Already there
+          // Check if already in personal
+          if (contextType === 'PERSONAL') return; 
           
           setIsSwitching(true);
           setTargetName(currentUser.name);
           
-          // Allow UI to render the loader
-          setTimeout(() => {
-              switchToPersonal(currentUser);
-              navigate('/'); 
-              setIsSwitching(false);
-          }, 800); // Artificial delay for smoothness like Facebook
+          // Execute Atomic Switch
+          await switchToPersonalAction();
+          navigate('/'); 
+          
+          setTimeout(() => setIsSwitching(false), 500); // Visual padding
       
       } else {
-          if (activeEntityId === target.id) return; // Already there
+          // Check if already in this org
+          if (activeEntityId === target.id) return; 
 
           setIsSwitching(true);
           setTargetName(target.name);
 
-          // Atomic Switch via Store
-          const success = await switchOrganization(target.id);
+          // Execute Atomic Switch
+          const success = await switchToOrganizationAction(target.id);
           
           if (success) {
               navigate('/admin'); // Force navigation to admin root
           } else {
-              alert("Hesaba geçiş yapılamadı. Yetkiniz olmayabilir.");
+              alert("Hesaba geçiş yapılamadı. Erişim yetkiniz olmayabilir.");
           }
           
-          setIsSwitching(false);
+          setTimeout(() => setIsSwitching(false), 500);
       }
   };
 
-  // --- VISUAL THEME BASED ON CONTEXT ---
+  // --- VISUAL THEME ---
   const isOrgMode = contextType === 'ORGANIZATION';
   const headerBg = isOrgMode ? 'bg-[#336699]' : 'bg-white/80 backdrop-blur-md';
   const headerText = isOrgMode ? 'text-white' : 'text-gray-800';

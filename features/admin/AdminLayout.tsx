@@ -12,9 +12,9 @@ import { usePermission } from '../../hooks/usePermission';
 import { getJoinRequests } from '../../services/db';
 
 export const AdminLayout: React.FC = () => {
-  const { logout, currentUser } = useAuthStore();
+  const { currentUser } = useAuthStore();
   const { contextType } = useContextStore();
-  const { currentOrganization, isLoading } = useOrganizationStore();
+  const { currentOrganization, isLoading, switchToOrganizationAction } = useOrganizationStore();
   
   const navigate = useNavigate();
   const { can } = usePermission();
@@ -22,21 +22,26 @@ export const AdminLayout: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
-  // --- STRICT GATEKEEPER ---
+  // --- STRICT GATEKEEPER & AUTO-HEAL ---
   useEffect(() => {
-      // If we are in PERSONAL context, we shouldn't be here.
+      // 1. If explicitly in Personal Mode, kick out.
       if (contextType === 'PERSONAL') {
           console.warn("[AdminLayout] Access attempt in PERSONAL mode. Redirecting...");
           navigate('/');
           return;
       }
       
-      // If we are in ORG context but no ORG is loaded, something went wrong with the switch.
+      // 2. If in Organization Context but no Data, try to recover if not loading
       if (contextType === 'ORGANIZATION' && !currentOrganization && !isLoading) {
-          console.error("[AdminLayout] Context is ORGANIZATION but no data. Redirecting...");
-          navigate('/');
+          if (currentUser?.currentOrganizationId) {
+              console.log("[AdminLayout] Context drift detected. Re-syncing organization...");
+              switchToOrganizationAction(currentUser.currentOrganizationId);
+          } else {
+              // Fatal error, no org ID to sync
+              navigate('/');
+          }
       }
-  }, [contextType, currentOrganization, isLoading, navigate]);
+  }, [contextType, currentOrganization, isLoading, currentUser]);
 
   // Fetch Badge Counts
   useEffect(() => {
@@ -46,7 +51,7 @@ export const AdminLayout: React.FC = () => {
               setPendingCount(reqs.length);
           }
       };
-      fetchCount();
+      if (currentOrganization) fetchCount();
   }, [currentOrganization]);
 
   // Loading State
