@@ -26,6 +26,8 @@ interface OrganizationState {
   // Helpers
   addLocalChannel: (channel: Channel) => void;
   removeLocalChannel: (channelId: string) => void;
+  // New action to just set the org directly (for hydration fixes)
+  setCurrentOrganization: (org: Organization) => void;
 }
 
 export const useOrganizationStore = create<OrganizationState>()(
@@ -41,6 +43,8 @@ export const useOrganizationStore = create<OrganizationState>()(
         const memberships = await getMyMemberships(userId);
         set({ myMemberships: memberships });
       },
+
+      setCurrentOrganization: (org) => set({ currentOrganization: org }),
 
       /**
        * FACEBOOK-STYLE SESSION SWITCHER
@@ -84,7 +88,12 @@ export const useOrganizationStore = create<OrganizationState>()(
                   userRole = (membership.role === 'ADMIN' || membership.role === 'MODERATOR') ? 'manager' : 'staff';
                   dept = membership.department;
               } else {
-                  throw new Error("Bu organizasyona erişim yetkiniz yok.");
+                  // Fallback for new creators or super admins
+                  if (currentUser.role === 'super_admin') {
+                      effectiveRole = 'ADMIN';
+                  } else {
+                      throw new Error("Bu organizasyona erişim yetkiniz yok.");
+                  }
               }
 
               // 3. ATOMIC STATE UPDATE
@@ -108,7 +117,7 @@ export const useOrganizationStore = create<OrganizationState>()(
               });
 
               // C. Context Store (The Global Pointer)
-              // Updated to use the new API from useContextStore
+              // FIX: Use the correct API method signature
               contextStore.switchToOrganization(
                   orgData.id, 
                   orgData.name, 
@@ -137,7 +146,6 @@ export const useOrganizationStore = create<OrganizationState>()(
 
           if (currentUser) {
               // Reset Context to Personal
-              // Updated to use the new API from useContextStore
               contextStore.switchToPersonal(
                   currentUser.id, 
                   currentUser.name, 
@@ -171,11 +179,19 @@ export const useOrganizationStore = create<OrganizationState>()(
       })
     }),
     {
-      name: 'hotel-academy-session-v4', // Version bumped to force cache clear
+      name: 'hotel-academy-session-v5', // Bumped version to force clear old bad state
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ 
-          // Only persist essential ID references, reload data on mount to ensure freshness
-          currentOrganization: state.currentOrganization ? { id: state.currentOrganization.id, name: state.currentOrganization.name, logoUrl: state.currentOrganization.logoUrl } : null
+          // We persist the minimal required info to avoid stale data, 
+          // but enough to render a skeleton if needed.
+          // Note: AdminLayout detects if this is partial and triggers a refetch if needed.
+          currentOrganization: state.currentOrganization ? { 
+              id: state.currentOrganization.id, 
+              name: state.currentOrganization.name, 
+              logoUrl: state.currentOrganization.logoUrl,
+              // Persist ownerId so we don't flash "Unauthorized" on reload before fetch
+              ownerId: state.currentOrganization.ownerId 
+          } : null
       }),
     }
   )
