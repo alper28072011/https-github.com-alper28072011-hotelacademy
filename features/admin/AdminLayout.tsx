@@ -96,14 +96,14 @@ export const AdminLayout: React.FC = () => {
               
               {/* Center: Global Search */}
               <div className="flex items-center h-full w-full">
-                  <div className="w-full relative">
+                  <div className="w-full relative flex items-center">
                       <input 
                           value={adminSearchTerm}
                           onChange={(e) => setAdminSearchTerm(e.target.value)}
                           placeholder="Yönetim panelinde ara..." 
-                          className="w-full h-[28px] pl-8 pr-4 text-[12px] border border-[#333] rounded-sm bg-[#333] text-white placeholder-gray-500 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner"
+                          className="w-full h-[30px] pl-8 pr-4 text-[12px] border border-[#333] rounded-sm bg-[#333] text-white placeholder-gray-500 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner block"
                       />
-                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 text-gray-500 pointer-events-none" style={{ top: '50%', transform: 'translateY(-50%)' }} />
                   </div>
               </div>
 
