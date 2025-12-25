@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { 
     Users, Map, BarChart2, Inbox, 
-    Settings, Loader2, Network, Lock, Menu, BookOpen
+    Settings, Loader2, Network, Lock, Menu, BookOpen, LogOut
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useContextStore } from '../../stores/useContextStore';
@@ -14,7 +14,7 @@ import { getJoinRequests } from '../../services/db';
 export const AdminLayout: React.FC = () => {
   const { currentUser } = useAuthStore();
   const { contextType, activeEntityId } = useContextStore();
-  const { currentOrganization, restoreActiveSession } = useOrganizationStore();
+  const { currentOrganization, restoreActiveSession, switchToPersonalAction } = useOrganizationStore();
   
   const navigate = useNavigate();
   const { can } = usePermission();
@@ -77,9 +77,10 @@ export const AdminLayout: React.FC = () => {
   }, [isRestoring, currentOrganization]);
 
   // --- LOADING SCREEN ---
+  // Ensure solid background to prevent ghost UI
   if (isRestoring || (contextType === 'ORGANIZATION' && !currentOrganization)) {
       return (
-          <div className="h-screen flex items-center justify-center bg-[#eff0f2] text-slate-900">
+          <div className="h-screen w-screen flex items-center justify-center bg-[#eff0f2] text-slate-900 absolute top-0 left-0 z-[9999]">
               <div className="flex flex-col items-center gap-4">
                   <div className="w-12 h-12 border-4 border-[#3b5998] border-t-transparent rounded-full animate-spin"></div>
                   <div className="flex flex-col items-center">
@@ -96,7 +97,7 @@ export const AdminLayout: React.FC = () => {
 
   if (!can('adminAccess')) {
       return (
-          <div className="h-screen flex flex-col items-center justify-center bg-[#eff0f2]">
+          <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#eff0f2] absolute top-0 left-0 z-[9999]">
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-[#d8dfea] mb-4 flex flex-col items-center">
                   <Lock className="w-12 h-12 text-red-600 mb-4" />
                   <h2 className="text-xl font-bold text-slate-900">Erişim Reddedildi</h2>
@@ -126,13 +127,17 @@ export const AdminLayout: React.FC = () => {
     { path: '/admin/settings', icon: Settings, label: 'Ayarlar', show: can('adminAccess') },
   ];
 
+  const handleSwitchToPersonal = async () => {
+      await switchToPersonalAction();
+      navigate('/');
+  };
+
   return (
-    // CRITICAL FIX: The `key` prop here forces React to destroy and recreate the entire layout when switching entities.
-    // This prevents CSS bleeding from the previous page (Ghost UI issue).
+    // CRITICAL: Added z-50 and absolute isolation to ensure it overlays any previous route animations (Ghost UI Fix)
     <div 
         key={activeEntityId} 
-        className="flex h-screen bg-[#eff0f2] text-slate-900 admin-panel overflow-hidden"
-        style={{ isolation: 'isolate' }} // Creates a new stacking context for robust Z-indexing
+        className="flex h-screen w-full bg-[#eff0f2] text-slate-900 admin-panel overflow-hidden absolute inset-0 z-50"
+        style={{ isolation: 'isolate' }}
     >
       
       {/* MOBILE HEADER */}
@@ -145,10 +150,10 @@ export const AdminLayout: React.FC = () => {
 
       {/* LEFT SIDEBAR (Desktop Fixed, Mobile Toggle) */}
       <aside className={`
-          fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-[#d8dfea] transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:flex-shrink-0 overflow-y-auto
+          fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-[#d8dfea] transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:flex-shrink-0 overflow-y-auto flex flex-col
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-          <div className="p-4 flex flex-col gap-6 h-full mt-12 md:mt-0">
+          <div className="p-4 flex flex-col gap-6 flex-1 mt-12 md:mt-0">
               {/* Organization Identity Card */}
               <div className="bg-[#f7f7f7] border border-[#e9e9e9] p-4 rounded-xl shadow-sm flex flex-col items-center text-center">
                   <div className="w-16 h-16 bg-white rounded-lg mb-3 overflow-hidden border border-[#d8dfea]">
@@ -189,18 +194,26 @@ export const AdminLayout: React.FC = () => {
                       </NavLink>
                   ))}
               </nav>
+          </div>
 
-              <div className="mt-auto border-t border-[#e9e9e9] pt-4 px-2 text-center">
-                  <div className="text-[9px] text-slate-400 leading-relaxed">
-                      Hotel Academy © 2024<br/>
-                      Business Manager v2.1
-                  </div>
+          {/* EXIT BUTTON (Since we removed DashboardLayout) */}
+          <div className="p-4 border-t border-[#d8dfea] bg-[#f7f7f7]">
+              <button 
+                  onClick={handleSwitchToPersonal}
+                  className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-[#3b5998] text-[11px] font-bold py-2 hover:bg-white rounded-lg border border-transparent hover:border-[#d8dfea] transition-all"
+              >
+                  <LogOut className="w-3 h-3" />
+                  Bireysel Hesaba Dön
+              </button>
+              <div className="mt-3 text-center text-[9px] text-slate-400 leading-relaxed">
+                  Hotel Academy © 2024<br/>
+                  Business Manager v2.2
               </div>
           </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 overflow-y-auto relative w-full h-full bg-[#eff0f2] pt-14 md:pt-6 px-2 md:px-6 pb-20">
+      <main className="flex-1 overflow-y-auto relative w-full h-full bg-[#eff0f5] pt-14 md:pt-6 px-2 md:px-6 pb-20">
           <Outlet />
       </main>
 

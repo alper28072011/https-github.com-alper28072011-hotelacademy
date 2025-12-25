@@ -89,12 +89,11 @@ const AnimatedRoutes = () => {
                           <Route path="/course/:courseId" element={<CourseIntroPage />} />
                           <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
                           
-                          {/* ADMIN ROUTES */}
-                          <Route path="/admin" element={
-                              <DashboardLayout>
-                                  <AdminLayout />
-                              </DashboardLayout>
-                          }>
+                          {/* 
+                              CRITICAL FIX: ADMIN ROUTES MUST BE OUTSIDE DashboardLayout 
+                              This prevents double header rendering and CSS layout conflicts (h-screen inside h-screen).
+                          */}
+                          <Route path="/admin" element={<AdminLayout />}>
                               <Route index element={<PageTransition><OrganizationManager /></PageTransition>} /> 
                               <Route path="organization" element={<PageTransition><OrganizationManager /></PageTransition>} />
                               <Route path="requests" element={<PageTransition><TeamRequests /></PageTransition>} />
@@ -125,7 +124,7 @@ const AnimatedRoutes = () => {
                               </SuperAdminGuard>
                           } />
 
-                          {/* USER APP ROUTES */}
+                          {/* USER APP ROUTES - WRAPPED IN DASHBOARD LAYOUT */}
                           <Route 
                             path="/*" 
                             element={
