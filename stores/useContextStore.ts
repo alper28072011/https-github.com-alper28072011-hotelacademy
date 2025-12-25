@@ -11,6 +11,7 @@ interface ContextState {
   
   // Actions
   setContext: (type: AppContextType, id: string | null, name: string, avatar: string) => void;
+  switchToPersonal: (user: { id: string; name: string; avatar: string }) => void;
   resetContext: () => void;
 }
 
@@ -28,6 +29,15 @@ export const useContextStore = create<ContextState>()(
           activeEntityId: id,
           activeEntityName: name,
           activeEntityAvatar: avatar
+        });
+      },
+
+      switchToPersonal: (user) => {
+        set({
+          contextType: 'PERSONAL',
+          activeEntityId: user.id,
+          activeEntityName: user.name,
+          activeEntityAvatar: user.avatar
         });
       },
       
