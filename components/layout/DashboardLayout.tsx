@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, ArrowLeft, Menu, ChevronDown, Check, Building2, User, RefreshCw, LayoutDashboard, LogOut } from 'lucide-react';
+import { Bell, ArrowLeft, Menu, ChevronDown, Check, Building2, User, RefreshCw, LayoutDashboard, LogOut, Plus } from 'lucide-react';
 import { BottomNavigation } from './BottomNavigation';
 import { SettingsDrawer } from '../../features/profile/components/SettingsDrawer';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -196,7 +196,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                                     onClick={() => { setIsContextOpen(false); navigate('/lobby'); }}
                                     className="flex-1 py-2 text-[10px] font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 flex items-center justify-center gap-2"
                                 >
-                                    <PlusIcon className="w-3 h-3" /> Yeni Kurum Ekle
+                                    <Plus className="w-3 h-3" /> Yeni Kurum Ekle
                                 </button>
                                 <button 
                                     onClick={() => { setIsContextOpen(false); logout(); }}
@@ -250,11 +250,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   };
 
   const config = getHeaderConfig();
-
-  // Helper Icon for dropdown
-  const PlusIcon = ({ className }: { className?: string }) => (
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-  );
 
   return (
     <div className="flex flex-col h-screen w-full bg-surface overflow-hidden supports-[height:100dvh]:h-[100dvh]">
