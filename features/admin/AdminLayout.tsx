@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { 
-    Inbox, Settings, Loader2, Network, Lock, Menu, BookOpen, LogOut, Search, Bell, ChevronDown 
+    Inbox, Settings, Loader2, Network, Lock, Menu, BookOpen, LogOut, Search, Bell, ChevronDown, LayoutDashboard
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useContextStore } from '../../stores/useContextStore';
@@ -13,6 +13,7 @@ import { Avatar } from '../../components/ui/Avatar';
 
 export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser } = useAuthStore();
   
   // Stores
@@ -20,92 +21,82 @@ export const AdminLayout: React.FC = () => {
   const { currentOrganization, startOrganizationSession, endOrganizationSession } = useOrganizationStore();
   const { can } = usePermission();
   
-  // UI
+  // UI State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   
-  // Recovery State (For F5 Refresh)
-  const [isRecovering, setIsRecovering] = useState(false);
+  // --- CORE LOGIC: READY CHECK ---
+  // We check if the data currently in the store matches the URL/Context expectation.
+  const isDataReady = useMemo(() => {
+      return currentOrganization && currentOrganization.id === activeEntityId;
+  }, [currentOrganization, activeEntityId]);
 
-  // --- CRITICAL: DATA INTEGRITY CHECK ---
+  // --- SELF-HEALING EFFECT ---
+  // If we are on the admin page, but data is missing (White Screen Cause), fetch it immediately.
   useEffect(() => {
-      const verifySession = async () => {
-          // 1. If Context is not Organization, kick out immediately
+      const stabilizeSession = async () => {
+          // 1. Safety: If context is wrong, leave.
           if (contextType !== 'ORGANIZATION' || !activeEntityId) {
+              console.warn("AdminLayout: Invalid Context. Redirecting...");
               navigate('/');
               return;
           }
 
-          // 2. If Data exists and matches Context, we are good.
-          if (currentOrganization && currentOrganization.id === activeEntityId) {
-              return;
-          }
+          // 2. Optimization: If data is already there, do nothing.
+          if (isDataReady) return;
 
-          // 3. If Data is missing (F5 Refresh case), Attempt Recovery
-          console.log("[AdminLayout] Session mismatch. Attempting recovery...");
-          setIsRecovering(true);
-          
+          // 3. Action: Data is missing (F5 refresh or fast switch). Fetch it.
+          console.log(`AdminLayout: Hydrating session for ${activeEntityId}...`);
           const result = await startOrganizationSession(activeEntityId);
           
-          setIsRecovering(false);
-          
           if (!result.success) {
-              console.error("[AdminLayout] Recovery failed:", result.error);
+              console.error("AdminLayout: Hydration failed. Kicking user out.");
               await endOrganizationSession();
               navigate('/');
           }
       };
 
-      verifySession();
-  }, [activeEntityId, contextType]);
+      stabilizeSession();
+  }, [activeEntityId, contextType, isDataReady]);
 
   // --- BADGE FETCHING ---
   useEffect(() => {
-      if (currentOrganization && !isRecovering) {
+      if (isDataReady && currentOrganization && can('canApproveRequests')) {
           getJoinRequests(currentOrganization.id).then(reqs => setPendingCount(reqs.length)).catch(() => {});
       }
-  }, [currentOrganization, isRecovering]);
+  }, [isDataReady, currentOrganization]);
 
   const handleExit = async () => {
       await endOrganizationSession();
       navigate('/');
   };
 
-  // --- RENDER: LOADING / RECOVERING SKELETON ---
-  // This prevents white screen. We show a skeleton UI while data loads.
-  if (isRecovering || !currentOrganization || currentOrganization.id !== activeEntityId) {
+  // --- RENDER 1: LOADING STATE (PREVENT WHITE SCREEN) ---
+  // If data is not ready, we render a FULL SCREEN LOADER instead of null.
+  // This ensures React has something to paint while waiting for Zustand.
+  if (!isDataReady || !currentOrganization) {
       return (
-          <div className="flex h-screen w-full bg-[#eff0f5]">
-              {/* Skeleton Sidebar */}
-              <div className="w-64 bg-white border-r border-[#d8dfea] hidden md:flex flex-col p-4 gap-6">
-                  <div className="h-24 bg-gray-100 rounded-xl animate-pulse" />
-                  <div className="space-y-3">
-                      {[1,2,3,4,5].map(i => <div key={i} className="h-10 bg-gray-100 rounded-lg animate-pulse" />)}
+          <div className="flex h-screen w-full bg-[#eff0f5] items-center justify-center fixed inset-0 z-[9999]">
+              <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center mb-4">
+                      <Loader2 className="w-8 h-8 text-[#3b5998] animate-spin" />
                   </div>
-              </div>
-              {/* Skeleton Content */}
-              <div className="flex-1 flex flex-col">
-                  <div className="h-16 bg-white border-b border-[#d8dfea] flex items-center px-6">
-                      <div className="h-8 w-32 bg-gray-100 rounded animate-pulse" />
-                  </div>
-                  <div className="flex-1 flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-3">
-                          <Loader2 className="w-8 h-8 text-[#3b5998] animate-spin" />
-                          <span className="text-sm font-bold text-gray-400">Panel Yükleniyor...</span>
-                      </div>
-                  </div>
+                  <h2 className="text-lg font-bold text-slate-700">Yönetim Paneli</h2>
+                  <p className="text-xs text-slate-400 font-medium mt-1">Veriler hazırlanıyor...</p>
               </div>
           </div>
       );
   }
 
-  // --- RENDER: MAIN LAYOUT ---
-  const org = currentOrganization;
+  // --- RENDER 2: MAIN LAYOUT ---
+  // At this point, "currentOrganization" is guaranteed to exist.
+  
   const navItems = [
+    { path: '/admin/organization', icon: LayoutDashboard, label: 'Genel Bakış', show: true }, 
     { path: '/admin/requests', icon: Inbox, label: 'İstekler', show: can('canApproveRequests'), badge: pendingCount }, 
-    { path: '/admin/organization', icon: Network, label: 'Organizasyon', show: can('manageStructure') || can('manageStaff') }, 
+    { path: '/admin/organization/structure', icon: Network, label: 'Organizasyon', show: can('manageStructure') }, 
     { path: '/admin/career', icon: Map, label: 'Kariyer Yolu', show: can('manageStructure') },
-    { path: '/admin/courses', icon: BookOpen, label: 'Kurslar', show: can('canCreateContent') },
+    { path: '/admin/courses', icon: BookOpen, label: 'Eğitimler', show: can('canCreateContent') },
     { path: '/admin/reports', icon: Settings, label: 'Raporlar', show: can('viewAnalytics') },
     { path: '/admin/settings', icon: Settings, label: 'Ayarlar', show: can('adminAccess') },
   ];
@@ -115,7 +106,7 @@ export const AdminLayout: React.FC = () => {
       
       {/* MOBILE HEADER */}
       <div className="md:hidden bg-[#3b5998] p-3 flex justify-between items-center fixed top-0 left-0 right-0 z-50 shadow-md h-14">
-          <span className="text-white font-bold text-sm ml-2 truncate">{org.name}</span>
+          <span className="text-white font-bold text-sm ml-2 truncate">{currentOrganization.name}</span>
           <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white p-1">
               <Menu className="w-6 h-6" />
           </button>
@@ -130,38 +121,51 @@ export const AdminLayout: React.FC = () => {
           <div className="p-4 flex flex-col gap-6 flex-1">
               {/* Identity Card */}
               <div className="bg-[#f7f7f7] border border-[#e9e9e9] p-4 rounded-xl shadow-sm flex flex-col items-center text-center">
-                  <div className="w-16 h-16 bg-white rounded-lg mb-3 overflow-hidden border border-[#d8dfea] shadow-sm">
-                      {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center font-bold text-gray-300 text-2xl">{org.name[0]}</div>}
+                  <div className="w-16 h-16 bg-white rounded-lg mb-3 overflow-hidden border border-[#d8dfea] shadow-sm relative group">
+                      {currentOrganization.logoUrl ? (
+                          <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" />
+                      ) : (
+                          <div className="w-full h-full flex items-center justify-center font-bold text-gray-300 text-2xl">
+                              {currentOrganization.name[0]}
+                          </div>
+                      )}
                   </div>
-                  <h2 className="font-bold text-sm text-slate-900 leading-tight line-clamp-2">{org.name}</h2>
-                  <span className="text-[10px] text-[#3b5998] font-bold mt-1 uppercase bg-[#3b5998]/5 px-2 py-0.5 rounded border border-[#3b5998]/10">Yönetim Paneli</span>
+                  <h2 className="font-bold text-sm text-slate-900 leading-tight line-clamp-2">{currentOrganization.name}</h2>
+                  <span className="text-[10px] text-[#3b5998] font-bold mt-1 uppercase bg-[#3b5998]/5 px-2 py-0.5 rounded border border-[#3b5998]/10">
+                      Yönetim Paneli
+                  </span>
               </div>
 
               {/* Navigation */}
               <nav className="flex flex-col gap-1">
                   <div className="px-4 py-2 text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Araçlar</div>
-                  {navItems.filter(i => i.show).map((item) => (
-                      <NavLink
-                          key={item.path}
-                          to={item.path}
-                          onClick={() => setIsMobileMenuOpen(false)}
-                          className={({ isActive }) => 
-                              `flex items-center gap-3 px-4 py-2.5 text-[12px] font-bold transition-all rounded-lg relative group ${
-                                  isActive 
-                                  ? 'bg-[#eff0f5] text-[#3b5998] border border-[#d8dfea] shadow-sm' 
-                                  : 'text-slate-500 hover:bg-gray-50 hover:text-[#3b5998]'
-                              }`
-                          }
-                      >
-                          <item.icon className="w-4 h-4" />
-                          <span>{item.label}</span>
-                          {item.badge && item.badge > 0 ? (
-                              <span className="ml-auto bg-[#dd3c10] text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm min-w-[20px] text-center leading-none">
-                                  {item.badge}
-                              </span>
-                          ) : null}
-                      </NavLink>
-                  ))}
+                  {navItems.filter(i => i.show).map((item) => {
+                      // Fix active state logic for sub-routes
+                      const isActive = location.pathname === item.path || (item.path !== '/admin' && location.pathname.startsWith(item.path));
+                      
+                      return (
+                          <NavLink
+                              key={item.path}
+                              to={item.path}
+                              onClick={() => setIsMobileMenuOpen(false)}
+                              className={`
+                                  flex items-center gap-3 px-4 py-2.5 text-[12px] font-bold transition-all rounded-lg relative group
+                                  ${isActive 
+                                      ? 'bg-[#eff0f5] text-[#3b5998] border border-[#d8dfea] shadow-sm' 
+                                      : 'text-slate-500 hover:bg-gray-50 hover:text-[#3b5998]'
+                                  }
+                              `}
+                          >
+                              <item.icon className={`w-4 h-4 ${isActive ? 'text-[#3b5998]' : 'text-gray-400 group-hover:text-[#3b5998]'}`} />
+                              <span>{item.label}</span>
+                              {item.badge && item.badge > 0 ? (
+                                  <span className="ml-auto bg-[#dd3c10] text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm min-w-[20px] text-center leading-none">
+                                      {item.badge}
+                                  </span>
+                              ) : null}
+                          </NavLink>
+                      );
+                  })}
               </nav>
           </div>
 
