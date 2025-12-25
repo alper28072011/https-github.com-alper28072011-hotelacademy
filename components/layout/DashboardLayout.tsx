@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, ArrowLeft, Menu, ChevronDown, Check, Building2, User, RefreshCw } from 'lucide-react';
+import { Bell, ArrowLeft, Menu, ChevronDown, Check, Building2, User, RefreshCw, LayoutDashboard, LogOut } from 'lucide-react';
 import { BottomNavigation } from './BottomNavigation';
 import { SettingsDrawer } from '../../features/profile/components/SettingsDrawer';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -18,22 +18,33 @@ interface DashboardLayoutProps {
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser } = useAuthStore();
+  const { currentUser, logout } = useAuthStore();
   const { contextType, activeEntityId, activeEntityName, activeEntityAvatar, switchToPersonal, switchToOrganization, ensureContext } = useContextStore();
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [managedOrgs, setManagedOrgs] = useState<Organization[]>([]);
 
-  // 1. Ensure Context on Load
+  // 1. Ensure Context & Fetch Managed Pages (The Truth Source)
   useEffect(() => {
-      if (currentUser) {
-          ensureContext(currentUser);
-          if (currentUser.managedPageIds?.length > 0) {
-              getUserManagedPages(currentUser.id).then(setManagedOrgs);
+      const initLayout = async () => {
+          if (currentUser) {
+              // A. Ensure context is valid
+              ensureContext(currentUser);
+
+              // B. Always fetch managed pages from DB to ensure list is fresh
+              // Do not rely solely on currentUser.managedPageIds to prevent stale state issues
+              try {
+                  const orgs = await getUserManagedPages(currentUser.id);
+                  setManagedOrgs(orgs);
+              } catch (error) {
+                  console.error("Failed to fetch managed organizations", error);
+              }
           }
-      }
-  }, [currentUser]);
+      };
+      
+      initLayout();
+  }, [currentUser?.id]); // Only re-run if the user ID changes
 
   // 2. Context Switch Handler
   const handleContextSwitch = (target: 'PERSONAL' | Organization) => {
@@ -59,8 +70,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const getHeaderConfig = () => {
     const path = location.pathname;
 
-    // CASE A: HOME / DASHBOARD (Context Aware)
-    if (path === '/' || path.startsWith('/admin')) {
+    // CASE A: HOME / DASHBOARD / ADMIN (Context Aware)
+    if (path === '/' || path.startsWith('/admin') || path.startsWith('/journey') || path.startsWith('/explore')) {
       return {
         showBack: false,
         titleComponent: (
@@ -69,23 +80,30 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                 onClick={() => setIsContextOpen(!isContextOpen)}
                 className={`flex items-center gap-2 p-1 pr-2 rounded-full transition-colors ${isOrgMode ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}
               >
-                <div className={`w-8 h-8 rounded-full border flex items-center justify-center overflow-hidden ${isOrgMode ? 'border-white/20 bg-white' : 'border-gray-200 bg-gray-100'}`}>
-                   {isOrgMode ? <img src={activeEntityAvatar} className="w-full h-full object-cover" /> : <Avatar src={activeEntityAvatar} alt={activeEntityName} size="sm" />}
+                {/* Active Avatar */}
+                <div className={`w-9 h-9 rounded-full border flex items-center justify-center overflow-hidden shrink-0 ${isOrgMode ? 'border-white/20 bg-white' : 'border-gray-200 bg-gray-100'}`}>
+                   {isOrgMode ? (
+                       activeEntityAvatar ? <img src={activeEntityAvatar} className="w-full h-full object-cover" /> : <Building2 className="w-5 h-5 text-gray-400" />
+                   ) : (
+                       <Avatar src={activeEntityAvatar} alt={activeEntityName} size="sm" />
+                   )}
                 </div>
-                <div className="flex flex-col items-start">
-                    <span className={`text-[9px] font-bold uppercase leading-none ${subText}`}>
-                        {isOrgMode ? 'Yönetim Modu' : 'Bireysel Mod'}
+                
+                {/* Active Name & Role */}
+                <div className="flex flex-col items-start min-w-[100px] max-w-[160px]">
+                    <span className={`text-[9px] font-bold uppercase leading-none mb-0.5 ${subText}`}>
+                        {isOrgMode ? 'Kurumsal Hesap' : 'Bireysel Hesap'}
                     </span>
-                    <div className="flex items-center gap-1">
-                        <span className={`text-sm font-bold leading-none truncate max-w-[150px] ${headerText}`}>
+                    <div className="flex items-center gap-1 w-full">
+                        <span className={`text-sm font-bold leading-none truncate ${headerText}`}>
                             {activeEntityName}
                         </span>
-                        <ChevronDown className={`w-3 h-3 ${isOrgMode ? 'text-white/70' : 'text-gray-400'}`} />
+                        <ChevronDown className={`w-3 h-3 shrink-0 ${isOrgMode ? 'text-white/70' : 'text-gray-400'}`} />
                     </div>
                 </div>
               </button>
 
-              {/* CONTEXT DROPDOWN */}
+              {/* UNIFIED CONTEXT DROPDOWN */}
               <AnimatePresence>
                   {isContextOpen && (
                       <>
@@ -94,52 +112,98 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                             initial={{ opacity: 0, y: 10, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden"
+                            className="absolute top-full left-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden ring-1 ring-black/5"
                         >
+                            {/* SECTION 1: PERSONAL ACCOUNT */}
                             <div className="p-2">
                                 <div className="text-[10px] font-bold text-gray-400 uppercase px-3 py-2 flex items-center gap-2">
-                                    <RefreshCw className="w-3 h-3" /> Hesap Değiştir
+                                    <User className="w-3 h-3" /> Kişisel Profil
                                 </div>
-                                
-                                {/* Personal Profile */}
                                 <button 
                                     onClick={() => handleContextSwitch('PERSONAL')}
-                                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${contextType === 'PERSONAL' ? 'bg-blue-50 text-blue-900 border border-blue-100' : 'hover:bg-gray-50'}`}
+                                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors group ${
+                                        !isOrgMode ? 'bg-blue-50 border border-blue-100' : 'hover:bg-gray-50 border border-transparent'
+                                    }`}
                                 >
-                                    <div className="w-9 h-9 rounded-full bg-gray-200 overflow-hidden relative border border-gray-200">
+                                    <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden relative border border-gray-200 shrink-0">
                                         <Avatar src={currentUser?.avatar} alt={currentUser?.name || ''} size="md" />
-                                        <div className="absolute bottom-0 right-0 bg-white rounded-full p-0.5"><User className="w-3 h-3 text-gray-600" /></div>
+                                        <div className="absolute bottom-0 right-0 bg-white rounded-full p-0.5 shadow-sm">
+                                            <User className="w-3 h-3 text-gray-600" />
+                                        </div>
                                     </div>
-                                    <div className="flex-1 text-left">
-                                        <div className="text-sm font-bold">{currentUser?.name}</div>
-                                        <div className="text-[10px] text-gray-500">Kişisel Profil</div>
+                                    <div className="flex-1 text-left min-w-0">
+                                        <div className={`text-sm font-bold truncate ${!isOrgMode ? 'text-blue-900' : 'text-gray-900'}`}>
+                                            {currentUser?.name}
+                                        </div>
+                                        <div className="text-[10px] text-gray-500">Öğrenim & Kariyer</div>
                                     </div>
-                                    {contextType === 'PERSONAL' && <Check className="w-4 h-4 text-blue-600" />}
+                                    {!isOrgMode && <div className="bg-blue-500 rounded-full p-1"><Check className="w-3 h-3 text-white" /></div>}
                                 </button>
+                            </div>
 
-                                {managedOrgs.length > 0 && (
-                                    <>
-                                        <div className="h-px bg-gray-100 my-2" />
-                                        <div className="text-[10px] font-bold text-gray-400 uppercase px-3 py-2">Yönetilen Sayfalar</div>
-                                        {managedOrgs.map(org => (
+                            <div className="h-px bg-gray-100 mx-2" />
+
+                            {/* SECTION 2: MANAGED ORGANIZATIONS */}
+                            <div className="p-2 bg-gray-50/50">
+                                <div className="text-[10px] font-bold text-gray-400 uppercase px-3 py-2 flex items-center gap-2 justify-between">
+                                    <span className="flex items-center gap-2"><LayoutDashboard className="w-3 h-3" /> Yönetim Panelleri</span>
+                                    <span className="bg-gray-200 text-gray-600 px-1.5 rounded text-[9px]">{managedOrgs.length}</span>
+                                </div>
+                                
+                                <div className="space-y-1 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
+                                    {managedOrgs.map(org => {
+                                        const isActive = isOrgMode && activeEntityId === org.id;
+                                        return (
                                             <button 
                                                 key={org.id}
                                                 onClick={() => handleContextSwitch(org)}
-                                                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${activeEntityId === org.id && isOrgMode ? 'bg-blue-50 text-blue-900 border border-blue-100' : 'hover:bg-gray-50'}`}
+                                                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors border ${
+                                                    isActive 
+                                                    ? 'bg-white border-blue-500 shadow-md relative z-10' 
+                                                    : 'bg-white border-gray-100 hover:border-blue-300 hover:shadow-sm'
+                                                }`}
                                             >
-                                                <div className="w-9 h-9 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden relative">
-                                                    {org.logoUrl ? <img src={org.logoUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center font-bold text-gray-400">{org.name[0]}</div>}
-                                                    <div className="absolute bottom-0 right-0 bg-white rounded-tl-md p-0.5"><Building2 className="w-3 h-3 text-gray-600" /></div>
+                                                <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden relative shrink-0">
+                                                    {org.logoUrl ? (
+                                                        <img src={org.logoUrl} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center font-bold text-gray-400 bg-gray-50">{org.name[0]}</div>
+                                                    )}
+                                                    <div className="absolute bottom-0 right-0 bg-white rounded-tl-md p-0.5 shadow-sm border-t border-l border-gray-100">
+                                                        <Building2 className="w-3 h-3 text-gray-600" />
+                                                    </div>
                                                 </div>
-                                                <div className="flex-1 text-left">
-                                                    <div className="text-sm font-bold truncate">{org.name}</div>
+                                                <div className="flex-1 text-left min-w-0">
+                                                    <div className={`text-sm font-bold truncate ${isActive ? 'text-blue-900' : 'text-gray-900'}`}>{org.name}</div>
                                                     <div className="text-[10px] text-gray-500">İşletme Hesabı</div>
                                                 </div>
-                                                {activeEntityId === org.id && isOrgMode && <Check className="w-4 h-4 text-blue-600" />}
+                                                {isActive && <div className="bg-blue-500 rounded-full p-1"><Check className="w-3 h-3 text-white" /></div>}
                                             </button>
-                                        ))}
-                                    </>
-                                )}
+                                        );
+                                    })}
+
+                                    {managedOrgs.length === 0 && (
+                                        <div className="text-center p-4 text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                                            Yönettiğiniz bir sayfa bulunmuyor.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* SECTION 3: FOOTER ACTIONS */}
+                            <div className="bg-gray-50 border-t border-gray-100 p-2 flex gap-2">
+                                <button 
+                                    onClick={() => { setIsContextOpen(false); navigate('/lobby'); }}
+                                    className="flex-1 py-2 text-[10px] font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 flex items-center justify-center gap-2"
+                                >
+                                    <PlusIcon className="w-3 h-3" /> Yeni Kurum Ekle
+                                </button>
+                                <button 
+                                    onClick={() => { setIsContextOpen(false); logout(); }}
+                                    className="w-10 flex items-center justify-center bg-white border border-gray-200 rounded-lg hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-colors"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                </button>
                             </div>
                         </motion.div>
                       </>
@@ -177,16 +241,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       };
     }
 
-    // CASE C: EXPLORE
-    if (path === '/explore') {
-      return {
-        showBack: false,
-        titleComponent: <span className="text-primary font-bold text-xl">Keşfet</span>,
-        rightAction: null // Search is inside the page content usually
-      };
-    }
-
-    // CASE D: GENERIC PAGES
+    // CASE C: GENERIC PAGES
     return {
       showBack: true,
       titleComponent: null,
@@ -195,6 +250,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   };
 
   const config = getHeaderConfig();
+
+  // Helper Icon for dropdown
+  const PlusIcon = ({ className }: { className?: string }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+  );
 
   return (
     <div className="flex flex-col h-screen w-full bg-surface overflow-hidden supports-[height:100dvh]:h-[100dvh]">
