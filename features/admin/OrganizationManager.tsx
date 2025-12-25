@@ -37,25 +37,39 @@ export const OrganizationManager: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-      loadAllData();
+      // Ensure we have an org before loading
+      if (currentOrganization) {
+          loadAllData();
+      }
   }, [currentOrganization?.id]);
 
   const loadAllData = async () => {
       if (!currentOrganization) return;
       setLoading(true);
-      const allUsers = await getOrganizationUsers(currentOrganization.id);
-      setUsers(allUsers);
-      setLoading(false);
+      try {
+          const allUsers = await getOrganizationUsers(currentOrganization.id);
+          setUsers(allUsers || []);
+      } catch (e) {
+          console.error("Failed to load users", e);
+      } finally {
+          setLoading(false);
+      }
   };
 
   const loadFollowers = async () => {
       if (!currentOrganization) return;
       setLoading(true);
-      const data = await getRecruitableFollowers(currentOrganization.id);
-      setFollowers(data);
-      setLoading(false);
+      try {
+          const data = await getRecruitableFollowers(currentOrganization.id);
+          setFollowers(data);
+      } catch (e) {
+          console.error("Failed to load followers", e);
+      } finally {
+          setLoading(false);
+      }
   };
 
+  // ... (Rest of the component logic remains the same, assuming actions) ...
   // --- CHANNEL ACTIONS ---
   const handleCreateChannel = async () => {
       if (!currentOrganization || !newChannelName) return;
@@ -82,7 +96,7 @@ export const OrganizationManager: React.FC = () => {
           pageRoles: { ...u.pageRoles, [currentOrganization.id]: { role: newRole, title: newRole === 'ADMIN' ? 'Yönetici' : 'Üye' } } 
       } : u));
       setIsProcessing(false);
-      setSelectedMember(null); // Close modal
+      setSelectedMember(null);
   };
 
   const handleKickMember = async (userId: string) => {
@@ -108,16 +122,17 @@ export const OrganizationManager: React.FC = () => {
   const handleInviteUser = async (userId: string) => {
       if (!currentOrganization) return;
       await inviteUserToOrg(currentOrganization.id, userId, currentOrganization.name);
-      setFollowers(prev => prev.filter(u => u.id !== userId)); // Remove from list visually
+      setFollowers(prev => prev.filter(u => u.id !== userId));
       alert("Davet gönderildi.");
   };
 
-  // Helper
   const getMemberRole = (user: User) => {
       const roleData = user.pageRoles?.[currentOrganization?.id || ''];
       if (typeof roleData === 'string') return roleData;
       return roleData?.role || 'MEMBER';
   };
+
+  if (!currentOrganization) return null; // Should be handled by layout but extra safety
 
   return (
     <div className="bg-white border border-[#d8dfea] min-h-[600px] relative">
@@ -241,7 +256,7 @@ export const OrganizationManager: React.FC = () => {
             )}
         </div>
 
-        {/* --- MEMBER DETAIL MODAL (THE RETRO CONTROL CENTER) --- */}
+        {/* --- MEMBER DETAIL MODAL --- */}
         <AnimatePresence>
             {selectedMember && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[1px] p-4">
@@ -329,7 +344,7 @@ export const OrganizationManager: React.FC = () => {
             )}
         </AnimatePresence>
 
-        {/* --- RECRUITMENT MODAL (INVITE FOLLOWERS) --- */}
+        {/* --- RECRUITMENT MODAL --- */}
         <AnimatePresence>
             {showRecruitModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[1px] p-4">
