@@ -38,24 +38,28 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
 
       /**
-       * ATOMIC SWITCH: Ensures data is loaded BEFORE navigation happens.
-       * This prevents "White Screen" or "Ghost UI".
+       * STRICT ATOMIC SWITCH
+       * Order of operations is CRITICAL here to prevent White Screen.
+       * 1. Fetch Data
+       * 2. Set Organization Data (Ready for Render)
+       * 3. Set Auth/Context (Triggers Router Guard)
        */
       switchOrganization: async (orgId: string): Promise<boolean> => {
           set({ isLoading: true });
-          const authStore = useAuthStore.getState();
-          const contextStore = useContextStore.getState();
-          const currentUser = authStore.currentUser;
-
-          if (!currentUser) {
-              set({ isLoading: false });
-              return false;
-          }
-
+          
           try {
-              console.log(`[Switch] Starting switch to Org: ${orgId}`);
+              const authStore = useAuthStore.getState();
+              const contextStore = useContextStore.getState();
+              const currentUser = authStore.currentUser;
+
+              if (!currentUser) {
+                  set({ isLoading: false });
+                  return false;
+              }
+
+              console.log(`[Switch] 1. Fetching Org: ${orgId}`);
               
-              // 1. Fetch Org Data from DB
+              // 1. Fetch Data from DB
               const org = await getOrganizationDetails(orgId);
               if (!org) {
                   console.error("[Switch] Organization not found.");
@@ -64,6 +68,7 @@ export const useOrganizationStore = create<OrganizationState>()(
               }
 
               // 2. Fetch User Membership for this Org
+              // We refetch to ensure we have the latest roles
               const memberships = await getMyMemberships(currentUser.id);
               const membership = memberships.find(m => m.organizationId === orgId);
               
@@ -86,10 +91,17 @@ export const useOrganizationStore = create<OrganizationState>()(
                   return false;
               }
 
-              // 4. UPDATE STORES IN STRICT ORDER
-              // Update context FIRST so App.tsx guards are happy, but keep loading true in OrgStore
-              contextStore.setContext('ORGANIZATION', org.id, org.name, org.logoUrl);
+              console.log(`[Switch] 2. Data Ready. Updating Stores...`);
 
+              // 4. CRITICAL: Update Organization Store FIRST.
+              // This ensures that when the Router mounts AdminLayout, the data is ALREADY there.
+              set({ 
+                  currentOrganization: org, 
+                  myMemberships: memberships, 
+                  isLoading: false // Release lock
+              });
+
+              // 5. Update Auth Store (Permissions)
               authStore.updateCurrentUser({
                   currentOrganizationId: org.id,
                   role: role,
@@ -100,16 +112,14 @@ export const useOrganizationStore = create<OrganizationState>()(
                   }
               });
 
-              // Finally update the Organization Store data and release loading lock
-              set({ 
-                  currentOrganization: org, 
-                  myMemberships: memberships, 
-                  isLoading: false 
-              });
+              // 6. Update Context Store (Triggers App.tsx Guard)
+              // We do this LAST so the guard passes only after data is ready.
+              contextStore.setContext('ORGANIZATION', org.id, org.name, org.logoUrl);
 
-              // 5. Persist to DB (Background)
+              // 7. Persist to DB (Background - Fire and Forget)
               switchUserActiveOrganization(currentUser.id, org.id);
 
+              console.log(`[Switch] 3. Switch Complete. Ready to Navigate.`);
               return true;
 
           } catch (e) {
@@ -132,18 +142,20 @@ export const useOrganizationStore = create<OrganizationState>()(
 
           console.log("[Switch] Reverting to Personal Mode");
           
-          // 1. Update Stores
-          set({ currentOrganization: null, isLoading: false });
-          
+          // 1. Reset Context FIRST to block Admin Routes immediately
           contextStore.setContext('PERSONAL', currentUser.id, currentUser.name, currentUser.avatar);
           
+          // 2. Clear Org Data
+          set({ currentOrganization: null, isLoading: false });
+          
+          // 3. Reset Auth Scope
           authStore.updateCurrentUser({
               currentOrganizationId: null,
-              role: 'staff', // Reset to default scope
+              role: 'staff',
               department: null
           });
 
-          // 2. Persist DB
+          // 4. Persist DB
           switchUserActiveOrganization(currentUser.id, '');
       },
 
