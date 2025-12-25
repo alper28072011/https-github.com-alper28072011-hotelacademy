@@ -79,12 +79,12 @@ export const AdminLayout: React.FC = () => {
   // --- LOADING SCREEN ---
   if (isRestoring || (contextType === 'ORGANIZATION' && !currentOrganization)) {
       return (
-          <div className="h-screen flex items-center justify-center bg-[#eff0f5]">
+          <div className="h-screen flex items-center justify-center bg-[#eff0f2] text-slate-900">
               <div className="flex flex-col items-center gap-4">
                   <div className="w-12 h-12 border-4 border-[#3b5998] border-t-transparent rounded-full animate-spin"></div>
                   <div className="flex flex-col items-center">
                       <span className="text-sm font-bold text-[#3b5998]">Yönetim Paneli Hazırlanıyor...</span>
-                      <span className="text-xs text-gray-400">Veriler senkronize ediliyor</span>
+                      <span className="text-xs text-slate-500">Veriler senkronize ediliyor</span>
                   </div>
               </div>
           </div>
@@ -96,11 +96,11 @@ export const AdminLayout: React.FC = () => {
 
   if (!can('adminAccess')) {
       return (
-          <div className="h-screen flex flex-col items-center justify-center bg-[#eff0f5]">
+          <div className="h-screen flex flex-col items-center justify-center bg-[#eff0f2]">
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-[#d8dfea] mb-4 flex flex-col items-center">
                   <Lock className="w-12 h-12 text-red-600 mb-4" />
-                  <h2 className="text-xl font-bold text-[#333]">Erişim Reddedildi</h2>
-                  <p className="text-sm text-gray-500 mt-2 text-center max-w-xs">
+                  <h2 className="text-xl font-bold text-slate-900">Erişim Reddedildi</h2>
+                  <p className="text-sm text-slate-500 mt-2 text-center max-w-xs">
                       Bu organizasyonun yönetim paneline erişim yetkiniz bulunmuyor.
                   </p>
                   <button onClick={() => navigate('/')} className="mt-6 bg-[#3b5998] text-white px-6 py-2 rounded-lg font-bold hover:bg-[#2d4373] transition-colors text-sm">
@@ -127,77 +127,84 @@ export const AdminLayout: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#eff0f5] font-sans text-[#333]">
+    <div className="flex h-screen bg-[#eff0f2] text-slate-900 admin-panel overflow-hidden">
       
-      {/* ADMIN HEADER (Mobile) */}
-      <div className="md:hidden bg-[#3b5998] p-3 flex justify-between items-center sticky top-0 z-40 shadow-md">
+      {/* MOBILE HEADER */}
+      <div className="md:hidden bg-[#3b5998] p-3 flex justify-between items-center fixed top-0 left-0 right-0 z-50 shadow-md">
           <span className="text-white font-bold text-sm ml-2">{currentOrganization.name}</span>
           <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white p-1 rounded hover:bg-white/10">
               <Menu className="w-6 h-6" />
           </button>
       </div>
 
-      {/* MAIN CONTAINER */}
-      <div className="flex flex-col md:flex-row max-w-[1000px] mx-auto w-full mt-0 md:mt-[20px] px-2 gap-4">
-        
-        {/* LEFT SIDEBAR */}
-        <aside className={`w-full md:w-[200px] shrink-0 flex-col gap-4 ${isMobileMenuOpen ? 'flex' : 'hidden md:flex'}`}>
-            
-            {/* Organization Identity Card */}
-            <div className="bg-white border border-[#d8dfea] p-4 rounded-sm shadow-sm flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-lg mb-3 overflow-hidden border border-gray-200">
-                    {currentOrganization.logoUrl ? (
-                        <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center font-bold text-gray-300 text-xl">{currentOrganization.name[0]}</div>
-                    )}
-                </div>
-                <h2 className="font-bold text-sm text-[#333] leading-tight">{currentOrganization.name}</h2>
-                <span className="text-[10px] text-gray-500 mt-1 uppercase tracking-wide">Yönetim Paneli</span>
-            </div>
+      {/* LEFT SIDEBAR (Desktop Fixed, Mobile Toggle) */}
+      <aside className={`
+          fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-[#d8dfea] transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:flex-shrink-0 overflow-y-auto
+          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+          <div className="p-4 flex flex-col gap-6 h-full mt-12 md:mt-0">
+              {/* Organization Identity Card */}
+              <div className="bg-[#f7f7f7] border border-[#e9e9e9] p-4 rounded-xl shadow-sm flex flex-col items-center text-center">
+                  <div className="w-16 h-16 bg-white rounded-lg mb-3 overflow-hidden border border-[#d8dfea]">
+                      {currentOrganization.logoUrl ? (
+                          <img src={currentOrganization.logoUrl} className="w-full h-full object-cover" />
+                      ) : (
+                          <div className="w-full h-full flex items-center justify-center font-bold text-slate-300 text-xl">{currentOrganization.name[0]}</div>
+                      )}
+                  </div>
+                  <h2 className="font-bold text-sm text-slate-900 leading-tight">{currentOrganization.name}</h2>
+                  <span className="text-[10px] text-slate-500 mt-1 uppercase tracking-wide font-bold">Yönetim Paneli</span>
+              </div>
 
-            {/* Navigation Links */}
-            <nav className="flex flex-col gap-1 bg-white border border-[#d8dfea] py-2 rounded-sm shadow-sm">
-                <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Araçlar</div>
-                {navItems.filter(i => i.show).map((item) => (
-                    <NavLink
-                        key={item.path}
-                        to={item.path}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className={({ isActive }) => 
-                            `flex items-center gap-3 px-4 py-2.5 text-[12px] font-bold transition-colors border-l-[3px] ${
-                                isActive 
-                                ? 'bg-[#eff0f5] text-[#3b5998] border-[#3b5998]' 
-                                : 'text-gray-600 border-transparent hover:bg-gray-50 hover:text-[#3b5998]'
-                            }`
-                        }
-                    >
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.label}</span>
-                        
-                        {item.badge && item.badge > 0 ? (
-                            <span className="ml-auto bg-[#dd3c10] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[2px] shadow-sm leading-none border border-[#b0300d]">
-                                {item.badge}
-                            </span>
-                        ) : null}
-                    </NavLink>
-                ))}
-            </nav>
+              {/* Navigation Links */}
+              <nav className="flex flex-col gap-1">
+                  <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Araçlar</div>
+                  {navItems.filter(i => i.show).map((item) => (
+                      <NavLink
+                          key={item.path}
+                          to={item.path}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={({ isActive }) => 
+                              `flex items-center gap-3 px-4 py-2.5 text-[12px] font-bold transition-colors rounded-lg ${
+                                  isActive 
+                                  ? 'bg-[#eff0f5] text-[#3b5998] border border-[#d8dfea]' 
+                                  : 'text-slate-600 hover:bg-gray-50 hover:text-[#3b5998]'
+                              }`
+                          }
+                      >
+                          <item.icon className="w-4 h-4" />
+                          <span>{item.label}</span>
+                          
+                          {item.badge && item.badge > 0 ? (
+                              <span className="ml-auto bg-[#dd3c10] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-[4px] shadow-sm leading-none">
+                                  {item.badge}
+                              </span>
+                          ) : null}
+                      </NavLink>
+                  ))}
+              </nav>
 
-            <div className="border-t border-[#d8dfea] pt-3 px-2 text-center">
-                <div className="text-[9px] text-gray-400 leading-relaxed">
-                    Hotel Academy © 2024<br/>
-                    Business Manager v2.1
-                </div>
-            </div>
-        </aside>
+              <div className="mt-auto border-t border-[#e9e9e9] pt-4 px-2 text-center">
+                  <div className="text-[9px] text-slate-400 leading-relaxed">
+                      Hotel Academy © 2024<br/>
+                      Business Manager v2.1
+                  </div>
+              </div>
+          </div>
+      </aside>
 
-        {/* MAIN CONTENT AREA */}
-        <main className="flex-1 min-w-0 pb-12">
-            <Outlet />
-        </main>
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 overflow-y-auto relative w-full h-full bg-[#eff0f2] pt-14 md:pt-6 px-2 md:px-6 pb-20">
+          <Outlet />
+      </main>
 
-      </div>
+      {/* Mobile Backdrop */}
+      {isMobileMenuOpen && (
+          <div 
+              className="fixed inset-0 bg-black/50 z-30 md:hidden"
+              onClick={() => setIsMobileMenuOpen(false)}
+          />
+      )}
     </div>
   );
 };

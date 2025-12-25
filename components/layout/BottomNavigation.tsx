@@ -10,6 +10,13 @@ export const BottomNavigation: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const checkActive = (path: string) => {
+      // Home route requires exact match
+      if (path === '/') return location.pathname === '/';
+      // Other routes check if current path starts with their path
+      return location.pathname.startsWith(path);
+  };
+
   const tabs = [
     { id: '/', icon: Home, label: t('nav_home') },
     { id: '/explore', icon: Compass, label: 'Explore' },
@@ -17,10 +24,10 @@ export const BottomNavigation: React.FC = () => {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-gray-200/50 px-6 py-3 z-50 shadow-lg shadow-black/5">
+    <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-gray-200/50 px-6 py-3 z-50 shadow-lg shadow-black/5 text-slate-900">
       <div className="flex justify-around items-center">
         {tabs.map((tab) => {
-          const isActive = location.pathname === tab.id;
+          const isActive = checkActive(tab.id);
           return (
             <button
               key={tab.id}
