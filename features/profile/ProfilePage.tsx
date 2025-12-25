@@ -4,14 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { 
     Grid, Building2, 
-    Plus, ExternalLink, Hash, X, Network, Tv, CheckCircle2, LogOut, Loader2
+    Plus, ExternalLink, Hash, X, Network, Tv, CheckCircle2, LogOut, Loader2, AlertCircle
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '../../stores/useAuthStore';
+import { useContextStore } from '../../stores/useContextStore';
 import { ProfileHeader } from './components/ProfileHeader';
 import { Organization, FeedPost, Channel } from '../../types';
 import { getUserManagedPages, updateUserSubscriptions, kickMember } from '../../services/organizationService';
-import { getFollowedPages, unfollowUser } from '../../services/userService';
+import { getFollowedPages } from '../../services/userService';
 import { getUserPosts, getSubscribedChannelsDetails } from '../../services/db';
 import { toggleTagFollow, unfollowEntity } from '../../services/socialService';
 import { EditProfileModal } from './components/EditProfileModal';
@@ -20,6 +21,7 @@ export const ProfilePage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { currentUser, refreshProfile, updateCurrentUser } = useAuthStore();
+  const { contextType } = useContextStore(); // Use Context to check mode
   
   // UI State
   const [activeTab, setActiveTab] = useState<'INTERESTS' | 'POSTS'>('INTERESTS');
@@ -27,45 +29,45 @@ export const ProfilePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   // Data State
-  const [managedPages, setManagedPages] = useState<Organization[]>([]); // Using as "Memberships"
+  const [managedPages, setManagedPages] = useState<Organization[]>([]);
   const [followedPages, setFollowedPages] = useState<Organization[]>([]);
   const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
   const [subscribedChannels, setSubscribedChannels] = useState<{ channel: Channel, organization: { id: string, name: string, logoUrl: string } }[]>([]);
 
   useEffect(() => {
+      // Safety Check: If in Org mode, don't load personal data
+      if (contextType === 'ORGANIZATION') return;
       loadProfileData();
-  }, [currentUser?.id]);
+  }, [currentUser?.id, contextType]);
 
   const loadProfileData = async () => {
       if (!currentUser) return;
       setLoading(true);
       
-      const [managed, followed, posts, channels] = await Promise.all([
-          getUserManagedPages(currentUser.id), // Actually gets memberships where user is admin, we need ALL memberships ideally but let's use this or getMyMemberships logic if available
-          getFollowedPages(currentUser.id),
-          getUserPosts(currentUser.id),
-          getSubscribedChannelsDetails(currentUser)
-      ]);
-
-      // Note: getUserManagedPages only returns where admin. We probably want all joined pages.
-      // Since we don't have a direct "getJoinedPages" loaded in types easily without modifying services deeply,
-      // we will rely on what we have or add a simple fetch if needed.
-      // For now, let's assume managedPages covers the "Workspaces" aspect or reuse logic.
-      // Better: Use `joinedPageIds` from user object to fetch details if managedPages is insufficient.
-      
-      setManagedPages(managed); 
-      setFollowedPages(followed);
-      setMyPosts(posts);
-      setSubscribedChannels(channels);
-      setLoading(false);
+      try {
+          const [managed, followed, posts, channels] = await Promise.all([
+              getUserManagedPages(currentUser.id), 
+              getFollowedPages(currentUser.id),
+              getUserPosts(currentUser.id),
+              getSubscribedChannelsDetails(currentUser)
+          ]);
+          
+          setManagedPages(managed); 
+          setFollowedPages(followed);
+          setMyPosts(posts);
+          setSubscribedChannels(channels);
+      } catch (e) {
+          console.error("Profile Load Error", e);
+      } finally {
+          setLoading(false);
+      }
   };
 
   // --- ACTIONS ---
-
   const handleRemoveTag = async (tag: string) => {
       if(!currentUser) return;
       await toggleTagFollow(currentUser.id, tag, false);
-      refreshProfile(); // Sync
+      refreshProfile(); 
   };
 
   const handleUnfollowPage = async (orgId: string) => {
@@ -87,18 +89,36 @@ export const ProfilePage: React.FC = () => {
   const handleLeaveOrganization = async (orgId: string) => {
       if(!currentUser) return;
       if(confirm("Bu işletmeden ayrılmak istediğinize emin misiniz? Tüm yetkileriniz gidecek.")) {
-          // Self-kick
           await kickMember(orgId, currentUser.id);
-          // Update local state
           const newJoined = currentUser.joinedPageIds.filter(id => id !== orgId);
           updateCurrentUser({ joinedPageIds: newJoined, currentOrganizationId: null });
           setManagedPages(prev => prev.filter(p => p.id !== orgId));
-          // Refresh to ensure clean state
           window.location.reload();
       }
   };
 
+  // --- RENDER SAFEGUARDS ---
   if (!currentUser) return null;
+
+  if (contextType === 'ORGANIZATION') {
+      return (
+          <div className="flex flex-col items-center justify-center min-h-[50vh] p-6 text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
+                  <AlertCircle className="w-8 h-8 text-orange-500" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800">Hesap Modu Hatası</h2>
+              <p className="text-sm text-gray-500 mt-2 mb-6">
+                  Kişisel profilinizi görüntülerken Kurumsal Moddasınız. Lütfen kişisel hesabınıza geçiş yapın.
+              </p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="bg-primary text-white px-6 py-2 rounded-xl font-bold text-sm"
+              >
+                  Sayfayı Yenile
+              </button>
+          </div>
+      );
+  }
 
   return (
     <div className="min-h-screen bg-white pb-24 pt-4">

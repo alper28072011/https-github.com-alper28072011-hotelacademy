@@ -1,10 +1,10 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { User, AuthMode, ActiveContext, UserRole, PageRole } from '../types';
+import { User, AuthMode } from '../types';
 import { logoutUser } from '../services/authService';
 import { getUserById } from '../services/db';
-import { useContextStore } from './useContextStore'; // Import Context Store
+import { useContextStore } from './useContextStore';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -37,7 +37,7 @@ export const useAuthStore = create<AuthState>()(
       setError: (error) => set({ error, isLoading: false }),
 
       loginSuccess: (user) => {
-        // Ensure social fields exist
+        // 1. Kullanıcı verisini temizle/hazırla
         const sanitizedUser: User = {
             ...user,
             followers: user.followers || [],
@@ -45,13 +45,14 @@ export const useAuthStore = create<AuthState>()(
             followedPageIds: user.followedPageIds || [],
             channelSubscriptions: user.channelSubscriptions || [],
             managedPageIds: user.managedPageIds || [],
-            // CRITICAL: On login, always reset to null org ID for the session to enforce Personal Mode start
-            currentOrganizationId: null 
+            currentOrganizationId: null // Login'de her zaman sıfırla
         };
         
-        // Force Context Store to Personal
+        // 2. CONTEXT'i Zorla "PERSONAL" Yap
+        // Bu işlem UI'ın admin modunda açılmasını engeller.
         useContextStore.getState().switchToPersonal(sanitizedUser);
 
+        // 3. Store'u Güncelle
         set({ 
           isAuthenticated: true, 
           currentUser: sanitizedUser,
@@ -66,7 +67,7 @@ export const useAuthStore = create<AuthState>()(
               const updatedUser = { ...currentUser, ...updates };
               set({ currentUser: updatedUser });
               
-              // If we are updating name/avatar, sync with context if context is PERSONAL
+              // Profil güncellenirse Context'i de güncelle (Eğer Bireysel Moddaysak)
               const contextState = useContextStore.getState();
               if (contextState.contextType === 'PERSONAL') {
                   contextState.switchToPersonal(updatedUser);
@@ -80,8 +81,8 @@ export const useAuthStore = create<AuthState>()(
         } catch (e) {
           console.error("Logout error", e);
         }
-        localStorage.clear();
-        useContextStore.getState().switchToPersonal({} as User); // Reset context
+        localStorage.clear(); // Tam temizlik
+        useContextStore.getState().resetContext();
         set({
           isAuthenticated: false,
           currentUser: null,
@@ -96,8 +97,6 @@ export const useAuthStore = create<AuthState>()(
           try {
               const refreshedUser = await getUserById(currentUser.id);
               if (refreshedUser) {
-                  // Keep current session flags (like currentOrg) if needed, but here we update profile data
-                  // We do NOT use loginSuccess here to avoid resetting context mid-session
                   set({ currentUser: { ...currentUser, ...refreshedUser } });
               }
           } catch (e) {

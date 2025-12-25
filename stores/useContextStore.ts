@@ -1,20 +1,20 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { AppContextType, User } from '../types';
+import { User, AppContextType } from '../types';
 
 interface ContextState {
+  // Durum (State)
   contextType: AppContextType;
-  activeEntityId: string | null; // Null means "Self" in PERSONAL mode context (or explicit user ID)
+  activeEntityId: string | null; // User ID (Personal) or Organization ID
   activeEntityName: string;
   activeEntityAvatar: string;
   
-  // Actions
+  // Eylemler (Actions)
   switchToPersonal: (user: User) => void;
-  switchToOrganization: (orgId: string, orgName: string, avatar: string) => void;
-  
-  // Helper to ensure context integrity
-  ensureContext: (user: User) => void;
+  switchToOrganization: (orgId: string, orgName: string, orgAvatar: string) => void;
+  ensureContext: (user: User) => void; // Hydration sonrası güvenli liman kontrolü
+  resetContext: () => void;
 }
 
 export const useContextStore = create<ContextState>()(
@@ -25,36 +25,43 @@ export const useContextStore = create<ContextState>()(
       activeEntityName: '',
       activeEntityAvatar: '',
 
-      switchToPersonal: (user: User) => {
-          console.log("[Context] Switching to PERSONAL mode");
-          set({
-              contextType: 'PERSONAL',
-              activeEntityId: user.id,
-              activeEntityName: user.name,
-              activeEntityAvatar: user.avatar
-          });
+      switchToPersonal: (user) => {
+        console.log("[Context] Switching to PERSONAL mode");
+        set({
+          contextType: 'PERSONAL',
+          activeEntityId: user.id,
+          activeEntityName: user.name,
+          activeEntityAvatar: user.avatar || ''
+        });
       },
 
-      switchToOrganization: (orgId: string, orgName: string, avatar: string) => {
-          console.log(`[Context] Switching to ORGANIZATION mode: ${orgName}`);
-          set({
-              contextType: 'ORGANIZATION',
-              activeEntityId: orgId,
-              activeEntityName: orgName,
-              activeEntityAvatar: avatar
-          });
+      switchToOrganization: (orgId, orgName, orgAvatar) => {
+        console.log(`[Context] Switching to ORGANIZATION mode: ${orgName}`);
+        set({
+          contextType: 'ORGANIZATION',
+          activeEntityId: orgId,
+          activeEntityName: orgName,
+          activeEntityAvatar: orgAvatar
+        });
       },
 
-      ensureContext: (user: User) => {
+      ensureContext: (user) => {
           const { activeEntityId } = get();
-          // If no active entity is set, default to Personal
+          // Eğer aktif bir entity yoksa veya veri bozulmuşsa Bireysele dön
           if (!activeEntityId) {
               get().switchToPersonal(user);
           }
-      }
+      },
+      
+      resetContext: () => set({
+        contextType: 'PERSONAL',
+        activeEntityId: null,
+        activeEntityName: '',
+        activeEntityAvatar: ''
+      }),
     }),
     {
-      name: 'hotel-academy-context-v1', // Separate from auth store
+      name: 'hotel-academy-context-v2', // Versiyonu güncelledik
       storage: createJSONStorage(() => localStorage),
     }
   )

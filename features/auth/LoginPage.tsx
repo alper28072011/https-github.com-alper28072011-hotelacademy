@@ -6,6 +6,7 @@ import {
   ArrowRight, ShieldCheck, CheckCircle2, Globe
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom'; // Added navigate
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useAppStore } from '../../stores/useAppStore';
 import { loginUser, registerUser } from '../../services/authService';
@@ -16,6 +17,7 @@ import { SUPPORTED_LANGUAGES } from '../../i18n/config';
 
 export const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const { setLanguage, systemSettings } = useAppStore();
   const { 
     authMode, setAuthMode, 
@@ -31,8 +33,6 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [langMenuOpen, setLangMenuOpen] = useState(false);
-  
-  // Image Loading State for Smooth Fade-In
   const [imageLoaded, setImageLoaded] = useState(false);
 
   const bgImage = systemSettings?.loginScreenImage;
@@ -46,11 +46,16 @@ export const LoginPage: React.FC = () => {
     setError(null);
     try {
       const user = await loginUser(identifier, password);
-      // Pre-fetch memberships to warm up cache, but don't switch context
+      
+      // Cache memberships but don't switch context
       await getMyMemberships(user.id);
       
-      // Removed switchOrganization call to enforce Personal Mode start
+      // Store action handles context switching to Personal
       loginSuccess(user);
+      
+      // Explicit navigation to dashboard root
+      navigate('/');
+      
     } catch (err: any) {
       setError(err.message || "Giriş başarısız. Bilgilerini kontrol et.");
       setLoading(false);
@@ -68,6 +73,7 @@ export const LoginPage: React.FC = () => {
     try {
       const user = await registerUser({ email, password, username, name });
       loginSuccess(user);
+      navigate('/');
     } catch (err: any) {
       setError(err.message || "Kayıt sırasında bir hata oluştu.");
       setLoading(false);
@@ -82,7 +88,7 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="w-full max-w-5xl mx-auto bg-white md:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col md:flex-row relative h-auto md:h-[700px]">
       
-      {/* MINIMAL LANG SELECTOR (Top Right) */}
+      {/* LANG SELECTOR */}
       <div className="absolute top-6 right-6 z-20">
           <div className="relative">
               <button 
@@ -111,10 +117,9 @@ export const LoginPage: React.FC = () => {
           </div>
       </div>
 
-      {/* LEFT: FORM AREA - Fixed width and centered content */}
+      {/* LEFT: FORM AREA */}
       <div className="w-full md:w-1/2 p-8 md:p-12 lg:p-16 flex flex-col justify-center relative h-full overflow-y-auto custom-scrollbar">
         <div className="max-w-sm mx-auto w-full">
-            {/* Brand */}
             <div className="mb-8">
                 <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center mb-4">
                     <span className="text-xl font-black tracking-tighter">H</span>
@@ -206,16 +211,12 @@ export const LoginPage: React.FC = () => {
         </div>
       </div>
 
-      {/* RIGHT: IMAGE AREA (Soft Overlay & Smooth Loading) */}
+      {/* RIGHT: IMAGE AREA */}
       <div className="hidden md:block w-1/2 bg-gray-50 relative p-4 h-full">
           <div className="w-full h-full rounded-3xl overflow-hidden relative shadow-inner bg-gray-900">
-              
-              {/* 1. Placeholder / Skeleton (Always visible initially) */}
               <div className={`absolute inset-0 bg-gray-800 flex items-center justify-center transition-opacity duration-700 ${imageLoaded ? 'opacity-0' : 'opacity-100'}`}>
                   <div className="w-12 h-12 rounded-full border-4 border-white/20 border-t-white animate-spin" />
               </div>
-
-              {/* 2. Actual Image (Fades in) */}
               {bgImage && (
                   <img 
                     src={bgImage} 
@@ -224,12 +225,9 @@ export const LoginPage: React.FC = () => {
                     className={`w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                   />
               )}
-
-              {/* 3. Text & Gradient Overlay (Fades in with image or slightly after) */}
               <div className={`absolute inset-0 transition-opacity duration-1000 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}>
                   <div className="absolute inset-0 bg-primary/20 mix-blend-multiply" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                  
                   <div className="absolute bottom-10 left-10 right-10 text-white">
                       <h2 className="text-3xl font-bold leading-tight mb-4 drop-shadow-lg">
                           Detaylardaki Mükemmellik.
@@ -241,7 +239,6 @@ export const LoginPage: React.FC = () => {
               </div>
           </div>
       </div>
-
     </div>
   );
 };

@@ -23,27 +23,26 @@ export const AdminLayout: React.FC = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [isRestoring, setIsRestoring] = useState(true);
 
-  // --- THE SESSION RESTORATION GATE ---
+  // --- GATEKEEPER ---
   useEffect(() => {
       const verifySession = async () => {
-          // Case 1: Wrong Context (User tried to access /admin while in Personal Mode)
+          // 1. If explicitly in Personal Mode, kick out immediately.
           if (contextType === 'PERSONAL') {
               console.warn("[AdminLayout] Access attempt in PERSONAL mode. Redirecting...");
               navigate('/');
               return;
           }
 
-          // Case 2: In Org Context, but data might be stale or missing
-          // We trust `activeEntityId` from ContextStore as the source of truth for "Where am I?"
+          // 2. If in Organization Context but data is stale
           if (contextType === 'ORGANIZATION' && activeEntityId) {
               
-              // If we already have the correct org loaded, we are good.
               if (currentOrganization && currentOrganization.id === activeEntityId) {
+                  // Data matches context, all good
                   setIsRestoring(false);
                   return;
               }
 
-              // Otherwise, we must restore the session (Fetch DB, verify role)
+              // Data mismatch or missing -> Restore
               console.log("[AdminLayout] Hydrating Organization Session...");
               const success = await restoreActiveSession(activeEntityId);
               
@@ -54,15 +53,15 @@ export const AdminLayout: React.FC = () => {
                   setIsRestoring(false); // Let them in
               }
           } else {
-              // Fallback: No active entity ID? Invalid state.
+              // Context is organization but no ID? Invalid state.
               navigate('/');
           }
       };
 
       verifySession();
-  }, [contextType, activeEntityId, navigate]); // Removed currentOrganization from dependency to avoid loop
+  }, [contextType, activeEntityId, navigate]); 
 
-  // Fetch Badge Counts (Only when stable)
+  // Fetch Badge Counts
   useEffect(() => {
       const fetchCount = async () => {
           if (!isRestoring && currentOrganization && can('canApproveRequests')) {
@@ -77,7 +76,7 @@ export const AdminLayout: React.FC = () => {
       fetchCount();
   }, [isRestoring, currentOrganization]);
 
-  // --- LOADING SCREEN (The Gate) ---
+  // --- LOADING SCREEN ---
   if (isRestoring || (contextType === 'ORGANIZATION' && !currentOrganization)) {
       return (
           <div className="h-screen flex items-center justify-center bg-[#eff0f5]">
@@ -92,7 +91,7 @@ export const AdminLayout: React.FC = () => {
       );
   }
 
-  // Final Security Guard
+  // Final Safety Check
   if (!currentOrganization) return null;
 
   if (!can('adminAccess')) {
@@ -130,7 +129,7 @@ export const AdminLayout: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen bg-[#eff0f5] font-sans text-[#333]">
       
-      {/* 1. ADMIN HEADER (Mobile) */}
+      {/* ADMIN HEADER (Mobile) */}
       <div className="md:hidden bg-[#3b5998] p-3 flex justify-between items-center sticky top-0 z-40 shadow-md">
           <span className="text-white font-bold text-sm ml-2">{currentOrganization.name}</span>
           <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white p-1 rounded hover:bg-white/10">
@@ -138,7 +137,7 @@ export const AdminLayout: React.FC = () => {
           </button>
       </div>
 
-      {/* 2. MAIN CONTAINER */}
+      {/* MAIN CONTAINER */}
       <div className="flex flex-col md:flex-row max-w-[1000px] mx-auto w-full mt-0 md:mt-[20px] px-2 gap-4">
         
         {/* LEFT SIDEBAR */}
