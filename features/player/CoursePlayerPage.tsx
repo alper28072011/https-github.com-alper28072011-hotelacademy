@@ -9,7 +9,7 @@ import { getTopicsByCourse, getModulesByTopic } from '../../services/courseServi
 import { Course, StoryCard } from '../../types';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { getLocalizedContent } from '../../i18n/config';
-import { useTelemetry } from '../../hooks/useTelemetry'; // NEW
+import { useTelemetry } from '../../hooks/useTelemetry';
 
 // Animation Variants for Vertical Scroll
 const slideVariants: Variants = {
@@ -42,7 +42,7 @@ export const CoursePlayerPage: React.FC = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   const { currentUser, refreshProfile } = useAuthStore();
-  const { logEvent } = useTelemetry(); // New Hook
+  const { logEvent } = useTelemetry(); 
   
   const [course, setCourse] = useState<Course | null>(null);
   const [playlist, setPlaylist] = useState<StoryCard[]>([]);
@@ -116,8 +116,6 @@ export const CoursePlayerPage: React.FC = () => {
       const currentCard = playlist[currentIndex];
       if (!currentCard || !course) return;
 
-      // 1. Log previous slide end (if any) -> Effectively done by start of next, but for cleaner data we track "View" here
-      
       // Reset Timer
       slideStartTimeRef.current = Date.now();
 
@@ -255,7 +253,7 @@ export const CoursePlayerPage: React.FC = () => {
           const timeSpentSeconds = Math.floor((Date.now() - courseStartTimeRef.current) / 1000);
           
           // Enhanced Completion Log
-          logEvent('VIDEO_COMPLETE', { // Or COURSE_COMPLETE if we add that type
+          logEvent('VIDEO_COMPLETE', { 
               courseId: course.id,
               organizationId: course.organizationId
           }, { 
@@ -293,7 +291,7 @@ export const CoursePlayerPage: React.FC = () => {
             {/* HEADER */}
             <div className="absolute top-6 left-0 right-0 z-30 flex justify-between items-center px-4">
                 <div className="flex items-center gap-2">
-                    <span className="text-white font-black text-xs shadow-black drop-shadow-md tracking-widest uppercase">Hotel Academy</span>
+                    <span className="text-white font-black text-xs shadow-black drop-shadow-md tracking-widest uppercase">Corbit Learning</span>
                 </div>
                 <button onClick={() => navigate('/')} className="p-2 rounded-full bg-black/20 backdrop-blur-md text-white hover:bg-white/20 transition-colors"><X className="w-5 h-5" /></button>
             </div>
@@ -418,7 +416,7 @@ export const CoursePlayerPage: React.FC = () => {
                             </p>
                             <div className="mt-8 p-6 bg-gray-50 rounded-[2rem] border border-gray-100">
                                 <div className="flex items-center gap-3 text-primary font-bold mb-2"><BookOpen className="w-5 h-5" /> Kaynak Bilgisi</div>
-                                <p className="text-sm text-gray-500">Bu içerik yapay zeka tarafından işletme standartlarına uygun olarak özetlenmiştir.</p>
+                                <p className="text-sm text-gray-500">Bu içerik Corbit AI tarafından işletme standartlarına uygun olarak özetlenmiştir.</p>
                             </div>
                         </motion.div>
                     </>

@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Hotel Academy</title>
+    <title>Corbit | Self-Improvement Ecosystem</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -12,44 +12,45 @@
           extend: {
             colors: {
               primary: {
-                DEFAULT: '#3b5998', // Classic FB Blue
-                hover: '#2d4373',   // Darker FB Blue
-                light: '#eceff5',   // Very light blue highlight
+                DEFAULT: '#3b5998', // Corbit Blue (Solid base)
+                hover: '#2d4373',
+                light: '#eceff5',
               },
               surface: {
                 DEFAULT: '#ffffff',
-                subtle: '#eff0f2',  // Classic Wall Background Gray
+                subtle: '#eff0f2',
               },
               text: {
-                main: '#333333',    // Sharp Dark Gray
-                muted: '#666666',   // Muted Gray
-                link: '#3b5998',    // Link Blue
+                main: '#1c1e21',    // Sharp Black/Gray
+                muted: '#65676b',
+                link: '#3b5998',
               },
               accent: {
-                DEFAULT: '#5b74a8', // Secondary Blue
-                light: '#d8dfea',   // Border Color (Critical)
+                DEFAULT: '#5b74a8',
+                light: '#d8dfea',
               },
               border: {
-                DEFAULT: '#d8dfea', // The omnipresent border color
+                DEFAULT: '#d8dfea',
               }
             },
             fontFamily: {
-              sans: ['"Lucida Grande"', 'Tahoma', 'Verdana', 'Arial', 'sans-serif'],
+              sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
             },
             borderRadius: {
               'none': '0px',
-              'sm': '2px', // Only very slight rounding allowed
-              'md': '3px',
-              'lg': '4px', // Max rounding
-              'xl': '4px',
-              '2xl': '4px',
-              '3xl': '4px',
-              'full': '9999px', // Kept only for avatars
+              'sm': '4px', // Slightly softer for Corbit
+              'md': '6px',
+              'lg': '8px',
+              'xl': '12px',
+              '2xl': '16px',
+              '3xl': '24px',
+              'full': '9999px',
             },
             boxShadow: {
               'none': 'none',
               'sm': '0 1px 2px rgba(0, 0, 0, 0.05)',
-              'card': '0 1px 0 rgba(0,0,0,0.05)', // Very subtle divider-like shadow
+              'card': '0 1px 2px rgba(0, 0, 0, 0.1)',
+              'float': '0 4px 12px rgba(0, 0, 0, 0.15)',
             }
           },
         },
@@ -57,10 +58,10 @@
     </script>
     <style>
       body {
-        font-family: 'Lucida Grande', Tahoma, Verdana, Arial, sans-serif;
-        background-color: #eff0f2; /* The classic gray background */
-        color: #333333;
-        font-size: 13px; /* Smaller base font size */
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: #eff0f2;
+        color: #1c1e21;
+        font-size: 14px; /* More readable for content */
         -webkit-tap-highlight-color: transparent;
       }
       /* Hide scrollbar for horizontal scrolling areas */
@@ -72,9 +73,11 @@
           scrollbar-width: none;
       }
       
-      /* Reset heavy animations for a snappier feel */
+      /* Smooth interactions */
       * {
-        transition-duration: 100ms !important;
+        transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 150ms;
       }
     </style>
   <script type="importmap">

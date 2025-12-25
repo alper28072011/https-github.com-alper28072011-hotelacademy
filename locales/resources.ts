@@ -1,7 +1,8 @@
+
 export const resources = {
   en: {
     translation: {
-      welcome: "Hotel Academy Starting...",
+      welcome: "Corbit Starting...",
       select_language: "Select Language",
       start_journey: "Start Journey",
       loading: "Loading assets...",
@@ -61,7 +62,7 @@ export const resources = {
   },
   tr: {
     translation: {
-      welcome: "Hotel Academy Başlıyor...",
+      welcome: "Corbit Başlıyor...",
       select_language: "Dil Seçiniz",
       start_journey: "Yolculuğa Başla",
       loading: "Yükleniyor...",
@@ -121,7 +122,7 @@ export const resources = {
   },
   ru: {
     translation: {
-      welcome: "Hotel Academy Запускается...",
+      welcome: "Corbit Запускается...",
       select_language: "Выберите язык",
       start_journey: "Начать",
       loading: "Загрузка...",
@@ -181,7 +182,7 @@ export const resources = {
   },
   de: {
     translation: {
-      welcome: "Hotel Academy Startet...",
+      welcome: "Corbit Startet...",
       select_language: "Sprache wählen",
       start_journey: "Starten",
       loading: "Laden...",
@@ -241,7 +242,7 @@ export const resources = {
   },
   id: {
     translation: {
-      welcome: "Hotel Academy Dimulai...",
+      welcome: "Corbit Dimulai...",
       select_language: "Pilih Bahasa",
       start_journey: "Mulai",
       loading: "Memuat...",
@@ -301,7 +302,7 @@ export const resources = {
   },
   ar: {
     translation: {
-      welcome: "أكاديمية الفندق تبدأ...",
+      welcome: "Corbit تبدأ...",
       select_language: "اختر اللغة",
       start_journey: "ابدأ الرحلة",
       loading: "جار التحميل...",
