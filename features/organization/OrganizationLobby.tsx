@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Building2, ArrowRight, Loader2, Globe, Users } from 'lucide-react';
+import { Plus, Search, Building2, ArrowRight, Loader2, Globe, Users, Eye, Settings } from 'lucide-react';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { createOrganization, searchOrganizations, getUserPendingRequests, cancelJoinRequest } from '../../services/db';
-import { Organization, OrganizationSector, User, JoinRequest } from '../../types';
+import { Organization, OrganizationSector, User, JoinRequest, PageRole } from '../../types';
 
 export const OrganizationLobby: React.FC = () => {
   const navigate = useNavigate();
@@ -43,7 +43,13 @@ export const OrganizationLobby: React.FC = () => {
       return () => clearTimeout(delayDebounceFn);
   }, [searchTerm]);
 
-  const handleSelectMembership = async (orgId: string) => {
+  const handleSelectMembership = async (orgId: string, role: PageRole) => {
+      // SECURITY CHECK: Members cannot access admin session
+      if (role === 'MEMBER') {
+          navigate(`/org/${orgId}`);
+          return;
+      }
+
       const result = await startOrganizationSession(orgId);
       if (result.success) navigate('/admin'); 
   };
@@ -85,22 +91,43 @@ export const OrganizationLobby: React.FC = () => {
             
             {activeTab === 'MY_GROUPS' && (
                 <div className="space-y-2">
-                    {myMemberships.map(mem => (
-                        <div key={mem.id} className="flex items-center gap-3 p-2 border border-[#e9e9e9] rounded-sm hover:bg-[#fff9d7] transition-colors group">
-                            <div className="w-12 h-12 bg-[#eee] border border-[#ccc] flex items-center justify-center rounded-sm">
-                                <Building2 className="w-6 h-6 text-gray-400" />
-                            </div>
-                            <div className="flex-1">
-                                <div className="text-[13px] font-bold text-[#3b5998] cursor-pointer hover:underline" onClick={() => handleSelectMembership(mem.organizationId)}>
-                                    Organizasyon {mem.organizationId.substring(0,4)}...
+                    {myMemberships.map(mem => {
+                        const canManage = mem.role === 'ADMIN' || mem.role === 'MODERATOR';
+                        return (
+                            <div key={mem.id} className="flex items-center gap-3 p-2 border border-[#e9e9e9] rounded-sm hover:bg-[#fff9d7] transition-colors group">
+                                <div className="w-12 h-12 bg-[#eee] border border-[#ccc] flex items-center justify-center rounded-sm">
+                                    <Building2 className="w-6 h-6 text-gray-400" />
                                 </div>
-                                <div className="text-[10px] text-gray-500">Rol: {mem.role}</div>
+                                <div className="flex-1">
+                                    <div 
+                                        className="text-[13px] font-bold text-[#3b5998] cursor-pointer hover:underline" 
+                                        onClick={() => handleSelectMembership(mem.organizationId, mem.role)}
+                                    >
+                                        Organizasyon {mem.organizationId.substring(0,4)}...
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                                        Rol: <span className="font-bold">{mem.role}</span>
+                                    </div>
+                                </div>
+                                
+                                {canManage ? (
+                                    <button 
+                                        onClick={() => handleSelectMembership(mem.organizationId, mem.role)} 
+                                        className="bg-[#3b5998] border border-[#29447e] text-white text-[10px] font-bold px-3 py-1 hover:bg-[#2d4373] rounded-sm flex items-center gap-1"
+                                    >
+                                        <Settings className="w-3 h-3" /> Yönet
+                                    </button>
+                                ) : (
+                                    <button 
+                                        onClick={() => navigate(`/org/${mem.organizationId}`)} 
+                                        className="bg-[#f5f6f7] border border-[#ccc] text-[#333] text-[10px] font-bold px-3 py-1 hover:bg-[#e9e9e9] rounded-sm flex items-center gap-1"
+                                    >
+                                        <Eye className="w-3 h-3" /> Görüntüle
+                                    </button>
+                                )}
                             </div>
-                            <button onClick={() => handleSelectMembership(mem.organizationId)} className="bg-[#f5f6f7] border border-[#ccc] text-[#333] text-[10px] font-bold px-3 py-1 hover:bg-[#e9e9e9] rounded-sm">
-                                Yönet
-                            </button>
-                        </div>
-                    ))}
+                        );
+                    })}
                     {myMemberships.length === 0 && (
                         <div className="text-center py-10 text-gray-400 text-xs">Henüz bir işletmeye üye değilsiniz.</div>
                     )}

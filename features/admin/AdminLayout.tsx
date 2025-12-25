@@ -15,7 +15,7 @@ export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
   const { contextType, activeEntityId, isHydrated, switchToPersonal } = useContextStore();
   const { currentUser, logout } = useAuthStore();
-  const { startOrganizationSession, currentOrganization } = useOrganizationStore();
+  const { startOrganizationSession, currentOrganization, activeRole } = useOrganizationStore();
 
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [managedOrgs, setManagedOrgs] = useState<Organization[]>([]);
@@ -23,10 +23,20 @@ export const AdminLayout: React.FC = () => {
 
   // 1. Security Check & Hydration
   useEffect(() => {
+    // Basic Hydration Check
     if (isHydrated && contextType === 'PERSONAL') {
       navigate('/');
+      return;
     }
-  }, [contextType, isHydrated, navigate]);
+
+    // RBAC: Role Based Access Control
+    // If the user has hydrated, is in an org context, but is a "MEMBER" -> KICK OUT
+    if (isHydrated && contextType === 'ORGANIZATION' && activeRole === 'MEMBER') {
+        console.warn("Security Alert: Unauthorized Admin Access Attempt redirected.");
+        navigate('/');
+    }
+
+  }, [contextType, isHydrated, activeRole, navigate]);
 
   // 2. Load Managed Pages for Dropdown
   useEffect(() => {
