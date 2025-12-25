@@ -1,18 +1,20 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { User, AppContextType } from '../types';
+
+type ContextType = 'PERSONAL' | 'ORGANIZATION';
 
 interface ContextState {
-  contextType: AppContextType;
+  contextType: ContextType;
   activeEntityId: string | null;
-  activeEntityName: string;
-  activeEntityAvatar: string;
-  
-  // Actions
-  setContext: (type: AppContextType, id: string | null, name: string, avatar: string) => void;
-  switchToPersonal: (user: { id: string; name: string; avatar: string }) => void;
-  resetContext: () => void;
+  activeEntityName: string | null;
+  activeEntityAvatar: string | null;
+  activeEntityRole: string | null;
+  isHydrated: boolean; // Storage'dan veri okundu mu?
+
+  switchToPersonal: (userId: string, userName: string, userAvatar: string) => void;
+  switchToOrganization: (orgId: string, orgName: string, orgAvatar: string, role: string) => void;
+  setHydrated: () => void;
 }
 
 export const useContextStore = create<ContextState>()(
@@ -20,37 +22,35 @@ export const useContextStore = create<ContextState>()(
     (set) => ({
       contextType: 'PERSONAL',
       activeEntityId: null,
-      activeEntityName: '',
-      activeEntityAvatar: '',
+      activeEntityName: null,
+      activeEntityAvatar: null,
+      activeEntityRole: null,
+      isHydrated: false,
 
-      setContext: (type, id, name, avatar) => {
-        set({
-          contextType: type,
-          activeEntityId: id,
-          activeEntityName: name,
-          activeEntityAvatar: avatar
-        });
-      },
-
-      switchToPersonal: (user) => {
-        set({
-          contextType: 'PERSONAL',
-          activeEntityId: user.id,
-          activeEntityName: user.name,
-          activeEntityAvatar: user.avatar
-        });
-      },
-      
-      resetContext: () => set({
+      switchToPersonal: (userId, userName, userAvatar) => set({
         contextType: 'PERSONAL',
-        activeEntityId: null,
-        activeEntityName: '',
-        activeEntityAvatar: ''
+        activeEntityId: userId,
+        activeEntityName: userName,
+        activeEntityAvatar: userAvatar,
+        activeEntityRole: null
       }),
+
+      switchToOrganization: (orgId, orgName, orgAvatar, role) => set({
+        contextType: 'ORGANIZATION',
+        activeEntityId: orgId,
+        activeEntityName: orgName,
+        activeEntityAvatar: orgAvatar,
+        activeEntityRole: role
+      }),
+      
+      setHydrated: () => set({ isHydrated: true })
     }),
     {
-      name: 'hotel-academy-context-v3',
+      name: 'app-context-stable',
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated();
+      }
     }
   )
 );
