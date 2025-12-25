@@ -14,57 +14,47 @@ import { getJoinRequests } from '../../services/db';
 export const AdminLayout: React.FC = () => {
   const { currentUser } = useAuthStore();
   const { contextType, activeEntityId } = useContextStore();
-  const { currentOrganization, restoreActiveSession, switchToPersonalAction } = useOrganizationStore();
+  const { currentOrganization, switchOrganization, switchToPersonal } = useOrganizationStore();
   
   const navigate = useNavigate();
   const { can } = usePermission();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
-  const [isRestoring, setIsRestoring] = useState(true);
+  const [isRecovering, setIsRecovering] = useState(true);
 
-  // --- GATEKEEPER ---
+  // --- RECOVERY LOGIC (F5 Refresh Fix) ---
   useEffect(() => {
-      const verifySession = async () => {
-          // 1. If explicitly in Personal Mode, kick out immediately.
-          if (contextType === 'PERSONAL') {
-              console.warn("[AdminLayout] Access attempt in PERSONAL mode. Redirecting...");
-              navigate('/');
+      const ensureData = async () => {
+          // If we have organization data and it matches the context ID, we are good.
+          if (currentOrganization && currentOrganization.id === activeEntityId) {
+              setIsRecovering(false);
               return;
           }
 
-          // 2. If in Organization Context but data is stale
+          // If we are in ORGANIZATION mode but missing data (e.g., Refresh), fetch it.
           if (contextType === 'ORGANIZATION' && activeEntityId) {
-              
-              if (currentOrganization && currentOrganization.id === activeEntityId) {
-                  // Data matches context, all good
-                  setIsRestoring(false);
-                  return;
-              }
-
-              // Data mismatch or missing -> Restore
-              console.log("[AdminLayout] Hydrating Organization Session...");
-              const success = await restoreActiveSession(activeEntityId);
-              
+              console.log("[AdminLayout] Data missing after refresh. Recovering...");
+              const success = await switchOrganization(activeEntityId);
               if (!success) {
-                  console.error("[AdminLayout] Restore failed. Access denied.");
-                  navigate('/'); // Kick out
-              } else {
-                  setIsRestoring(false); // Let them in
+                  // Recovery failed (deleted org, lost perms), kick to personal
+                  await switchToPersonal();
+                  navigate('/');
               }
+              setIsRecovering(false);
           } else {
-              // Context is organization but no ID? Invalid state.
+              // Should be caught by Route Guard, but safe fallback
               navigate('/');
           }
       };
 
-      verifySession();
-  }, [contextType, activeEntityId, navigate]); 
+      ensureData();
+  }, [contextType, activeEntityId, currentOrganization?.id]);
 
   // Fetch Badge Counts
   useEffect(() => {
       const fetchCount = async () => {
-          if (!isRestoring && currentOrganization && can('canApproveRequests')) {
+          if (!isRecovering && currentOrganization && can('canApproveRequests')) {
               try {
                   const reqs = await getJoinRequests(currentOrganization.id);
                   setPendingCount(reqs.length);
@@ -74,37 +64,39 @@ export const AdminLayout: React.FC = () => {
           }
       };
       fetchCount();
-  }, [isRestoring, currentOrganization]);
+  }, [isRecovering, currentOrganization]);
 
-  // --- LOADING SCREEN ---
-  // Ensure solid background to prevent ghost UI
-  if (isRestoring || (contextType === 'ORGANIZATION' && !currentOrganization)) {
+  const handleSwitchToPersonal = async () => {
+      await switchToPersonal();
+      navigate('/');
+  };
+
+  // --- LOADING STATE ---
+  if (isRecovering || !currentOrganization) {
       return (
-          <div className="h-screen w-screen flex items-center justify-center bg-[#eff0f2] text-slate-900 absolute top-0 left-0 z-[9999]">
+          <div className="h-screen w-screen flex items-center justify-center bg-[#eff0f2] text-slate-900 absolute inset-0 z-[9999]">
               <div className="flex flex-col items-center gap-4">
                   <div className="w-12 h-12 border-4 border-[#3b5998] border-t-transparent rounded-full animate-spin"></div>
                   <div className="flex flex-col items-center">
-                      <span className="text-sm font-bold text-[#3b5998]">Yönetim Paneli Hazırlanıyor...</span>
-                      <span className="text-xs text-slate-500">Veriler senkronize ediliyor</span>
+                      <span className="text-sm font-bold text-[#3b5998]">Yönetim Paneli Yükleniyor...</span>
                   </div>
               </div>
           </div>
       );
   }
 
-  // Final Safety Check
-  if (!currentOrganization) return null;
-
-  if (!can('adminAccess')) {
+  // --- PERMISSION CHECK ---
+  // If user loaded but permissions lost/revoked
+  if (!can('adminAccess') && currentUser?.role !== 'super_admin') {
       return (
-          <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#eff0f2] absolute top-0 left-0 z-[9999]">
+          <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#eff0f2] absolute inset-0 z-[9999]">
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-[#d8dfea] mb-4 flex flex-col items-center">
                   <Lock className="w-12 h-12 text-red-600 mb-4" />
                   <h2 className="text-xl font-bold text-slate-900">Erişim Reddedildi</h2>
                   <p className="text-sm text-slate-500 mt-2 text-center max-w-xs">
                       Bu organizasyonun yönetim paneline erişim yetkiniz bulunmuyor.
                   </p>
-                  <button onClick={() => navigate('/')} className="mt-6 bg-[#3b5998] text-white px-6 py-2 rounded-lg font-bold hover:bg-[#2d4373] transition-colors text-sm">
+                  <button onClick={handleSwitchToPersonal} className="mt-6 bg-[#3b5998] text-white px-6 py-2 rounded-lg font-bold hover:bg-[#2d4373] transition-colors text-sm">
                       Ana Sayfaya Dön
                   </button>
               </div>
@@ -127,13 +119,8 @@ export const AdminLayout: React.FC = () => {
     { path: '/admin/settings', icon: Settings, label: 'Ayarlar', show: can('adminAccess') },
   ];
 
-  const handleSwitchToPersonal = async () => {
-      await switchToPersonalAction();
-      navigate('/');
-  };
-
   return (
-    // CRITICAL: Added z-50 and absolute isolation to ensure it overlays any previous route animations (Ghost UI Fix)
+    // Unique Key ensures React destroys the entire tree when Org changes
     <div 
         key={activeEntityId} 
         className="flex h-screen w-full bg-[#eff0f2] text-slate-900 admin-panel overflow-hidden absolute inset-0 z-50"
@@ -148,13 +135,13 @@ export const AdminLayout: React.FC = () => {
           </button>
       </div>
 
-      {/* LEFT SIDEBAR (Desktop Fixed, Mobile Toggle) */}
+      {/* LEFT SIDEBAR */}
       <aside className={`
           fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-[#d8dfea] transform transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:flex-shrink-0 overflow-y-auto flex flex-col
           ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
           <div className="p-4 flex flex-col gap-6 flex-1 mt-12 md:mt-0">
-              {/* Organization Identity Card */}
+              {/* Identity Card */}
               <div className="bg-[#f7f7f7] border border-[#e9e9e9] p-4 rounded-xl shadow-sm flex flex-col items-center text-center">
                   <div className="w-16 h-16 bg-white rounded-lg mb-3 overflow-hidden border border-[#d8dfea]">
                       {currentOrganization.logoUrl ? (
@@ -167,7 +154,7 @@ export const AdminLayout: React.FC = () => {
                   <span className="text-[10px] text-slate-500 mt-1 uppercase tracking-wide font-bold">Yönetim Paneli</span>
               </div>
 
-              {/* Navigation Links */}
+              {/* Navigation */}
               <nav className="flex flex-col gap-1">
                   <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Araçlar</div>
                   {navItems.filter(i => i.show).map((item) => (
@@ -196,7 +183,7 @@ export const AdminLayout: React.FC = () => {
               </nav>
           </div>
 
-          {/* EXIT BUTTON (Since we removed DashboardLayout) */}
+          {/* EXIT */}
           <div className="p-4 border-t border-[#d8dfea] bg-[#f7f7f7]">
               <button 
                   onClick={handleSwitchToPersonal}
@@ -207,12 +194,12 @@ export const AdminLayout: React.FC = () => {
               </button>
               <div className="mt-3 text-center text-[9px] text-slate-400 leading-relaxed">
                   Hotel Academy © 2024<br/>
-                  Business Manager v2.2
+                  Business Manager v2.3
               </div>
           </div>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
+      {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto relative w-full h-full bg-[#eff0f5] pt-14 md:pt-6 px-2 md:px-6 pb-20">
           <Outlet />
       </main>

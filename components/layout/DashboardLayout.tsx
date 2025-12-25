@@ -21,11 +21,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const navigate = useNavigate();
   const { currentUser, logout } = useAuthStore();
   
-  // Use Context Store for Display
-  const { contextType, activeEntityId, activeEntityName, activeEntityAvatar, ensureContext } = useContextStore();
+  // Display Data
+  const { activeEntityName, activeEntityAvatar } = useContextStore();
   
-  // Use Organization Store for Actions
-  const { switchToOrganizationAction, switchToPersonalAction } = useOrganizationStore();
+  // Actions
+  const { switchOrganization, switchToPersonal } = useOrganizationStore();
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
@@ -35,14 +35,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const [isSwitching, setIsSwitching] = useState(false);
   const [targetName, setTargetName] = useState('');
 
-  // 1. Initial Load & Hydration
+  // Initial Load
   useEffect(() => {
       const initLayout = async () => {
           if (currentUser) {
-              // Ensure we have a valid visual context (defaults to Personal if none)
-              ensureContext(currentUser);
-              
-              // Load selectable organizations (Workspaces)
               try {
                   const orgs = await getUserManagedPages(currentUser.id);
                   setManagedOrgs(orgs);
@@ -55,90 +51,72 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       initLayout();
   }, [currentUser?.id]);
 
-  // 2. ATOMIC CONTEXT SWITCH HANDLER
+  // --- ATOMIC SWITCH HANDLER ---
   const handleContextSwitch = async (target: 'PERSONAL' | Organization) => {
       if (!currentUser || isSwitching) return;
-      
-      // Close dropdown immediately
       setIsContextOpen(false);
 
       if (target === 'PERSONAL') {
-          // Check if already in personal
-          if (contextType === 'PERSONAL') return; 
-          
-          setIsSwitching(true);
-          setTargetName(currentUser.name);
-          
-          // Execute Atomic Switch
-          await switchToPersonalAction();
-          navigate('/'); 
-          
-          setTimeout(() => setIsSwitching(false), 500); // Visual padding
-      
+          // Already in Personal mode? (Route guard handles this usually, but good to check)
+          // Since we are in DashboardLayout, we ARE in Personal mode (or should be).
+          // Just refresh/navigate home.
+          navigate('/');
+          return;
       } else {
-          // Check if already in this org
-          if (activeEntityId === target.id) return; 
-
+          // Switch to Organization
           setIsSwitching(true);
           setTargetName(target.name);
 
-          // Execute Atomic Switch
-          const success = await switchToOrganizationAction(target.id);
+          // 1. Perform atomic switch (Data Fetch + Context Update)
+          const success = await switchOrganization(target.id);
           
           if (success) {
-              navigate('/admin'); // Force navigation to admin root
+              // 2. Navigate (App.tsx guard will render AdminLayout)
+              navigate('/admin'); 
           } else {
               alert("Hesaba geçiş yapılamadı. Erişim yetkiniz olmayabilir.");
+              setIsSwitching(false);
           }
-          
-          setTimeout(() => setIsSwitching(false), 500);
       }
   };
 
-  // --- VISUAL THEME ---
-  const isOrgMode = contextType === 'ORGANIZATION';
-  const headerBg = isOrgMode ? 'bg-[#336699]' : 'bg-white/80 backdrop-blur-md';
-  const headerText = isOrgMode ? 'text-white' : 'text-gray-800';
-  const subText = isOrgMode ? 'text-blue-100' : 'text-gray-400';
+  // Static Visuals for Personal Mode
+  const headerBg = 'bg-white/80 backdrop-blur-md';
+  const headerText = 'text-gray-800';
+  const subText = 'text-gray-400';
 
-  // --- DYNAMIC HEADER CONFIGURATION ---
+  // --- HEADER CONFIG ---
   const getHeaderConfig = () => {
     const path = location.pathname;
 
-    // CASE A: HOME / DASHBOARD / ADMIN (Context Aware)
-    if (path === '/' || path.startsWith('/admin') || path.startsWith('/journey') || path.startsWith('/explore')) {
+    // Home / Explore
+    if (path === '/' || path.startsWith('/journey') || path.startsWith('/explore')) {
       return {
         showBack: false,
         titleComponent: (
           <div className="relative">
               <button 
                 onClick={() => setIsContextOpen(!isContextOpen)}
-                className={`flex items-center gap-2 p-1 pr-2 rounded-full transition-colors ${isOrgMode ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}
+                className="flex items-center gap-2 p-1 pr-2 rounded-full transition-colors hover:bg-gray-100"
               >
-                {/* Active Avatar */}
-                <div className={`w-9 h-9 rounded-full border flex items-center justify-center overflow-hidden shrink-0 ${isOrgMode ? 'border-white/20 bg-white' : 'border-gray-200 bg-gray-100'}`}>
-                   {isOrgMode ? (
-                       activeEntityAvatar ? <img src={activeEntityAvatar} className="w-full h-full object-cover" /> : <Building2 className="w-5 h-5 text-gray-400" />
-                   ) : (
-                       <Avatar src={activeEntityAvatar} alt={activeEntityName} size="sm" />
-                   )}
+                <div className="w-9 h-9 rounded-full border border-gray-200 bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+                   <Avatar src={currentUser?.avatar} alt={currentUser?.name || ''} size="sm" />
                 </div>
                 
-                {/* Active Name & Role */}
                 <div className="flex flex-col items-start min-w-[100px] max-w-[160px]">
-                    <span className={`text-[9px] font-bold uppercase leading-none mb-0.5 ${subText}`}>
-                        {isOrgMode ? 'Kurumsal Hesap' : 'Bireysel Hesap'}
+                    <span className="text-[9px] font-bold uppercase leading-none mb-0.5 text-gray-400">
+                        Bireysel Hesap
                     </span>
                     <div className="flex items-center gap-1 w-full">
-                        <span className={`text-sm font-bold leading-none truncate ${headerText}`}>
-                            {activeEntityName}
+                        <span className="text-sm font-bold leading-none truncate text-gray-800">
+                            {currentUser?.name}
                         </span>
-                        <ChevronDown className={`w-3 h-3 shrink-0 ${isOrgMode ? 'text-white/70' : 'text-gray-400'}`} />
+                        <ChevronDown className="w-3 h-3 shrink-0 text-gray-400" />
                     </div>
                 </div>
               </button>
 
-              {/* UNIFIED CONTEXT DROPDOWN */}
+              {/* DROPDOWN */}
               <AnimatePresence>
                   {isContextOpen && (
                       <>
@@ -149,73 +127,58 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                             exit={{ opacity: 0, scale: 0.95 }}
                             className="absolute top-full left-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden ring-1 ring-black/5"
                         >
-                            {/* SECTION 1: PERSONAL ACCOUNT */}
+                            {/* Personal Section */}
                             <div className="p-2">
                                 <div className="text-[10px] font-bold text-gray-400 uppercase px-3 py-2 flex items-center gap-2">
                                     <User className="w-3 h-3" /> Kişisel Profil
                                 </div>
                                 <button 
-                                    onClick={() => handleContextSwitch('PERSONAL')}
-                                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors group ${
-                                        !isOrgMode ? 'bg-blue-50 border border-blue-100' : 'hover:bg-gray-50 border border-transparent'
-                                    }`}
+                                    className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors bg-blue-50 border border-blue-100 cursor-default"
                                 >
                                     <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden relative border border-gray-200 shrink-0">
                                         <Avatar src={currentUser?.avatar} alt={currentUser?.name || ''} size="md" />
                                         <div className="absolute bottom-0 right-0 bg-white rounded-full p-0.5 shadow-sm">
-                                            <User className="w-3 h-3 text-gray-600" />
+                                            <Check className="w-3 h-3 text-blue-600" />
                                         </div>
                                     </div>
                                     <div className="flex-1 text-left min-w-0">
-                                        <div className={`text-sm font-bold truncate ${!isOrgMode ? 'text-blue-900' : 'text-gray-900'}`}>
-                                            {currentUser?.name}
-                                        </div>
-                                        <div className="text-[10px] text-gray-500">Öğrenim & Kariyer</div>
+                                        <div className="text-sm font-bold truncate text-blue-900">{currentUser?.name}</div>
+                                        <div className="text-[10px] text-gray-500">Aktif Oturum</div>
                                     </div>
-                                    {!isOrgMode && <div className="bg-blue-500 rounded-full p-1"><Check className="w-3 h-3 text-white" /></div>}
                                 </button>
                             </div>
 
                             <div className="h-px bg-gray-100 mx-2" />
 
-                            {/* SECTION 2: MANAGED ORGANIZATIONS */}
+                            {/* Organizations Section */}
                             <div className="p-2 bg-gray-50/50">
                                 <div className="text-[10px] font-bold text-gray-400 uppercase px-3 py-2 flex items-center gap-2 justify-between">
                                     <span className="flex items-center gap-2"><LayoutDashboard className="w-3 h-3" /> Yönetim Panelleri</span>
-                                    <span className="bg-gray-200 text-gray-600 px-1.5 rounded text-[9px]">{managedOrgs.length}</span>
                                 </div>
                                 
                                 <div className="space-y-1 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
-                                    {managedOrgs.map(org => {
-                                        const isActive = isOrgMode && activeEntityId === org.id;
-                                        return (
-                                            <button 
-                                                key={org.id}
-                                                onClick={() => handleContextSwitch(org)}
-                                                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors border ${
-                                                    isActive 
-                                                    ? 'bg-white border-blue-500 shadow-md relative z-10' 
-                                                    : 'bg-white border-gray-100 hover:border-blue-300 hover:shadow-sm'
-                                                }`}
-                                            >
-                                                <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden relative shrink-0">
-                                                    {org.logoUrl ? (
-                                                        <img src={org.logoUrl} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center font-bold text-gray-400 bg-gray-50">{org.name[0]}</div>
-                                                    )}
-                                                    <div className="absolute bottom-0 right-0 bg-white rounded-tl-md p-0.5 shadow-sm border-t border-l border-gray-100">
-                                                        <Building2 className="w-3 h-3 text-gray-600" />
-                                                    </div>
+                                    {managedOrgs.map(org => (
+                                        <button 
+                                            key={org.id}
+                                            onClick={() => handleContextSwitch(org)}
+                                            className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors border bg-white border-gray-100 hover:border-blue-300 hover:shadow-sm group"
+                                        >
+                                            <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden relative shrink-0">
+                                                {org.logoUrl ? (
+                                                    <img src={org.logoUrl} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center font-bold text-gray-400 bg-gray-50">{org.name[0]}</div>
+                                                )}
+                                                <div className="absolute bottom-0 right-0 bg-white rounded-tl-md p-0.5 shadow-sm border-t border-l border-gray-100 group-hover:bg-blue-50">
+                                                    <Building2 className="w-3 h-3 text-gray-600 group-hover:text-blue-600" />
                                                 </div>
-                                                <div className="flex-1 text-left min-w-0">
-                                                    <div className={`text-sm font-bold truncate ${isActive ? 'text-blue-900' : 'text-gray-900'}`}>{org.name}</div>
-                                                    <div className="text-[10px] text-gray-500">İşletme Hesabı</div>
-                                                </div>
-                                                {isActive && <div className="bg-blue-500 rounded-full p-1"><Check className="w-3 h-3 text-white" /></div>}
-                                            </button>
-                                        );
-                                    })}
+                                            </div>
+                                            <div className="flex-1 text-left min-w-0">
+                                                <div className="text-sm font-bold truncate text-gray-900 group-hover:text-blue-900">{org.name}</div>
+                                                <div className="text-[10px] text-gray-500">İşletme Hesabına Geç</div>
+                                            </div>
+                                        </button>
+                                    ))}
 
                                     {managedOrgs.length === 0 && (
                                         <div className="text-center p-4 text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">
@@ -225,7 +188,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                                 </div>
                             </div>
 
-                            {/* SECTION 3: FOOTER ACTIONS */}
+                            {/* Footer */}
                             <div className="bg-gray-50 border-t border-gray-100 p-2 flex gap-2">
                                 <button 
                                     onClick={() => { setIsContextOpen(false); navigate('/lobby'); }}
@@ -247,7 +210,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
           </div>
         ),
         rightAction: (
-          <button className={`p-2 rounded-full transition-colors relative ${isOrgMode ? 'text-white hover:bg-white/10' : 'text-gray-600 hover:bg-gray-100'}`}>
+          <button className="p-2 rounded-full transition-colors relative text-gray-600 hover:bg-gray-100">
             <Bell className="w-6 h-6" />
             <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
           </button>
@@ -255,7 +218,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       };
     }
 
-    // CASE B: PROFILE
+    // Profile
     if (path === '/profile') {
       return {
         showBack: false,
@@ -276,7 +239,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       };
     }
 
-    // CASE C: GENERIC PAGES
+    // Generic
     return {
       showBack: true,
       titleComponent: null,
@@ -289,7 +252,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   return (
     <div className="flex flex-col h-screen w-full bg-surface overflow-hidden supports-[height:100dvh]:h-[100dvh] relative">
       
-      {/* 0. SWITCHING OVERLAY (Facebook Style) */}
+      {/* SWITCHING OVERLAY */}
       <AnimatePresence>
           {isSwitching && (
               <motion.div 
@@ -302,50 +265,47 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                       <Loader2 className="w-8 h-8 animate-spin text-primary" />
                   </div>
                   <h3 className="text-lg font-bold text-gray-800">Geçiş Yapılıyor...</h3>
-                  <p className="text-sm text-gray-500">{targetName} olarak oturum açılıyor</p>
+                  <p className="text-sm text-gray-500">{targetName} yönetimine bağlanılıyor</p>
               </motion.div>
           )}
       </AnimatePresence>
 
-      {/* 1. Header Area */}
-      <div className={`shrink-0 z-50 border-b transition-all duration-300 ${headerBg} ${isOrgMode ? 'border-[#29487d]' : 'border-gray-100'}`}>
+      {/* Header Area */}
+      <div className={`shrink-0 z-50 border-b transition-all duration-300 ${headerBg} border-gray-100`}>
           <header className="px-4 py-3 min-h-[60px] flex items-center justify-between">
               
-              {/* LEFT AREA */}
               <div className="flex items-center gap-3">
                   {config.showBack ? (
                       <button 
                         onClick={() => navigate(-1)} 
-                        className={`p-2 -ml-2 rounded-full transition-colors ${isOrgMode ? 'text-white hover:bg-white/10' : 'text-gray-800 hover:bg-black/5'}`}
+                        className="p-2 -ml-2 rounded-full transition-colors text-gray-800 hover:bg-black/5"
                       >
                           <ArrowLeft className="w-6 h-6" />
                       </button>
                   ) : null}
-                  
                   {config.titleComponent}
               </div>
 
-              {/* RIGHT AREA */}
               <div className="flex items-center gap-2">
                   {config.rightAction}
               </div>
           </header>
       </div>
       
-      {/* 2. Main Content Area */}
-      <main className={`flex-1 overflow-y-auto scroll-smooth no-scrollbar relative w-full ${!isOrgMode ? 'pb-24' : 'pb-4'}`}>
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto scroll-smooth no-scrollbar relative w-full pb-24">
         {children}
       </main>
 
-      {/* 3. Global Drawers */}
+      {/* Drawers */}
       <AnimatePresence>
         {isSettingsOpen && (
             <SettingsDrawer onClose={() => setIsSettingsOpen(false)} />
         )}
       </AnimatePresence>
 
-      {/* 4. Bottom Navigation - Only show in PERSONAL mode */}
-      {!isOrgMode && <BottomNavigation />}
+      {/* Bottom Nav */}
+      <BottomNavigation />
     </div>
   );
 };

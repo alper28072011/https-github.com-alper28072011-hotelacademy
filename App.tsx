@@ -4,7 +4,7 @@ import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-d
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from './stores/useAppStore';
 import { useAuthStore } from './stores/useAuthStore';
-import { useOrganizationStore } from './stores/useOrganizationStore';
+import { useContextStore } from './stores/useContextStore';
 import { useTelemetry } from './hooks/useTelemetry';
 
 import { LoginPage } from './features/auth/LoginPage';
@@ -67,6 +67,25 @@ const SuperAdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return <>{children}</>;
 };
 
+// --- STRICT CONTEXT GUARDS ---
+// Prevents "Ghost UI" by ensuring URL matches Context Store
+
+const RequireAdminContext: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { contextType } = useContextStore();
+    if (contextType !== 'ORGANIZATION') {
+        return <Navigate to="/" replace />;
+    }
+    return <>{children}</>;
+};
+
+const RequireUserContext: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { contextType } = useContextStore();
+    if (contextType === 'ORGANIZATION') {
+        return <Navigate to="/admin" replace />;
+    }
+    return <>{children}</>;
+};
+
 const TelemetryProvider = () => {
     useTelemetry(); 
     return null;
@@ -83,17 +102,21 @@ const AnimatedRoutes = () => {
                 <Routes location={location} key={location.pathname}>
                     {isAuthenticated ? (
                        <>
+                          {/* PUBLIC / SHARED ROUTES (Accessible in both modes, but usually personal) */}
                           <Route path="/org/:orgId" element={<PageTransition><OrganizationProfile /></PageTransition>} />
                           <Route path="/hotel/:orgId" element={<Navigate to={`/org/${window.location.hash.split('/').pop()}`} replace />} />
-
                           <Route path="/course/:courseId" element={<CourseIntroPage />} />
                           <Route path="/course/:courseId/play" element={<CoursePlayerPage />} />
                           
                           {/* 
-                              CRITICAL FIX: ADMIN ROUTES MUST BE OUTSIDE DashboardLayout 
-                              This prevents double header rendering and CSS layout conflicts (h-screen inside h-screen).
+                              ADMIN ROUTES - Strictly Guarded
+                              If you are NOT in Organization context, you get kicked to /
                           */}
-                          <Route path="/admin" element={<AdminLayout />}>
+                          <Route path="/admin" element={
+                              <RequireAdminContext>
+                                  <AdminLayout />
+                              </RequireAdminContext>
+                          }>
                               <Route index element={<PageTransition><OrganizationManager /></PageTransition>} /> 
                               <Route path="organization" element={<PageTransition><OrganizationManager /></PageTransition>} />
                               <Route path="requests" element={<PageTransition><TeamRequests /></PageTransition>} />
@@ -124,23 +147,28 @@ const AnimatedRoutes = () => {
                               </SuperAdminGuard>
                           } />
 
-                          {/* USER APP ROUTES - WRAPPED IN DASHBOARD LAYOUT */}
+                          {/* 
+                              USER APP ROUTES - Strictly Guarded
+                              If you ARE in Organization context, you get kicked to /admin
+                          */}
                           <Route 
                             path="/*" 
                             element={
-                            <DashboardLayout>
-                                <Routes>
-                                    <Route path="/" element={<PageTransition><DashboardPage /></PageTransition>} />
-                                    <Route path="/journey" element={<PageTransition><JourneyMap /></PageTransition>} />
-                                    <Route path="/profile" element={<PageTransition><ProfilePage /></PageTransition>} />
-                                    <Route path="/user/:userId" element={<PageTransition><PublicProfilePage /></PageTransition>} />
-                                    <Route path="/operations" element={<PageTransition><OperationsPage /></PageTransition>} />
-                                    <Route path="/report" element={<PageTransition><ReportPage /></PageTransition>} />
-                                    <Route path="/explore" element={<PageTransition><ExplorePage /></PageTransition>} />
-                                    <Route path="/lobby" element={<PageTransition><OrganizationLobby /></PageTransition>} /> 
-                                    <Route path="*" element={<Navigate to="/" replace />} />
-                                </Routes>
-                            </DashboardLayout>
+                            <RequireUserContext>
+                                <DashboardLayout>
+                                    <Routes>
+                                        <Route path="/" element={<PageTransition><DashboardPage /></PageTransition>} />
+                                        <Route path="/journey" element={<PageTransition><JourneyMap /></PageTransition>} />
+                                        <Route path="/profile" element={<PageTransition><ProfilePage /></PageTransition>} />
+                                        <Route path="/user/:userId" element={<PageTransition><PublicProfilePage /></PageTransition>} />
+                                        <Route path="/operations" element={<PageTransition><OperationsPage /></PageTransition>} />
+                                        <Route path="/report" element={<PageTransition><ReportPage /></PageTransition>} />
+                                        <Route path="/explore" element={<PageTransition><ExplorePage /></PageTransition>} />
+                                        <Route path="/lobby" element={<PageTransition><OrganizationLobby /></PageTransition>} /> 
+                                        <Route path="*" element={<Navigate to="/" replace />} />
+                                    </Routes>
+                                </DashboardLayout>
+                            </RequireUserContext>
                             } 
                         />
                        </>
@@ -172,7 +200,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
       fetchSystemSettings();
-      // Simulate quick hydration check (no heavy syncing here anymore)
+      // Simulate quick hydration check
       setTimeout(() => setIsHydrating(false), 500);
   }, []);
 

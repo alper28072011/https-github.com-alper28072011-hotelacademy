@@ -1,7 +1,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Organization, Membership, User, DepartmentType, UserRole, Channel } from '../types';
+import { Organization, Membership, UserRole, DepartmentType, Channel, PageRole } from '../types';
 import { getOrganizationDetails, getMyMemberships, switchUserActiveOrganization } from '../services/db';
 import { useAuthStore } from './useAuthStore';
 import { useContextStore } from './useContextStore';
@@ -14,17 +14,13 @@ interface OrganizationState {
   // Actions
   fetchMemberships: (userId: string) => Promise<void>;
   
-  // ATOMIC SWITCHERS
-  switchToOrganizationAction: (orgId: string) => Promise<boolean>;
-  switchToPersonalAction: () => Promise<void>;
+  // THE ATOMIC SWITCHER
+  switchOrganization: (orgId: string) => Promise<boolean>;
+  switchToPersonal: () => Promise<void>;
   
-  // SESSION RESTORATION (The Fix)
-  restoreActiveSession: (orgId: string) => Promise<boolean>;
-
-  // Optimistic UI Actions
+  // UI Helpers
   addLocalChannel: (channel: Channel) => void;
   removeLocalChannel: (channelId: string) => void;
-  
   reset: () => void;
 }
 
@@ -36,22 +32,16 @@ export const useOrganizationStore = create<OrganizationState>()(
       isLoading: false,
 
       fetchMemberships: async (userId: string) => {
-        set({ isLoading: true });
+        // Silent fetch
         const memberships = await getMyMemberships(userId);
-        set({ myMemberships: memberships, isLoading: false });
+        set({ myMemberships: memberships });
       },
 
       /**
-       * RESTORE SESSION (Fix for Page Reloads)
-       * Ensures that if we are in an ORG context, we have the fresh data and permissions.
+       * ATOMIC SWITCH: Ensures data is loaded BEFORE navigation happens.
+       * This prevents "White Screen" or "Ghost UI".
        */
-      restoreActiveSession: async (orgId: string): Promise<boolean> => {
-          // If we already have the correct data loaded, don't re-fetch aggressively
-          const current = get().currentOrganization;
-          if (current && current.id === orgId) {
-              return true; 
-          }
-
+      switchOrganization: async (orgId: string): Promise<boolean> => {
           set({ isLoading: true });
           const authStore = useAuthStore.getState();
           const contextStore = useContextStore.getState();
@@ -63,121 +53,109 @@ export const useOrganizationStore = create<OrganizationState>()(
           }
 
           try {
-              console.log(`[Restore] Restoring session for Org: ${orgId}`);
+              console.log(`[Switch] Starting switch to Org: ${orgId}`);
               
-              // 1. Fetch Fresh Data from DB (Don't trust stale local state)
+              // 1. Fetch Org Data from DB
               const org = await getOrganizationDetails(orgId);
               if (!org) {
-                  console.error("[Restore] Organization no longer exists.");
+                  console.error("[Switch] Organization not found.");
                   set({ isLoading: false });
                   return false;
               }
 
-              // 2. Validate Membership & Calculate Roles
+              // 2. Fetch User Membership for this Org
+              const memberships = await getMyMemberships(currentUser.id);
+              const membership = memberships.find(m => m.organizationId === orgId);
+              
+              // 3. Determine Roles
               let role: UserRole = 'staff';
-              let dept: DepartmentType = 'housekeeping';
-              let pageRole = 'MEMBER';
+              let dept: DepartmentType | null = null;
+              let pageRole: PageRole = 'MEMBER';
 
               if (org.ownerId === currentUser.id) {
                   role = 'manager';
                   dept = 'management';
                   pageRole = 'ADMIN';
+              } else if (membership && membership.status === 'ACTIVE') {
+                  pageRole = membership.role;
+                  role = (membership.role === 'ADMIN' || membership.role === 'MODERATOR') ? 'manager' : 'staff';
+                  dept = membership.department;
               } else {
-                  // Fetch fresh memberships
-                  const memberships = await getMyMemberships(currentUser.id);
-                  set({ myMemberships: memberships });
-                  
-                  const membership = memberships.find(m => m.organizationId === orgId);
-                  
-                  if (membership && membership.status === 'ACTIVE') {
-                      pageRole = membership.role;
-                      if (membership.role === 'ADMIN' || membership.role === 'MODERATOR') role = 'manager';
-                      else role = 'staff';
-                      dept = membership.department;
-                  } else {
-                      console.warn("[Restore] User is not a valid member.");
-                      set({ isLoading: false });
-                      return false;
-                  }
+                  console.error("[Switch] No valid membership.");
+                  set({ isLoading: false });
+                  return false;
               }
 
-              // 3. Update All Stores Atomically
-              set({ currentOrganization: org, isLoading: false });
+              // 4. UPDATE ALL STORES AT ONCE (Synchronous-like)
+              set({ currentOrganization: org, myMemberships: memberships, isLoading: false });
               
-              // Ensure Visual Context is correct
-              if (contextStore.activeEntityId !== org.id) {
-                  contextStore.switchToOrganization(org.id, org.name, org.logoUrl);
-              }
+              contextStore.setContext('ORGANIZATION', org.id, org.name, org.logoUrl);
 
-              // Ensure Auth Context is correct
               authStore.updateCurrentUser({
-                  currentOrganizationId: orgId,
+                  currentOrganizationId: org.id,
                   role: role,
                   department: dept,
                   pageRoles: { 
                       ...currentUser.pageRoles, 
-                      [orgId]: { role: pageRole as any, title: role === 'manager' ? 'Yönetici' : 'Personel' } 
+                      [orgId]: { role: pageRole, title: role === 'manager' ? 'Yönetici' : 'Personel' } 
                   }
               });
+
+              // 5. Persist to DB (Background)
+              switchUserActiveOrganization(currentUser.id, org.id);
 
               return true;
 
           } catch (e) {
-              console.error("[Restore] Critical failure:", e);
+              console.error("[Switch] Critical failure:", e);
               set({ isLoading: false });
               return false;
           }
       },
 
-      switchToOrganizationAction: async (orgId: string): Promise<boolean> => {
-        // Reuse restoration logic for consistency, but force fetch
-        return get().restoreActiveSession(orgId);
-      },
-
-      switchToPersonalAction: async () => {
+      switchToPersonal: async () => {
           set({ isLoading: true });
           const authStore = useAuthStore.getState();
           const contextStore = useContextStore.getState();
           const currentUser = authStore.currentUser;
 
-          if (!currentUser) return;
+          if (!currentUser) { 
+              set({ isLoading: false });
+              return; 
+          }
 
           console.log("[Switch] Reverting to Personal Mode");
-          await switchUserActiveOrganization(currentUser.id, ''); // DB Persist
-
+          
+          // 1. Update Stores
           set({ currentOrganization: null, isLoading: false });
-          contextStore.switchToPersonal(currentUser);
+          
+          contextStore.setContext('PERSONAL', currentUser.id, currentUser.name, currentUser.avatar);
+          
           authStore.updateCurrentUser({
               currentOrganizationId: null,
-              role: 'staff',
+              role: 'staff', // Reset to default scope
               department: null
           });
+
+          // 2. Persist DB
+          switchUserActiveOrganization(currentUser.id, '');
       },
 
+      // ... Helpers ...
       addLocalChannel: (channel: Channel) => set((state) => {
           if (!state.currentOrganization) return {};
-          return {
-              currentOrganization: {
-                  ...state.currentOrganization,
-                  channels: [channel, ...(state.currentOrganization.channels || [])]
-              }
-          };
+          return { currentOrganization: { ...state.currentOrganization, channels: [channel, ...(state.currentOrganization.channels || [])] } };
       }),
 
       removeLocalChannel: (channelId: string) => set((state) => {
           if (!state.currentOrganization) return {};
-          return {
-              currentOrganization: {
-                  ...state.currentOrganization,
-                  channels: (state.currentOrganization.channels || []).filter(c => c.id !== channelId)
-              }
-          };
+          return { currentOrganization: { ...state.currentOrganization, channels: (state.currentOrganization.channels || []).filter(c => c.id !== channelId) } };
       }),
 
       reset: () => set({ currentOrganization: null, myMemberships: [] })
     }),
     {
-      name: 'hotel-academy-org-v2',
+      name: 'hotel-academy-org-v3',
       storage: createJSONStorage(() => localStorage),
     }
   )
