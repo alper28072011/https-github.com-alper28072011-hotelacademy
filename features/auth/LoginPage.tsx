@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { useAppStore } from '../../stores/useAppStore';
 import { loginUser, registerUser } from '../../services/authService';
 import { getMyMemberships } from '../../services/db';
@@ -24,7 +23,6 @@ export const LoginPage: React.FC = () => {
     error, setError, 
     loginSuccess 
   } = useAuthStore();
-  const { switchOrganization } = useOrganizationStore();
 
   const [identifier, setIdentifier] = useState(''); 
   const [email, setEmail] = useState('');
@@ -48,10 +46,10 @@ export const LoginPage: React.FC = () => {
     setError(null);
     try {
       const user = await loginUser(identifier, password);
+      // Pre-fetch memberships to warm up cache, but don't switch context
       await getMyMemberships(user.id);
-      if (user.currentOrganizationId) {
-        await switchOrganization(user.currentOrganizationId);
-      }
+      
+      // Removed switchOrganization call to enforce Personal Mode start
       loginSuccess(user);
     } catch (err: any) {
       setError(err.message || "Giriş başarısız. Bilgilerini kontrol et.");

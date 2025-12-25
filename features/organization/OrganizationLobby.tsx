@@ -11,7 +11,7 @@ import { Organization, OrganizationSector, User, JoinRequest } from '../../types
 export const OrganizationLobby: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, loginSuccess } = useAuthStore();
-  const { switchOrganization, fetchMemberships, myMemberships } = useOrganizationStore();
+  const { switchToOrganizationAction, fetchMemberships, myMemberships } = useOrganizationStore();
   const [activeTab, setActiveTab] = useState<'FIND' | 'CREATE'>('FIND');
   
   // Search State
@@ -78,7 +78,7 @@ export const OrganizationLobby: React.FC = () => {
       
       if (org) {
           // 1. Switch Organization Context
-          await switchOrganization(org.id);
+          await switchToOrganizationAction(org.id);
           
           // 2. CRITICAL: Manually update AuthStore User State
           const updatedUser: User = {
@@ -103,7 +103,7 @@ export const OrganizationLobby: React.FC = () => {
       setSwitchingOrgId(orgId);
       
       try {
-          const success = await switchOrganization(orgId);
+          const success = await switchToOrganizationAction(orgId);
           if (success) {
               navigate('/');
           } else {
