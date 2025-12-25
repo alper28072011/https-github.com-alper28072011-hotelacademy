@@ -10,60 +10,33 @@ import { useContextStore } from '../../stores/useContextStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { usePermission } from '../../hooks/usePermission';
 import { getJoinRequests } from '../../services/db';
-import { getUserManagedPages } from '../../services/organizationService';
 
 export const AdminLayout: React.FC = () => {
   const { logout, currentUser } = useAuthStore();
-  const { contextType, switchToOrganization, activeEntityId } = useContextStore();
-  const { currentOrganization, isLoading, switchOrganization } = useOrganizationStore();
+  const { contextType } = useContextStore();
+  const { currentOrganization, isLoading } = useOrganizationStore();
   
   const navigate = useNavigate();
   const { can } = usePermission();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
-  const [isCheckingContext, setIsCheckingContext] = useState(true);
 
-  // --- SECURITY WALL: ENFORCE ORGANIZATION CONTEXT ---
+  // --- STRICT GATEKEEPER ---
   useEffect(() => {
-      let isMounted = true;
-
-      const enforceContext = async () => {
-          if (!currentUser) return;
-
-          // 1. If already in Organization Mode -> Ensure Store is Synced
-          if (contextType === 'ORGANIZATION' && activeEntityId) {
-              if (currentOrganization?.id !== activeEntityId) {
-                  console.log("AdminLayout: Syncing Organization Store...");
-                  await switchOrganization(activeEntityId);
-              }
-              if (isMounted) setIsCheckingContext(false);
-              return;
-          }
-
-          // 2. If in Personal Mode -> Try Auto-Switch to first managed page
-          if (contextType === 'PERSONAL') {
-              console.log("[AdminLayout] User is in Personal Mode. Attempting Auto-Switch...");
-              const managedPages = await getUserManagedPages(currentUser.id);
-              
-              if (managedPages.length > 0) {
-                  // Auto Switch to First Page
-                  const target = managedPages[0];
-                  switchToOrganization(target.id, target.name, target.logoUrl);
-                  await switchOrganization(target.id);
-                  if (isMounted) setIsCheckingContext(false);
-              } else {
-                  // No Pages to Manage -> Kick out
-                  alert("Yönetim paneline erişmek için bir işletme hesabınız olmalıdır.");
-                  navigate('/');
-              }
-          }
-      };
-
-      enforceContext();
+      // If we are in PERSONAL context, we shouldn't be here.
+      if (contextType === 'PERSONAL') {
+          console.warn("[AdminLayout] Access attempt in PERSONAL mode. Redirecting...");
+          navigate('/');
+          return;
+      }
       
-      return () => { isMounted = false; };
-  }, [contextType, currentUser, activeEntityId]);
+      // If we are in ORG context but no ORG is loaded, something went wrong with the switch.
+      if (contextType === 'ORGANIZATION' && !currentOrganization && !isLoading) {
+          console.error("[AdminLayout] Context is ORGANIZATION but no data. Redirecting...");
+          navigate('/');
+      }
+  }, [contextType, currentOrganization, isLoading, navigate]);
 
   // Fetch Badge Counts
   useEffect(() => {
@@ -73,11 +46,23 @@ export const AdminLayout: React.FC = () => {
               setPendingCount(reqs.length);
           }
       };
-      if (!isCheckingContext) fetchCount();
-  }, [currentOrganization, isCheckingContext]);
+      fetchCount();
+  }, [currentOrganization]);
 
-  if (isLoading || isCheckingContext) return <div className="h-screen flex items-center justify-center bg-[#eff0f5]"><Loader2 className="w-6 h-6 animate-spin text-[#3b5998]" /></div>;
-  if (!currentOrganization) return <div className="h-screen flex items-center justify-center bg-[#eff0f5]">Veri yok.</div>;
+  // Loading State
+  if (isLoading || (!currentOrganization && contextType === 'ORGANIZATION')) {
+      return (
+          <div className="h-screen flex items-center justify-center bg-[#eff0f5]">
+              <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-[#3b5998]" />
+                  <span className="text-sm font-bold text-gray-500">Yönetim Paneli Yükleniyor...</span>
+              </div>
+          </div>
+      );
+  }
+
+  // Final Guard
+  if (!currentOrganization) return null;
 
   if (!can('adminAccess')) {
       return (

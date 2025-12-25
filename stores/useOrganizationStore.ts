@@ -3,7 +3,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Organization, Membership, User, DepartmentType, UserRole, Channel } from '../types';
 import { getOrganizationDetails, getMyMemberships, switchUserActiveOrganization } from '../services/db';
-import { useAuthStore } from './useAuthStore'; // Import Auth Store for cross-store update
+import { useAuthStore } from './useAuthStore';
+import { useContextStore } from './useContextStore';
 
 interface OrganizationState {
   currentOrganization: Organization | null;
@@ -34,9 +35,16 @@ export const useOrganizationStore = create<OrganizationState>()(
         set({ myMemberships: memberships, isLoading: false });
       },
 
+      /**
+       * ATOMIC SWITCHING LOGIC (Facebook Style)
+       * This function orchestrates the entire context switch.
+       * It ensures User Role, Auth Context, and Org Data are 100% synced before returning true.
+       */
       switchOrganization: async (orgId: string): Promise<boolean> => {
         set({ isLoading: true });
+        
         const authStore = useAuthStore.getState();
+        const contextStore = useContextStore.getState();
         const currentUser = authStore.currentUser;
 
         if (!currentUser) {
@@ -45,59 +53,81 @@ export const useOrganizationStore = create<OrganizationState>()(
         }
 
         try {
-            // 1. Fetch Org Details
+            console.log(`[Switch] Starting atomic switch to Org: ${orgId}`);
+
+            // 1. FETCH FRESH DATA (Blocking)
             const org = await getOrganizationDetails(orgId);
             if (!org) {
+                console.error("[Switch] Organization not found in DB.");
                 set({ isLoading: false });
                 return false;
             }
 
-            // 2. Determine Role (CRITICAL FIX for "Unauthorized" Bug)
+            // 2. DETERMINE ROLE & PERMISSIONS (Security Check)
             let role: UserRole = 'staff';
             let dept: DepartmentType = 'housekeeping';
+            let pageRole = 'MEMBER';
 
             // Priority A: Are you the Owner?
             if (org.ownerId === currentUser.id) {
                 role = 'manager';
                 dept = 'management';
+                pageRole = 'ADMIN';
             } else {
-                // Priority B: Check cached memberships
+                // Priority B: Check cached memberships first, then fetch if missing
                 let membership = get().myMemberships.find(m => m.organizationId === orgId);
                 
-                // Priority C: Fetch fresh memberships if not found (e.g. newly joined)
                 if (!membership) {
+                    // Critical: Fetch fresh memberships to ensure we aren't using stale cache
                     const freshMemberships = await getMyMemberships(currentUser.id);
-                    set({ myMemberships: freshMemberships }); // Sync store
+                    set({ myMemberships: freshMemberships });
                     membership = freshMemberships.find(m => m.organizationId === orgId);
                 }
 
                 if (membership) {
-                    // Map PageRole to UserRole if needed or keep UserRole for global context
-                    // For now, map simple admin to manager/admin
+                    pageRole = membership.role;
+                    // Map PageRole to Global Role context
                     if (membership.role === 'ADMIN') role = 'manager';
+                    else if (membership.role === 'MODERATOR') role = 'manager'; // Mods access admin too
                     else role = 'staff';
                     
                     dept = membership.department;
+                } else {
+                    // Security Fallback: User has no relation to this org?
+                    console.error("[Switch] User is not a member of this organization.");
+                    set({ isLoading: false });
+                    return false;
                 }
             }
 
-            // 3. Persist to DB (User Profile)
+            // 3. PERSIST STATE TO DB (Server-side Session)
             await switchUserActiveOrganization(currentUser.id, orgId);
 
-            // 4. Update Auth Store User (Important: Use updateCurrentUser to PRESERVE Context)
-            // Do NOT use loginSuccess here as it resets context to PERSONAL default.
+            // 4. UPDATE LOCAL STORES (Client-side Session)
+            
+            // A. Update Org Store
+            set({ currentOrganization: org, isLoading: false });
+
+            // B. Update Context Store (The Visual Context)
+            contextStore.switchToOrganization(org.id, org.name, org.logoUrl);
+
+            // C. Update Auth Store (The User Identity)
             authStore.updateCurrentUser({
                 currentOrganizationId: orgId,
                 role: role,
-                department: dept
+                department: dept,
+                // Also update legacy pageRoles map locally to prevent flicker
+                pageRoles: { 
+                    ...currentUser.pageRoles, 
+                    [orgId]: { role: pageRole as any, title: role === 'manager' ? 'Yönetici' : 'Personel' } 
+                }
             });
 
-            // 5. Update Org Store
-            set({ currentOrganization: org, isLoading: false });
+            console.log("[Switch] Atomic switch complete.");
             return true;
 
         } catch (e) {
-            console.error("Switch Org Failed:", e);
+            console.error("[Switch] Failed critical switch operation:", e);
             set({ isLoading: false });
             return false;
         }
@@ -105,7 +135,6 @@ export const useOrganizationStore = create<OrganizationState>()(
 
       addLocalChannel: (channel: Channel) => set((state) => {
           if (!state.currentOrganization) return {};
-          // Add to start of list for better visibility
           const newChannels = [channel, ...(state.currentOrganization.channels || [])];
           return {
               currentOrganization: {

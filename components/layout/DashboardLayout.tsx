@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, ArrowLeft, Menu, ChevronDown, Check, Building2, User, RefreshCw, LayoutDashboard, LogOut, Plus } from 'lucide-react';
+import { Bell, ArrowLeft, Menu, ChevronDown, Check, Building2, User, RefreshCw, LayoutDashboard, LogOut, Plus, Loader2 } from 'lucide-react';
 import { BottomNavigation } from './BottomNavigation';
 import { SettingsDrawer } from '../../features/profile/components/SettingsDrawer';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { useContextStore } from '../../stores/useContextStore';
+import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Avatar } from '../ui/Avatar';
 import { getUserManagedPages } from '../../services/organizationService';
@@ -19,21 +20,22 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuthStore();
-  const { contextType, activeEntityId, activeEntityName, activeEntityAvatar, switchToPersonal, switchToOrganization, ensureContext } = useContextStore();
+  const { contextType, activeEntityId, activeEntityName, activeEntityAvatar, switchToPersonal, ensureContext } = useContextStore();
+  const { switchOrganization } = useOrganizationStore();
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [managedOrgs, setManagedOrgs] = useState<Organization[]>([]);
+  
+  // New: Global Switching State
+  const [isSwitching, setIsSwitching] = useState(false);
+  const [targetName, setTargetName] = useState('');
 
   // 1. Ensure Context & Fetch Managed Pages (The Truth Source)
   useEffect(() => {
       const initLayout = async () => {
           if (currentUser) {
-              // A. Ensure context is valid
               ensureContext(currentUser);
-
-              // B. Always fetch managed pages from DB to ensure list is fresh
-              // Do not rely solely on currentUser.managedPageIds to prevent stale state issues
               try {
                   const orgs = await getUserManagedPages(currentUser.id);
                   setManagedOrgs(orgs);
@@ -44,20 +46,45 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       };
       
       initLayout();
-  }, [currentUser?.id]); // Only re-run if the user ID changes
+  }, [currentUser?.id]);
 
-  // 2. Context Switch Handler
-  const handleContextSwitch = (target: 'PERSONAL' | Organization) => {
-      if (!currentUser) return;
+  // 2. ROBUST CONTEXT SWITCH HANDLER
+  const handleContextSwitch = async (target: 'PERSONAL' | Organization) => {
+      if (!currentUser || isSwitching) return;
+      
+      // Close dropdown
+      setIsContextOpen(false);
 
       if (target === 'PERSONAL') {
-          switchToPersonal(currentUser);
-          navigate('/'); // Go to Personal Feed
+          if (contextType === 'PERSONAL') return; // Already there
+          
+          setIsSwitching(true);
+          setTargetName(currentUser.name);
+          
+          // Allow UI to render the loader
+          setTimeout(() => {
+              switchToPersonal(currentUser);
+              navigate('/'); 
+              setIsSwitching(false);
+          }, 800); // Artificial delay for smoothness like Facebook
+      
       } else {
-          switchToOrganization(target.id, target.name, target.logoUrl);
-          navigate('/admin'); // Go to Manager Dashboard
+          if (activeEntityId === target.id) return; // Already there
+
+          setIsSwitching(true);
+          setTargetName(target.name);
+
+          // Atomic Switch via Store
+          const success = await switchOrganization(target.id);
+          
+          if (success) {
+              navigate('/admin'); // Force navigation to admin root
+          } else {
+              alert("Hesaba geçiş yapılamadı. Yetkiniz olmayabilir.");
+          }
+          
+          setIsSwitching(false);
       }
-      setIsContextOpen(false);
   };
 
   // --- VISUAL THEME BASED ON CONTEXT ---
@@ -252,8 +279,26 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const config = getHeaderConfig();
 
   return (
-    <div className="flex flex-col h-screen w-full bg-surface overflow-hidden supports-[height:100dvh]:h-[100dvh]">
+    <div className="flex flex-col h-screen w-full bg-surface overflow-hidden supports-[height:100dvh]:h-[100dvh] relative">
       
+      {/* 0. SWITCHING OVERLAY (Facebook Style) */}
+      <AnimatePresence>
+          {isSwitching && (
+              <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center"
+              >
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center mb-4 border border-gray-100">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-800">Geçiş Yapılıyor...</h3>
+                  <p className="text-sm text-gray-500">{targetName} olarak oturum açılıyor</p>
+              </motion.div>
+          )}
+      </AnimatePresence>
+
       {/* 1. Header Area */}
       <div className={`shrink-0 z-50 border-b transition-all duration-300 ${headerBg} ${isOrgMode ? 'border-[#29487d]' : 'border-gray-100'}`}>
           <header className="px-4 py-3 min-h-[60px] flex items-center justify-between">
