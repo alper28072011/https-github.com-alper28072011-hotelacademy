@@ -7,159 +7,148 @@ import { useAuthStore } from './useAuthStore';
 import { useContextStore } from './useContextStore';
 
 interface OrganizationState {
+  // Data State
   currentOrganization: Organization | null;
+  activeRole: PageRole | null;
   myMemberships: Membership[];
+  
+  // UI State
+  isSwitching: boolean;
   isLoading: boolean;
 
   // Actions
-  fetchMemberships: (userId: string) => Promise<void>;
+  loadUserMemberships: (userId: string) => Promise<void>;
   
-  // THE ATOMIC SWITCHER
-  switchOrganization: (orgId: string) => Promise<boolean>;
-  switchToPersonal: () => Promise<void>;
+  // THE CORE SWITCHER FUNCTION
+  startOrganizationSession: (orgId: string) => Promise<{ success: boolean; error?: string }>;
+  endOrganizationSession: () => Promise<void>;
   
-  // UI Helpers
+  // Helpers
   addLocalChannel: (channel: Channel) => void;
   removeLocalChannel: (channelId: string) => void;
-  reset: () => void;
 }
 
 export const useOrganizationStore = create<OrganizationState>()(
   persist(
     (set, get) => ({
       currentOrganization: null,
+      activeRole: null,
       myMemberships: [],
+      isSwitching: false,
       isLoading: false,
 
-      fetchMemberships: async (userId: string) => {
-        // Silent fetch
+      loadUserMemberships: async (userId: string) => {
         const memberships = await getMyMemberships(userId);
         set({ myMemberships: memberships });
       },
 
       /**
-       * STRICT ATOMIC SWITCH
-       * Order of operations is CRITICAL here to prevent White Screen.
-       * 1. Fetch Data
-       * 2. Set Organization Data (Ready for Render)
-       * 3. Set Auth/Context (Triggers Router Guard)
+       * FACEBOOK-STYLE SESSION SWITCHER
+       * This function guarantees that when it resolves true, 
+       * the app is 100% ready to render the Admin Panel.
        */
-      switchOrganization: async (orgId: string): Promise<boolean> => {
-          set({ isLoading: true });
-          
+      startOrganizationSession: async (orgId: string) => {
+          set({ isSwitching: true });
+          console.log(`[OrgSession] Starting switch to ${orgId}...`);
+
           try {
               const authStore = useAuthStore.getState();
               const contextStore = useContextStore.getState();
               const currentUser = authStore.currentUser;
 
-              if (!currentUser) {
-                  set({ isLoading: false });
-                  return false;
-              }
+              if (!currentUser) throw new Error("Oturum açmış kullanıcı bulunamadı.");
 
-              console.log(`[Switch] 1. Fetching Org: ${orgId}`);
-              
-              // 1. Fetch Data from DB
-              const org = await getOrganizationDetails(orgId);
-              if (!org) {
-                  console.error("[Switch] Organization not found.");
-                  set({ isLoading: false });
-                  return false;
-              }
+              // 1. PRE-FETCH DATA (Parallel)
+              const [orgData, memberships] = await Promise.all([
+                  getOrganizationDetails(orgId),
+                  getMyMemberships(currentUser.id)
+              ]);
 
-              // 2. Fetch User Membership for this Org
-              // We refetch to ensure we have the latest roles
-              const memberships = await getMyMemberships(currentUser.id);
+              if (!orgData) throw new Error("Organizasyon verisi bulunamadı.");
+
+              // 2. CALCULATE PERMISSIONS
+              // Determine exact role for this specific organization session
               const membership = memberships.find(m => m.organizationId === orgId);
+              const isOwner = orgData.ownerId === currentUser.id;
               
-              // 3. Determine Roles
-              let role: UserRole = 'staff';
+              let effectiveRole: PageRole = 'MEMBER';
+              let userRole: UserRole = 'staff';
               let dept: DepartmentType | null = null;
-              let pageRole: PageRole = 'MEMBER';
 
-              if (org.ownerId === currentUser.id) {
-                  role = 'manager';
+              if (isOwner) {
+                  effectiveRole = 'ADMIN';
+                  userRole = 'manager';
                   dept = 'management';
-                  pageRole = 'ADMIN';
               } else if (membership && membership.status === 'ACTIVE') {
-                  pageRole = membership.role;
-                  role = (membership.role === 'ADMIN' || membership.role === 'MODERATOR') ? 'manager' : 'staff';
+                  effectiveRole = membership.role;
+                  userRole = (membership.role === 'ADMIN' || membership.role === 'MODERATOR') ? 'manager' : 'staff';
                   dept = membership.department;
               } else {
-                  console.error("[Switch] No valid membership.");
-                  set({ isLoading: false });
-                  return false;
+                  throw new Error("Bu organizasyona erişim yetkiniz yok.");
               }
 
-              console.log(`[Switch] 2. Data Ready. Updating Stores...`);
-
-              // 4. CRITICAL: Update Organization Store FIRST.
-              // This ensures that when the Router mounts AdminLayout, the data is ALREADY there.
+              // 3. ATOMIC STATE UPDATE
+              // We update all stores synchronously to prevent race conditions during render
+              
+              // A. Organization Store
               set({ 
-                  currentOrganization: org, 
-                  myMemberships: memberships, 
-                  isLoading: false // Release lock
+                  currentOrganization: orgData, 
+                  activeRole: effectiveRole,
+                  myMemberships: memberships,
+                  isSwitching: false 
               });
 
-              // 5. Update Auth Store (Permissions)
+              // B. Auth Store (Permissions Scope)
               authStore.updateCurrentUser({
-                  currentOrganizationId: org.id,
-                  role: role,
+                  currentOrganizationId: orgId,
+                  role: userRole,
                   department: dept,
-                  pageRoles: { 
-                      ...currentUser.pageRoles, 
-                      [orgId]: { role: pageRole, title: role === 'manager' ? 'Yönetici' : 'Personel' } 
-                  }
+                  // Cache role for UI access without DB
+                  pageRoles: { ...currentUser.pageRoles, [orgId]: { role: effectiveRole, title: isOwner ? 'Kurucu' : effectiveRole } }
               });
 
-              // 6. Update Context Store (Triggers App.tsx Guard)
-              // We do this LAST so the guard passes only after data is ready.
-              contextStore.setContext('ORGANIZATION', org.id, org.name, org.logoUrl);
+              // C. Context Store (The Global Pointer)
+              contextStore.setContext('ORGANIZATION', orgData.id, orgData.name, orgData.logoUrl);
 
-              // 7. Persist to DB (Background - Fire and Forget)
-              switchUserActiveOrganization(currentUser.id, org.id);
+              // 4. PERSISTENCE (Background)
+              switchUserActiveOrganization(currentUser.id, orgId);
 
-              console.log(`[Switch] 3. Switch Complete. Ready to Navigate.`);
-              return true;
+              console.log(`[OrgSession] Switch successful. Ready to route.`);
+              return { success: true };
 
-          } catch (e) {
-              console.error("[Switch] Critical failure:", e);
-              set({ isLoading: false });
-              return false;
+          } catch (error: any) {
+              console.error("[OrgSession] Switch failed:", error);
+              set({ isSwitching: false, currentOrganization: null });
+              return { success: false, error: error.message };
           }
       },
 
-      switchToPersonal: async () => {
-          set({ isLoading: true });
+      endOrganizationSession: async () => {
+          set({ isSwitching: true });
           const authStore = useAuthStore.getState();
           const contextStore = useContextStore.getState();
           const currentUser = authStore.currentUser;
 
-          if (!currentUser) { 
-              set({ isLoading: false });
-              return; 
+          if (currentUser) {
+              // Reset Context to Personal
+              contextStore.setContext('PERSONAL', currentUser.id, currentUser.name, currentUser.avatar);
+              
+              // Reset Auth Scope
+              authStore.updateCurrentUser({
+                  currentOrganizationId: null,
+                  role: 'staff' // Default back to basic role
+              });
+
+              // Clear Org Data
+              set({ currentOrganization: null, activeRole: null, isSwitching: false });
+              
+              // Persist
+              switchUserActiveOrganization(currentUser.id, '');
+          } else {
+              set({ isSwitching: false });
           }
-
-          console.log("[Switch] Reverting to Personal Mode");
-          
-          // 1. Reset Context FIRST to block Admin Routes immediately
-          contextStore.setContext('PERSONAL', currentUser.id, currentUser.name, currentUser.avatar);
-          
-          // 2. Clear Org Data
-          set({ currentOrganization: null, isLoading: false });
-          
-          // 3. Reset Auth Scope
-          authStore.updateCurrentUser({
-              currentOrganizationId: null,
-              role: 'staff',
-              department: null
-          });
-
-          // 4. Persist DB
-          switchUserActiveOrganization(currentUser.id, '');
       },
 
-      // ... Helpers ...
       addLocalChannel: (channel: Channel) => set((state) => {
           if (!state.currentOrganization) return {};
           return { currentOrganization: { ...state.currentOrganization, channels: [channel, ...(state.currentOrganization.channels || [])] } };
@@ -168,13 +157,15 @@ export const useOrganizationStore = create<OrganizationState>()(
       removeLocalChannel: (channelId: string) => set((state) => {
           if (!state.currentOrganization) return {};
           return { currentOrganization: { ...state.currentOrganization, channels: (state.currentOrganization.channels || []).filter(c => c.id !== channelId) } };
-      }),
-
-      reset: () => set({ currentOrganization: null, myMemberships: [] })
+      })
     }),
     {
-      name: 'hotel-academy-org-v3',
+      name: 'hotel-academy-session-v4', // Version bumped to force cache clear
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({ 
+          // Only persist essential ID references, reload data on mount to ensure freshness
+          currentOrganization: state.currentOrganization ? { id: state.currentOrganization.id, name: state.currentOrganization.name, logoUrl: state.currentOrganization.logoUrl } : null
+      }),
     }
   )
 );

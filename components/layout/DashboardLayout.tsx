@@ -5,7 +5,6 @@ import { Bell, ArrowLeft, Menu, ChevronDown, Check, Building2, User, LayoutDashb
 import { BottomNavigation } from './BottomNavigation';
 import { SettingsDrawer } from '../../features/profile/components/SettingsDrawer';
 import { useAuthStore } from '../../stores/useAuthStore';
-import { useContextStore } from '../../stores/useContextStore';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Avatar } from '../ui/Avatar';
@@ -20,19 +19,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuthStore();
-  
-  // Display Data
-  const { activeEntityName, activeEntityAvatar } = useContextStore();
-  
-  // Actions
-  const { switchOrganization, switchToPersonal } = useOrganizationStore();
+  const { startOrganizationSession, isSwitching } = useOrganizationStore();
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [managedOrgs, setManagedOrgs] = useState<Organization[]>([]);
   
-  // UI State
-  const [isSwitching, setIsSwitching] = useState(false);
+  // Local switching state for UI feedback
   const [targetName, setTargetName] = useState('');
 
   // Initial Load
@@ -51,39 +44,25 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       initLayout();
   }, [currentUser?.id]);
 
-  // --- ATOMIC SWITCH HANDLER ---
-  const handleContextSwitch = async (target: 'PERSONAL' | Organization) => {
-      if (!currentUser || isSwitching) return;
+  // --- NEW ATOMIC SWITCH HANDLER ---
+  const handleContextSwitch = async (target: Organization) => {
+      if (isSwitching) return;
       setIsContextOpen(false);
+      setTargetName(target.name);
 
-      if (target === 'PERSONAL') {
-          // Already in Personal mode? (Route guard handles this usually, but good to check)
-          // Since we are in DashboardLayout, we ARE in Personal mode (or should be).
-          // Just refresh/navigate home.
-          navigate('/');
-          return;
+      // 1. Start the Session (This updates Store + Context + Auth)
+      const result = await startOrganizationSession(target.id);
+      
+      if (result.success) {
+          // 2. Only Navigate AFTER success
+          navigate('/admin'); 
       } else {
-          // Switch to Organization
-          setIsSwitching(true);
-          setTargetName(target.name);
-
-          // 1. Perform atomic switch (Data Fetch + Context Update)
-          const success = await switchOrganization(target.id);
-          
-          if (success) {
-              // 2. Navigate (App.tsx guard will render AdminLayout)
-              navigate('/admin'); 
-          } else {
-              alert("Hesaba geçiş yapılamadı. Erişim yetkiniz olmayabilir.");
-              setIsSwitching(false);
-          }
+          alert(`Geçiş başarısız: ${result.error || 'Bilinmeyen hata'}`);
       }
   };
 
   // Static Visuals for Personal Mode
   const headerBg = 'bg-white/80 backdrop-blur-md';
-  const headerText = 'text-gray-800';
-  const subText = 'text-gray-400';
 
   // --- HEADER CONFIG ---
   const getHeaderConfig = () => {
@@ -252,20 +231,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
   return (
     <div className="flex flex-col h-screen w-full bg-surface overflow-hidden supports-[height:100dvh]:h-[100dvh] relative">
       
-      {/* SWITCHING OVERLAY */}
+      {/* SWITCHING OVERLAY (BLOCKING) */}
       <AnimatePresence>
           {isSwitching && (
               <motion.div 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="absolute inset-0 z-[100] bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center"
+                  className="fixed inset-0 z-[100] bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center"
               >
-                  <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center mb-4 border border-gray-100">
-                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <div className="w-20 h-20 bg-white rounded-3xl shadow-2xl flex items-center justify-center mb-6 border border-gray-100">
+                      <Loader2 className="w-10 h-10 animate-spin text-[#3b5998]" />
                   </div>
-                  <h3 className="text-lg font-bold text-gray-800">Geçiş Yapılıyor...</h3>
-                  <p className="text-sm text-gray-500">{targetName} yönetimine bağlanılıyor</p>
+                  <h3 className="text-xl font-bold text-slate-800 mb-1">Hesap Değiştiriliyor</h3>
+                  <p className="text-sm text-slate-500 font-medium">"{targetName}" paneli hazırlanıyor...</p>
               </motion.div>
           )}
       </AnimatePresence>
