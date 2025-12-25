@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, BookOpen, BarChart2, LogOut, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, BarChart2, LogOut, Settings, Map } from 'lucide-react';
 import { useContextStore } from '../../stores/useContextStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 
@@ -14,6 +14,7 @@ export const Sidebar: React.FC = () => {
     { path: '/admin/organization', label: 'Genel Bakış', icon: LayoutDashboard },
     { path: '/admin/requests', label: 'Ekip & İstekler', icon: Users },
     { path: '/admin/courses', label: 'Eğitimler', icon: BookOpen },
+    { path: '/admin/career', label: 'Kariyer Yolları', icon: Map }, // Restored Journey Menu
     { path: '/admin/reports', label: 'Raporlar', icon: BarChart2 },
     { path: '/admin/settings', label: 'Ayarlar', icon: Settings },
   ];

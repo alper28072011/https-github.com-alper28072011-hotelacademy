@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Briefcase, Plus, Save, Trash2, Edit3, X, 
-    BookOpen, Wand2, Loader2, ArrowRight, LayoutList 
+    BookOpen, Wand2, Loader2, ArrowRight, LayoutList, Map 
 } from 'lucide-react';
 import { useOrganizationStore } from '../../stores/useOrganizationStore';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -174,8 +174,10 @@ export const CareerBuilder: React.FC = () => {
         
         {/* LEFT COLUMN: SIDEBAR LIST */}
         <div className="w-[250px] border-r border-[#d8dfea] flex flex-col bg-white h-full shrink-0">
-            <div className="p-2 bg-[#d8dfea] border-b border-[#bdc7d8]">
-                <h3 className="text-[#3b5998] font-bold text-[11px]">Kariyer Yolları</h3>
+            <div className="p-3 bg-[#d8dfea] border-b border-[#bdc7d8]">
+                <h3 className="text-[#3b5998] font-bold text-[11px] uppercase tracking-wider flex items-center gap-2">
+                    <Map className="w-3 h-3" /> Eğitim Yolculukları
+                </h3>
             </div>
             
             <div className="flex-1 overflow-y-auto">
@@ -186,7 +188,7 @@ export const CareerBuilder: React.FC = () => {
                         <div 
                             key={path.id}
                             onClick={() => handleSelectPath(path)}
-                            className={`px-3 py-2 border-b border-[#e9e9e9] cursor-pointer flex items-center gap-2 group transition-colors ${
+                            className={`px-3 py-3 border-b border-[#e9e9e9] cursor-pointer flex items-center gap-2 group transition-colors ${
                                 selectedPath?.id === path.id 
                                 ? 'bg-[#d8dfea] text-[#333]' 
                                 : 'hover:bg-[#f7f7f7] text-[#333]'
@@ -195,7 +197,7 @@ export const CareerBuilder: React.FC = () => {
                             <Briefcase className="w-4 h-4 text-[#3b5998]" />
                             <div className="flex-1 min-w-0">
                                 <div className="text-[11px] font-bold truncate">{path.title}</div>
-                                <div className="text-[10px] text-gray-500 truncate">{path.courseIds.length} Kurs</div>
+                                <div className="text-[10px] text-gray-500 truncate">{path.courseIds.length} Adım (Kurs)</div>
                             </div>
                             <ArrowRight className={`w-3 h-3 text-gray-400 ${selectedPath?.id === path.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
                         </div>
@@ -207,9 +209,9 @@ export const CareerBuilder: React.FC = () => {
                 <button 
                     onClick={handleNewPath}
                     disabled={isInitializing}
-                    className="w-full bg-[#3b5998] border border-[#29447e] text-white text-[11px] font-bold py-1.5 px-2 flex items-center justify-center gap-1 hover:bg-[#2d4373]"
+                    className="w-full bg-[#3b5998] border border-[#29447e] text-white text-[11px] font-bold py-2 px-2 flex items-center justify-center gap-2 hover:bg-[#2d4373]"
                 >
-                    <Plus className="w-3 h-3" /> Yeni Yol Oluştur
+                    <Plus className="w-3 h-3" /> Yeni Yolculuk Tasarla
                 </button>
             </div>
         </div>
@@ -221,8 +223,8 @@ export const CareerBuilder: React.FC = () => {
                     {/* CANVAS HEADER */}
                     <div className="bg-[#f7f7f7] border-b border-[#d8dfea] p-3 flex justify-between items-center shadow-sm shrink-0">
                         <div className="text-[13px] font-bold text-[#333] flex items-center gap-2">
-                            <Briefcase className="w-4 h-4 text-gray-500" />
-                            {isNewPath ? 'Yeni Kariyer Yolu' : `Düzenleniyor: ${selectedPath.title}`}
+                            <Map className="w-4 h-4 text-gray-500" />
+                            {isNewPath ? 'Yeni Eğitim Yolu' : `Düzenleniyor: ${selectedPath.title}`}
                         </div>
                         <div className="flex gap-2">
                             <button 
@@ -249,11 +251,11 @@ export const CareerBuilder: React.FC = () => {
                             {/* SECTION 1: BASIC INFO */}
                             <div className="bg-white border border-[#bdc7d8] shadow-sm">
                                 <div className="bg-[#f0f2f5] border-b border-[#e9e9e9] px-4 py-2 text-[11px] font-bold text-[#3b5998] uppercase">
-                                    Temel Bilgiler
+                                    Hedef Tanımları
                                 </div>
                                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="md:col-span-2">
-                                        <label className="block text-[11px] font-bold text-[#666] mb-1">Yol Başlığı</label>
+                                        <label className="block text-[11px] font-bold text-[#666] mb-1">Yolculuk Adı</label>
                                         <input 
                                             value={selectedPath.title}
                                             onChange={(e) => setSelectedPath({...selectedPath, title: e.target.value})}
@@ -262,7 +264,7 @@ export const CareerBuilder: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-[11px] font-bold text-[#666] mb-1">Hedef Pozisyon</label>
+                                        <label className="block text-[11px] font-bold text-[#666] mb-1">Varış Noktası (Hedef Pozisyon)</label>
                                         <input 
                                             value={selectedPath.targetRole}
                                             onChange={(e) => setSelectedPath({...selectedPath, targetRole: e.target.value})}
@@ -271,7 +273,7 @@ export const CareerBuilder: React.FC = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-[11px] font-bold text-[#666] mb-1">Departman</label>
+                                        <label className="block text-[11px] font-bold text-[#666] mb-1">İlgili Departman</label>
                                         <select 
                                             value={selectedPath.department}
                                             onChange={(e) => setSelectedPath({...selectedPath, department: e.target.value as any})}
@@ -284,13 +286,13 @@ export const CareerBuilder: React.FC = () => {
                                         </select>
                                     </div>
                                     <div className="md:col-span-2">
-                                        <label className="block text-[11px] font-bold text-[#666] mb-1">Açıklama</label>
+                                        <label className="block text-[11px] font-bold text-[#666] mb-1">Motivasyon Açıklaması</label>
                                         <textarea 
                                             rows={3}
                                             value={selectedPath.description}
                                             onChange={(e) => setSelectedPath({...selectedPath, description: e.target.value})}
                                             className="w-full border border-[#bdc7d8] p-2 text-sm text-[#333] focus:border-[#3b5998] outline-none resize-none"
-                                            placeholder="Bu yolun amacı ve kazanımları..."
+                                            placeholder="Bu yolculuk sonunda personel ne kazanacak?"
                                         />
                                     </div>
                                 </div>
@@ -305,13 +307,13 @@ export const CareerBuilder: React.FC = () => {
                                     <div className="p-1 bg-white rounded border border-blue-200">
                                         <Wand2 className="w-4 h-4 text-[#3b5998]" />
                                     </div>
-                                    <span className="text-[12px] font-bold text-[#333]">AI Asistanı</span>
+                                    <span className="text-[12px] font-bold text-[#333]">AI Kariyer Mimarı</span>
                                 </div>
                                 <div className="flex gap-2 relative z-10">
                                     <input 
                                         value={aiPrompt}
                                         onChange={(e) => setAiPrompt(e.target.value)}
-                                        placeholder="Bir hedef belirtin, AI sizin için başlık ve açıklamayı oluştursun..."
+                                        placeholder="Bir hedef rol yazın, yapay zeka sizin için yolu çizsin..."
                                         className="flex-1 border border-blue-200 p-2 text-xs text-[#333] focus:border-[#3b5998] outline-none"
                                     />
                                     <button 
@@ -319,7 +321,7 @@ export const CareerBuilder: React.FC = () => {
                                         disabled={isGenerating}
                                         className="bg-white border border-blue-300 text-[#3b5998] text-[11px] font-bold px-4 hover:bg-blue-100 flex items-center gap-2"
                                     >
-                                        {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Taslak Çıkar'}
+                                        {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Taslak Oluştur'}
                                     </button>
                                 </div>
                             </div>
@@ -328,13 +330,13 @@ export const CareerBuilder: React.FC = () => {
                             <div className="bg-white border border-[#bdc7d8] shadow-sm">
                                 <div className="bg-[#f0f2f5] border-b border-[#e9e9e9] px-4 py-2 flex justify-between items-center">
                                     <div className="text-[11px] font-bold text-[#3b5998] uppercase">
-                                        Müfredat ({selectedPath.courseIds.length} Kurs)
+                                        Eğitim Haritası ({selectedPath.courseIds.length} Adım)
                                     </div>
                                     <button 
                                         onClick={() => setShowAddCourse(true)}
-                                        className="text-[10px] bg-[#3b5998] text-white px-2 py-1 font-bold hover:bg-[#2d4373]"
+                                        className="text-[10px] bg-[#3b5998] text-white px-2 py-1 font-bold hover:bg-[#2d4373] flex items-center gap-1"
                                     >
-                                        + Kurs Ekle
+                                        <Plus className="w-3 h-3" /> Eğitim Ekle
                                     </button>
                                 </div>
 
@@ -344,8 +346,11 @@ export const CareerBuilder: React.FC = () => {
                                         return (
                                             <div key={courseId + idx} className="p-3 flex justify-between items-center group hover:bg-gray-50 transition-colors">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="bg-[#eff0f5] border border-[#ccc] w-8 h-8 flex items-center justify-center text-[12px] font-bold text-[#666] rounded-sm">
+                                                    <div className="bg-[#eff0f5] border border-[#ccc] w-8 h-8 flex items-center justify-center text-[12px] font-bold text-[#666] rounded-sm relative">
                                                         {idx + 1}
+                                                        {idx < selectedPath.courseIds.length - 1 && (
+                                                            <div className="absolute top-full left-1/2 w-0.5 h-6 bg-[#ccc] -ml-px z-0" />
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <div className="text-[13px] font-bold text-[#333] hover:underline cursor-pointer">
@@ -361,7 +366,7 @@ export const CareerBuilder: React.FC = () => {
                                                 <button 
                                                     onClick={() => handleRemoveCourse(courseId)}
                                                     className="p-2 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-colors"
-                                                    title="Kaldır"
+                                                    title="Adımı Kaldır"
                                                 >
                                                     <X className="w-4 h-4" />
                                                 </button>
@@ -371,7 +376,7 @@ export const CareerBuilder: React.FC = () => {
 
                                     {selectedPath.courseIds.length === 0 && (
                                         <div className="text-center p-8 border-dashed text-gray-400 text-xs">
-                                            Bu yola henüz kurs eklenmemiş. Yukarıdan ekleyebilir veya AI ile taslak oluşturabilirsiniz.
+                                            Bu yola henüz eğitim eklenmemiş. "Eğitim Ekle" butonunu kullanın.
                                         </div>
                                     )}
                                 </div>
@@ -393,7 +398,7 @@ export const CareerBuilder: React.FC = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
                     <div className="bg-white border-[4px] border-[#555] w-[450px] shadow-2xl max-h-[80vh] flex flex-col">
                         <div className="bg-[#3b5998] text-white px-3 py-2 text-[12px] font-bold flex justify-between items-center shrink-0">
-                            <span>Kurs Ekle</span>
+                            <span>Müfredata Kurs Ekle</span>
                             <button onClick={() => setShowAddCourse(false)}><X className="w-4 h-4" /></button>
                         </div>
                         <div className="p-0 overflow-y-auto flex-1 bg-white">
