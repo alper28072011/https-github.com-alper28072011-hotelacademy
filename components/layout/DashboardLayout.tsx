@@ -98,15 +98,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
               
               {/* Center: Global Search (Strictly Aligned) */}
               <div className="flex items-center justify-center h-full w-full">
-                  <form onSubmit={handleSearchSubmit} className="w-full relative">
+                  <form onSubmit={handleSearchSubmit} className="w-full relative flex items-center m-0 p-0">
                       <input 
                           value={globalSearchTerm}
                           onChange={(e) => setGlobalSearchTerm(e.target.value)}
                           placeholder="Eğitim, kişi veya grup ara..." 
-                          className="w-full h-[28px] pl-7 pr-4 text-[12px] border border-[#233a66] rounded-[2px] bg-[#223966] text-white placeholder-blue-300 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner font-medium block leading-normal"
+                          className="w-full h-[28px] pl-8 pr-4 text-[12px] border border-[#233a66] rounded-[2px] bg-[#223966] text-white placeholder-blue-300 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner font-medium block leading-normal"
                       />
                       <Search 
-                        className="w-3.5 h-3.5 absolute left-2 text-blue-300 pointer-events-none" 
+                        className="w-3.5 h-3.5 absolute left-2.5 text-blue-300 pointer-events-none" 
                         style={{ top: '50%', transform: 'translateY(-50%)' }} 
                       />
                   </form>
