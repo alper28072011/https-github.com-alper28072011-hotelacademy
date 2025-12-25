@@ -533,7 +533,7 @@ export const OrganizationSettings: React.FC = () => {
             )}
 
             {/* FOOTER ACTIONS */}
-            {activeTab !== 'DELETE' && (
+            {activeTab !== 'DANGER' && (
                 <div className="mt-8 border-t border-[#d8dfea] pt-4 flex justify-end gap-2">
                     <button onClick={handleSave} disabled={isSaving} className="bg-[#3b5998] text-white px-6 py-1.5 text-[11px] font-bold border border-[#29447e]">
                         {isSaving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}

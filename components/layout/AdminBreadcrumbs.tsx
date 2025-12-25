@@ -42,7 +42,7 @@ export const AdminBreadcrumbs: React.FC = () => {
     }, [params]);
 
     // Build paths
-    const crumbs = [
+    const crumbs: { label: React.ReactNode; path: string }[] = [
         { label: <Home className="w-3 h-3" />, path: '/admin' }
     ];
 

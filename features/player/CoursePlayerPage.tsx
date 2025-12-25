@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { motion, AnimatePresence, PanInfo } from 'framer-motion';
+import { motion, AnimatePresence, PanInfo, Variants } from 'framer-motion';
 import { X, ChevronDown, BookOpen, AlertTriangle, Loader2, ChevronUp } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getCourse, completeCourse, saveCourseProgress } from '../../services/db';
@@ -12,7 +12,7 @@ import { getLocalizedContent } from '../../i18n/config';
 import { useTelemetry } from '../../hooks/useTelemetry'; // NEW
 
 // Animation Variants for Vertical Scroll
-const slideVariants = {
+const slideVariants: Variants = {
     enter: (direction: number) => ({
         y: direction > 0 ? '100%' : '-100%',
         opacity: 1,
