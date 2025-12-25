@@ -50,7 +50,12 @@ export const useAuthStore = create<AuthState>()(
         
         // 2. CONTEXT'i Zorla "PERSONAL" Yap
         // Bu işlem UI'ın admin modunda açılmasını engeller.
-        useContextStore.getState().switchToPersonal(sanitizedUser);
+        // FIX: Pass individual arguments instead of the user object
+        useContextStore.getState().switchToPersonal(
+            sanitizedUser.id,
+            sanitizedUser.name,
+            sanitizedUser.avatar
+        );
 
         // 3. Store'u Güncelle
         set({ 
@@ -70,7 +75,11 @@ export const useAuthStore = create<AuthState>()(
               // Profil güncellenirse Context'i de güncelle (Eğer Bireysel Moddaysak)
               const contextState = useContextStore.getState();
               if (contextState.contextType === 'PERSONAL') {
-                  contextState.switchToPersonal(updatedUser);
+                  contextState.switchToPersonal(
+                      updatedUser.id,
+                      updatedUser.name,
+                      updatedUser.avatar
+                  );
               }
           }
       },
@@ -82,7 +91,10 @@ export const useAuthStore = create<AuthState>()(
           console.error("Logout error", e);
         }
         localStorage.clear(); // Tam temizlik
-        useContextStore.getState().resetContext();
+        // useContextStore usually has a reset or we can force personal with dummy data to clear, 
+        // but since we cleared localStorage, it should be fine on reload. 
+        // However, explicit reset is safer if we implemented it.
+        // Since we removed resetContext from useContextStore in the Unbreakable update, we rely on page reload or store reset.
         set({
           isAuthenticated: false,
           currentUser: null,

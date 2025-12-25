@@ -108,7 +108,13 @@ export const useOrganizationStore = create<OrganizationState>()(
               });
 
               // C. Context Store (The Global Pointer)
-              contextStore.setContext('ORGANIZATION', orgData.id, orgData.name, orgData.logoUrl);
+              // Updated to use the new API from useContextStore
+              contextStore.switchToOrganization(
+                  orgData.id, 
+                  orgData.name, 
+                  orgData.logoUrl, 
+                  effectiveRole
+              );
 
               // 4. PERSISTENCE (Background)
               switchUserActiveOrganization(currentUser.id, orgId);
@@ -131,7 +137,12 @@ export const useOrganizationStore = create<OrganizationState>()(
 
           if (currentUser) {
               // Reset Context to Personal
-              contextStore.setContext('PERSONAL', currentUser.id, currentUser.name, currentUser.avatar);
+              // Updated to use the new API from useContextStore
+              contextStore.switchToPersonal(
+                  currentUser.id, 
+                  currentUser.name, 
+                  currentUser.avatar
+              );
               
               // Reset Auth Scope
               authStore.updateCurrentUser({
