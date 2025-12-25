@@ -96,16 +96,19 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                   </div>
               </div>
               
-              {/* Center: Global Search (Aligned with Content) */}
-              <div className="flex items-center h-full w-full">
-                  <form onSubmit={handleSearchSubmit} className="w-full relative flex items-center">
+              {/* Center: Global Search (Strictly Aligned) */}
+              <div className="flex items-center justify-center h-full w-full">
+                  <form onSubmit={handleSearchSubmit} className="w-full relative">
                       <input 
                           value={globalSearchTerm}
                           onChange={(e) => setGlobalSearchTerm(e.target.value)}
                           placeholder="Eğitim, kişi veya grup ara..." 
-                          className="w-full h-[30px] pl-7 pr-4 text-[12px] border border-[#233a66] rounded-sm bg-[#223966] text-white placeholder-blue-300 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner font-medium block"
+                          className="w-full h-[28px] pl-7 pr-4 text-[12px] border border-[#233a66] rounded-[2px] bg-[#223966] text-white placeholder-blue-300 focus:bg-white focus:text-[#1c1e21] focus:placeholder-gray-400 transition-all outline-none shadow-inner font-medium block leading-normal"
                       />
-                      <Search className="w-3.5 h-3.5 absolute left-2 text-blue-300 pointer-events-none" style={{ top: '50%', transform: 'translateY(-50%)' }} />
+                      <Search 
+                        className="w-3.5 h-3.5 absolute left-2 text-blue-300 pointer-events-none" 
+                        style={{ top: '50%', transform: 'translateY(-50%)' }} 
+                      />
                   </form>
               </div>
 
@@ -113,9 +116,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
               <div className="flex items-center justify-end gap-3 h-full">
                   <div 
                     onClick={() => navigate('/profile')}
-                    className="flex items-center gap-2 cursor-pointer hover:bg-[#00000010] px-2 py-1 rounded-sm transition-colors"
+                    className="flex items-center gap-2 cursor-pointer hover:bg-[#00000010] px-2 py-1 rounded-[2px] transition-colors"
                   >
-                      <div className="w-6 h-6 rounded-sm bg-gray-300 overflow-hidden border border-[#29487d]">
+                      <div className="w-6 h-6 rounded-[2px] bg-gray-300 overflow-hidden border border-[#29487d]">
                           <Avatar src={currentUser?.avatar} alt={currentUser?.name || ''} size="sm" className="w-full h-full rounded-none" />
                       </div>
                       <span className="hidden md:inline text-white text-[11px] font-bold">{currentUser?.name?.split(' ')[0]}</span>
@@ -178,7 +181,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
                             <button 
                                 key={item.label} 
                                 onClick={() => navigate(item.path)} 
-                                className={`w-full flex items-center gap-2 px-2 py-1.5 text-[11px] transition-all rounded-sm ${
+                                className={`w-full flex items-center gap-2 px-2 py-1.5 text-[11px] transition-all rounded-[2px] ${
                                     isActive 
                                     ? 'bg-[#d8dfea] font-bold text-[#1c1e21]' 
                                     : 'text-[#333] hover:bg-[#eff0f5] font-medium'
@@ -195,12 +198,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
                 <div>
                     <h4 className="text-[#999] text-[10px] font-bold uppercase mb-1 px-2">Kısayollar</h4>
-                    <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#eff0f5] rounded-sm text-[11px] text-[#333] transition-colors">
-                        <div className="w-4 h-4 bg-blue-500 rounded-sm flex items-center justify-center text-white text-[8px] font-bold">HK</div>
+                    <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#eff0f5] rounded-[2px] text-[11px] text-[#333] transition-colors">
+                        <div className="w-4 h-4 bg-blue-500 rounded-[2px] flex items-center justify-center text-white text-[8px] font-bold">HK</div>
                         <span className="truncate">Housekeeping 101</span>
                     </button>
-                    <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#eff0f5] rounded-sm text-[11px] text-[#333] transition-colors">
-                        <div className="w-4 h-4 bg-orange-500 rounded-sm flex items-center justify-center text-white text-[8px] font-bold">PD</div>
+                    <button className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-[#eff0f5] rounded-[2px] text-[11px] text-[#333] transition-colors">
+                        <div className="w-4 h-4 bg-orange-500 rounded-[2px] flex items-center justify-center text-white text-[8px] font-bold">PD</div>
                         <span className="truncate">Personel Duyuruları</span>
                     </button>
                 </div>
@@ -249,7 +252,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
 
                         <button 
                             onClick={() => navigate('/journey')}
-                            className="w-full mt-3 bg-[#f5f6f7] border border-[#d8dfea] hover:bg-[#e9e9e9] text-[#333] text-[10px] font-bold py-1.5 rounded-sm transition-colors"
+                            className="w-full mt-3 bg-[#f5f6f7] border border-[#d8dfea] hover:bg-[#e9e9e9] text-[#333] text-[10px] font-bold py-1.5 rounded-[2px] transition-colors"
                         >
                             Haritayı Görüntüle
                         </button>
