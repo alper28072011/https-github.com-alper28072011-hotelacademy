@@ -68,13 +68,13 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-[#eff0f2] font-sans flex flex-col">
       
       {/* 1. CORBIT HEADER */}
-      <div className="bg-[#3b5998] h-[82px] w-full border-b border-[#29487d] flex items-center justify-center shadow-md z-10">
-          <div className="w-full max-w-[980px] px-4 flex justify-between items-center">
+      <div className="bg-[#3b5998] h-auto md:h-[82px] py-4 md:py-0 w-full border-b border-[#29487d] flex items-center justify-center shadow-md z-10">
+          <div className="w-full max-w-[980px] px-4 flex flex-col md:flex-row justify-between items-center gap-4">
               <h1 className="text-white text-[34px] font-bold tracking-tighter flex items-center gap-2">
                   Corbit<span className="opacity-70 text-[10px] font-normal tracking-wide bg-white/20 px-2 py-0.5 rounded-full">EARLY ACCESS</span>
               </h1>
               
-              {/* Login Form in Header (Desktop) */}
+              {/* Login Form in Header (Desktop Only) */}
               <div className="hidden md:flex items-center gap-2">
                   {authMode === 'LOGIN' && (
                       <form onSubmit={handleLogin} className="flex gap-2 items-start">
@@ -106,50 +106,38 @@ export const LoginPage: React.FC = () => {
       </div>
 
       {/* 2. MAIN CONTENT */}
-      <div className="flex-1 w-full max-w-[980px] mx-auto px-4 py-12 flex flex-col md:flex-row gap-12">
+      <div className="flex-1 w-full max-w-[980px] mx-auto px-4 py-8 md:py-12 flex flex-col md:flex-row gap-8 md:gap-12">
           
-          {/* LEFT: PITCH */}
-          <div className="flex-1 md:pr-10 pt-4">
-              <h2 className="text-[#333] text-[24px] font-bold leading-tight mb-4 w-4/5">
+          {/* LEFT: PITCH (Desktop: Left, Mobile: Bottom or Top depending on emphasis) */}
+          <div className="flex-1 order-2 md:order-1 pt-4">
+              <h2 className="text-[#333] text-[20px] md:text-[24px] font-bold leading-tight mb-4 w-full md:w-4/5 text-center md:text-left">
                   Corbit, kendinizi geliştirmeniz ve yeni yetenekler keşfetmeniz için tasarlandı.
               </h2>
-              <p className="text-[#666] text-[15px] leading-relaxed mb-8">
+              <p className="text-[#666] text-[14px] md:text-[15px] leading-relaxed mb-8 text-center md:text-left">
                   Milyonlarca kullanıcı gibi siz de Corbit ekosistemine katılarak potansiyelinizi açığa çıkarın.
               </p>
               
-              <div className="space-y-8 mt-12">
-                  <div className="flex gap-4 items-start">
-                      <div className="w-12 h-12 shrink-0 bg-white rounded-full flex items-center justify-center border border-gray-200 shadow-sm">
-                          <img src="https://static.xx.fbcdn.net/rsrc.php/v3/yB/r/lDrM2S2vY8C.png" className="w-8 h-8 opacity-90" />
+              <div className="space-y-6 md:space-y-8 mt-4 md:mt-12">
+                  {[
+                      { title: 'Kişiselleştirilmiş Eğitim', desc: 'Size özel hazırlanan müfredat ile hızla ilerleyin.', icon: 'lDrM2S2vY8C' },
+                      { title: 'Sosyal Öğrenme Ağı', desc: 'Eğitmenler ve diğer öğrencilerle bağlantı kurun.', icon: '333k9e7_8b5' },
+                      { title: 'Sertifikalı Gelişim', desc: 'Başarılarınızı rozetler ve sertifikalarla taçlandırın.', icon: 'i7ewqYh0S6w' }
+                  ].map(item => (
+                      <div key={item.title} className="flex gap-4 items-start">
+                          <div className="w-10 h-10 md:w-12 md:h-12 shrink-0 bg-white rounded-full flex items-center justify-center border border-gray-200 shadow-sm">
+                              <img src={`https://static.xx.fbcdn.net/rsrc.php/v3/yB/r/${item.icon}.png`} className="w-6 h-6 md:w-8 md:h-8 opacity-90" />
+                          </div>
+                          <div>
+                              <h3 className="font-bold text-[#1c1e21] text-[15px] md:text-[16px]">{item.title}</h3>
+                              <p className="text-[#65676b] text-[13px] md:text-[14px]">{item.desc}</p>
+                          </div>
                       </div>
-                      <div>
-                          <h3 className="font-bold text-[#1c1e21] text-[16px]">Kişiselleştirilmiş Eğitim</h3>
-                          <p className="text-[#65676b] text-[14px]">Size özel hazırlanan müfredat ile hızla ilerleyin.</p>
-                      </div>
-                  </div>
-                  <div className="flex gap-4 items-start">
-                      <div className="w-12 h-12 shrink-0 bg-white rounded-full flex items-center justify-center border border-gray-200 shadow-sm">
-                          <img src="https://static.xx.fbcdn.net/rsrc.php/v3/yQ/r/333k9e7_8b5.png" className="w-8 h-8 opacity-90" />
-                      </div>
-                      <div>
-                          <h3 className="font-bold text-[#1c1e21] text-[16px]">Sosyal Öğrenme Ağı</h3>
-                          <p className="text-[#65676b] text-[14px]">Eğitmenler ve diğer öğrencilerle bağlantı kurun.</p>
-                      </div>
-                  </div>
-                  <div className="flex gap-4 items-start">
-                      <div className="w-12 h-12 shrink-0 bg-white rounded-full flex items-center justify-center border border-gray-200 shadow-sm">
-                          <img src="https://static.xx.fbcdn.net/rsrc.php/v3/yZ/r/i7ewqYh0S6w.png" className="w-8 h-8 opacity-90" />
-                      </div>
-                      <div>
-                          <h3 className="font-bold text-[#1c1e21] text-[16px]">Sertifikalı Gelişim</h3>
-                          <p className="text-[#65676b] text-[14px]">Başarılarınızı rozetler ve sertifikalarla taçlandırın.</p>
-                      </div>
-                  </div>
+                  ))}
               </div>
           </div>
 
           {/* RIGHT: REGISTER / MOBILE LOGIN */}
-          <div className="w-full md:w-[380px]">
+          <div className="w-full md:w-[380px] order-1 md:order-2">
               <div className="bg-white border border-[#dfe3ee] rounded-lg p-6 shadow-lg relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#3b5998] to-[#8b9dc3]"></div>
                   
@@ -172,9 +160,9 @@ export const LoginPage: React.FC = () => {
                           </>
                       )}
 
-                      {/* Mobile Login Inputs */}
+                      {/* Mobile Login Inputs (Always visible on mobile because header form is hidden) */}
                       {authMode === 'LOGIN' && (
-                          <div className="md:hidden space-y-4">
+                          <div className="space-y-4">
                               <Input placeholder="E-posta veya Kullanıcı Adı" value={identifier} onChange={e => setIdentifier(e.target.value)} className="p-3 text-[16px] bg-[#f5f6f7]" />
                               <Input type="password" placeholder="Şifre" value={password} onChange={e => setPassword(e.target.value)} className="p-3 text-[16px] bg-[#f5f6f7]" />
                           </div>
@@ -192,7 +180,7 @@ export const LoginPage: React.FC = () => {
                               Kaydol
                           </button>
                       ) : (
-                          <button onClick={handleLogin} className="w-full bg-[#3b5998] hover:bg-[#2d4373] text-white font-bold text-[18px] py-2.5 rounded-md shadow-md md:hidden transition-all active:scale-[0.98]">
+                          <button onClick={handleLogin} className="w-full bg-[#3b5998] hover:bg-[#2d4373] text-white font-bold text-[18px] py-2.5 rounded-md shadow-md transition-all active:scale-[0.98]">
                               Giriş Yap
                           </button>
                       )}

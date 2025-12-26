@@ -53,10 +53,10 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   };
 
   return (
-    <div className="flex flex-col md:flex-row gap-5">
-        {/* LEFT: AVATAR BOX (Polaroid/Frame Style) */}
-        <div className="shrink-0 mx-auto md:mx-0">
-            <div className="p-1.5 bg-white border border-[#bdc7d8] relative group shadow-sm w-[140px]">
+    <div className="flex flex-col md:flex-row gap-5 items-center md:items-start text-center md:text-left">
+        {/* LEFT: AVATAR BOX */}
+        <div className="shrink-0 w-[120px] md:w-[140px]">
+            <div className="p-1.5 bg-white border border-[#bdc7d8] relative group shadow-sm">
                 <Avatar 
                     src={user.avatar} 
                     alt={user.name} 
@@ -66,7 +66,7 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                 
                 {isOwnProfile && (
                     <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-1.5 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                        <div className="bg-black/70 text-white text-[10px] px-2 py-1 mb-1 flex items-center gap-1 font-bold backdrop-blur-sm shadow-md">
+                        <div className="bg-black/70 text-white text-[10px] px-2 py-1 mb-1 flex items-center gap-1 font-bold backdrop-blur-sm shadow-md rounded">
                             <Camera className="w-3 h-3" /> Değiştir
                         </div>
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
@@ -76,11 +76,11 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         </div>
 
         {/* RIGHT: INFO AREA */}
-        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+        <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 w-full">
             
-            {/* TOP SECTION: Name & Headline */}
+            {/* TOP SECTION */}
             <div>
-                <div className="flex justify-between items-start mb-1">
+                <div className="flex flex-col md:flex-row justify-between items-center md:items-start mb-2">
                     <h1 className="text-[22px] font-bold text-[#1c1e21] flex items-center gap-1.5 leading-tight tracking-tight">
                         {user.name}
                         {user.role === 'super_admin' && <ShieldCheck className="w-5 h-5 text-[#3b5998]" />}
@@ -89,15 +89,15 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                     {isOwnProfile && (
                         <button 
                             onClick={onEditClick}
-                            className="bg-[#f5f6f7] border border-[#d8dfea] text-[#333] font-bold px-3 py-1 text-[11px] hover:bg-[#ebedef] flex items-center gap-1 rounded-[2px] transition-colors"
+                            className="mt-2 md:mt-0 bg-[#f5f6f7] border border-[#d8dfea] text-[#333] font-bold px-4 py-1.5 text-[11px] hover:bg-[#ebedef] flex items-center gap-1 rounded-[2px] transition-colors"
                         >
-                            <Edit3 className="w-3 h-3" /> <span className="hidden sm:inline">Düzenle</span>
+                            <Edit3 className="w-3 h-3" /> Düzenle
                         </button>
                     )}
                 </div>
 
-                {/* Subtitle / Context Line */}
-                <div className="text-[13px] text-[#555] mb-3 flex items-center gap-2 flex-wrap">
+                {/* Subtitle */}
+                <div className="text-[13px] text-[#555] mb-3 flex items-center justify-center md:justify-start gap-2 flex-wrap">
                     <span className="font-bold text-[#333]">{user.roleTitle || 'Personel'}</span>
                     
                     {network && (
@@ -122,12 +122,12 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
                 </div>
 
                 {/* Bio & Level */}
-                <div className="flex items-start gap-3 mb-4">
-                    <div className="bg-[#eff0f5] border border-[#d8dfea] px-2 py-0.5 text-[10px] font-bold text-[#3b5998] uppercase tracking-wide rounded-[2px] self-start">
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-3 mb-4">
+                    <div className="bg-[#eff0f5] border border-[#d8dfea] px-2 py-0.5 text-[10px] font-bold text-[#3b5998] uppercase tracking-wide rounded-[2px]">
                         {user.creatorLevel}
                     </div>
                     {user.bio && (
-                        <p className="text-[12px] text-[#666] italic leading-snug">
+                        <p className="text-[12px] text-[#666] italic leading-snug max-w-sm">
                             "{user.bio}"
                         </p>
                     )}
@@ -135,17 +135,17 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             </div>
 
             {/* BOTTOM SECTION: Stats Bar */}
-            <div className="flex border-t border-[#e9e9e9] pt-3 mt-auto">
+            <div className="flex justify-center md:justify-start border-t border-[#e9e9e9] pt-3 mt-auto">
                 <div className="flex gap-6 text-[11px]">
-                    <div className="flex flex-col">
+                    <div className="flex flex-col items-center md:items-start">
                         <span className="font-bold text-[#1c1e21] text-[13px]">{followersCount}</span> 
                         <span className="text-[#888]">Takipçi</span>
                     </div>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col items-center md:items-start">
                         <span className="font-bold text-[#1c1e21] text-[13px]">{followingCount}</span> 
                         <span className="text-[#888]">Takip</span>
                     </div>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col items-center md:items-start">
                         <span className="font-bold text-[#1c1e21] text-[13px]">{postCount}</span> 
                         <span className="text-[#888]">Gönderi</span>
                     </div>

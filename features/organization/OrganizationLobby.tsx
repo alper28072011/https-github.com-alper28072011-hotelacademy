@@ -44,7 +44,6 @@ export const OrganizationLobby: React.FC = () => {
   }, [searchTerm]);
 
   const handleSelectMembership = async (orgId: string, role: PageRole) => {
-      // SECURITY CHECK: Members cannot access admin session
       if (role === 'MEMBER') {
           navigate(`/org/${orgId}`);
           return;
@@ -70,23 +69,23 @@ export const OrganizationLobby: React.FC = () => {
   return (
     <div className="flex flex-col gap-4">
         
-        {/* TABS HEADER - Matching Profile/Settings Tab Style */}
-        <div className="flex items-end border-b border-[#899bc1] h-[29px] pl-2 mb-[-1px] z-10 relative">
+        {/* TABS HEADER */}
+        <div className="flex items-end border-b border-[#899bc1] h-[29px] pl-2 mb-[-1px] z-10 relative overflow-x-auto no-scrollbar">
             <button 
                 onClick={() => setActiveTab('MY_GROUPS')}
-                className={`px-3 py-1.5 text-[11px] font-bold border-t border-l border-r mr-1 focus:outline-none rounded-t-sm ${activeTab === 'MY_GROUPS' ? 'bg-white border-[#899bc1] text-[#333] pb-2' : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'}`}
+                className={`px-3 py-1.5 text-[11px] font-bold border-t border-l border-r mr-1 focus:outline-none rounded-t-sm whitespace-nowrap ${activeTab === 'MY_GROUPS' ? 'bg-white border-[#899bc1] text-[#333] pb-2' : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'}`}
             >
                 Gruplarım
             </button>
             <button 
                 onClick={() => setActiveTab('FIND')}
-                className={`px-3 py-1.5 text-[11px] font-bold border-t border-l border-r mr-1 focus:outline-none rounded-t-sm ${activeTab === 'FIND' ? 'bg-white border-[#899bc1] text-[#333] pb-2' : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'}`}
+                className={`px-3 py-1.5 text-[11px] font-bold border-t border-l border-r mr-1 focus:outline-none rounded-t-sm whitespace-nowrap ${activeTab === 'FIND' ? 'bg-white border-[#899bc1] text-[#333] pb-2' : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'}`}
             >
                 Grup Bul / Oluştur
             </button>
         </div>
 
-        {/* CONTENT BOX - Matching Feed Style */}
+        {/* CONTENT BOX */}
         <div className="bg-white border border-[#bdc7d8] rounded-md shadow-sm min-h-[400px] p-3 relative z-0">
             
             {activeTab === 'MY_GROUPS' && (
@@ -94,37 +93,41 @@ export const OrganizationLobby: React.FC = () => {
                     {myMemberships.map(mem => {
                         const canManage = mem.role === 'ADMIN' || mem.role === 'MODERATOR';
                         return (
-                            <div key={mem.id} className="flex items-center gap-3 p-2 border border-[#e9e9e9] rounded-sm hover:bg-[#fff9d7] transition-colors group">
-                                <div className="w-12 h-12 bg-[#eee] border border-[#ccc] flex items-center justify-center rounded-sm">
-                                    <Building2 className="w-6 h-6 text-gray-400" />
-                                </div>
-                                <div className="flex-1">
-                                    <div 
-                                        className="text-[13px] font-bold text-[#3b5998] cursor-pointer hover:underline" 
-                                        onClick={() => handleSelectMembership(mem.organizationId, mem.role)}
-                                    >
-                                        Organizasyon {mem.organizationId.substring(0,4)}...
+                            <div key={mem.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-2 border border-[#e9e9e9] rounded-sm hover:bg-[#fff9d7] transition-colors group">
+                                <div className="flex items-center gap-3 w-full sm:w-auto">
+                                    <div className="w-12 h-12 bg-[#eee] border border-[#ccc] flex items-center justify-center rounded-sm shrink-0">
+                                        <Building2 className="w-6 h-6 text-gray-400" />
                                     </div>
-                                    <div className="text-[10px] text-gray-500 flex items-center gap-1">
-                                        Rol: <span className="font-bold">{mem.role}</span>
+                                    <div className="flex-1">
+                                        <div 
+                                            className="text-[13px] font-bold text-[#3b5998] cursor-pointer hover:underline truncate" 
+                                            onClick={() => handleSelectMembership(mem.organizationId, mem.role)}
+                                        >
+                                            Organizasyon {mem.organizationId.substring(0,4)}...
+                                        </div>
+                                        <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                                            Rol: <span className="font-bold">{mem.role}</span>
+                                        </div>
                                     </div>
                                 </div>
                                 
-                                {canManage ? (
-                                    <button 
-                                        onClick={() => handleSelectMembership(mem.organizationId, mem.role)} 
-                                        className="bg-[#3b5998] border border-[#29447e] text-white text-[10px] font-bold px-3 py-1 hover:bg-[#2d4373] rounded-sm flex items-center gap-1"
-                                    >
-                                        <Settings className="w-3 h-3" /> Yönet
-                                    </button>
-                                ) : (
-                                    <button 
-                                        onClick={() => navigate(`/org/${mem.organizationId}`)} 
-                                        className="bg-[#f5f6f7] border border-[#ccc] text-[#333] text-[10px] font-bold px-3 py-1 hover:bg-[#e9e9e9] rounded-sm flex items-center gap-1"
-                                    >
-                                        <Eye className="w-3 h-3" /> Görüntüle
-                                    </button>
-                                )}
+                                <div className="w-full sm:w-auto mt-2 sm:mt-0 flex justify-end">
+                                    {canManage ? (
+                                        <button 
+                                            onClick={() => handleSelectMembership(mem.organizationId, mem.role)} 
+                                            className="bg-[#3b5998] border border-[#29447e] text-white text-[10px] font-bold px-3 py-1.5 hover:bg-[#2d4373] rounded-sm flex items-center gap-1 w-full sm:w-auto justify-center"
+                                        >
+                                            <Settings className="w-3 h-3" /> Yönet
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={() => navigate(`/org/${mem.organizationId}`)} 
+                                            className="bg-[#f5f6f7] border border-[#ccc] text-[#333] text-[10px] font-bold px-3 py-1.5 hover:bg-[#e9e9e9] rounded-sm flex items-center gap-1 w-full sm:w-auto justify-center"
+                                        >
+                                            <Eye className="w-3 h-3" /> Görüntüle
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         );
                     })}
@@ -139,14 +142,14 @@ export const OrganizationLobby: React.FC = () => {
                     {/* Search Section */}
                     <div>
                         <h4 className="text-[11px] font-bold text-[#3b5998] mb-2 border-b border-[#eee] pb-1 uppercase">İşletme Ara</h4>
-                        <div className="flex gap-2 mb-2">
+                        <div className="flex flex-col sm:flex-row gap-2 mb-2">
                             <input 
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
-                                className="flex-1 border border-[#bdc7d8] p-1.5 text-[13px] outline-none focus:border-[#3b5998] rounded-sm"
+                                className="flex-1 border border-[#bdc7d8] p-1.5 text-[13px] outline-none focus:border-[#3b5998] rounded-sm w-full"
                                 placeholder="İsim veya kod..."
                             />
-                            {isSearching && <Loader2 className="w-4 h-4 animate-spin text-gray-400 mt-2" />}
+                            {isSearching && <div className="flex justify-center sm:block"><Loader2 className="w-4 h-4 animate-spin text-gray-400 mt-2" /></div>}
                         </div>
                         <div className="space-y-1">
                             {searchResults.map(org => (
@@ -154,8 +157,8 @@ export const OrganizationLobby: React.FC = () => {
                                     <div className="w-8 h-8 bg-white border border-[#ccc] shrink-0 flex items-center justify-center rounded-sm">
                                         <Building2 className="w-4 h-4 text-gray-300" />
                                     </div>
-                                    <div className="flex-1">
-                                        <a href={`#/org/${org.id}`} className="text-[11px] font-bold text-[#3b5998] hover:underline block">{org.name}</a>
+                                    <div className="flex-1 min-w-0">
+                                        <a href={`#/org/${org.id}`} className="text-[11px] font-bold text-[#3b5998] hover:underline block truncate">{org.name}</a>
                                         <div className="text-[9px] text-gray-500">{org.memberCount} Üye</div>
                                     </div>
                                 </div>
@@ -166,17 +169,17 @@ export const OrganizationLobby: React.FC = () => {
                     {/* Create Section */}
                     <div className="bg-[#eff0f5] border border-[#d8dfea] p-3 rounded-sm">
                         <h4 className="text-[11px] font-bold text-[#333] mb-2 uppercase">Yeni İşletme Oluştur</h4>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                             <input 
                                 value={newOrgName}
                                 onChange={e => setNewOrgName(e.target.value)}
-                                className="flex-1 border border-[#bdc7d8] p-1.5 text-[13px] outline-none rounded-sm"
+                                className="flex-1 border border-[#bdc7d8] p-1.5 text-[13px] outline-none rounded-sm w-full"
                                 placeholder="İşletme Adı..."
                             />
                             <button 
                                 onClick={handleCreate}
                                 disabled={!newOrgName || isCreating}
-                                className="bg-[#69a74e] border border-[#3b6e22] text-white px-3 py-1 text-[11px] font-bold hover:bg-[#5b9342] rounded-sm"
+                                className="bg-[#69a74e] border border-[#3b6e22] text-white px-3 py-1.5 text-[11px] font-bold hover:bg-[#5b9342] rounded-sm w-full sm:w-auto"
                             >
                                 {isCreating ? '...' : 'Oluştur'}
                             </button>

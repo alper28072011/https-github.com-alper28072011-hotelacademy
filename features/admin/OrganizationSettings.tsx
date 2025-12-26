@@ -55,7 +55,7 @@ export const OrganizationSettings: React.FC = () => {
 
   // Form State - Onboarding
   const [joinConfig, setJoinConfig] = useState<JoinConfig>({
-      rules: "Organizasyon kurallarına ve gizlilik politikalarına uymayı kabul ediyorum.",
+      rules: "Kurum kurallarına ve gizlilik politikalarına uymayı kabul ediyorum.",
       requireApproval: true,
       availableRoles: ["Personel", "Stajyer", "Öğrenci"]
   });
@@ -220,19 +220,20 @@ export const OrganizationSettings: React.FC = () => {
         
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6 px-2">
-            <h1 className="text-xl font-bold text-[#3b5998]">Organizasyon Ayarları</h1>
+            <h1 className="text-xl font-bold text-[#3b5998]">Kurum Ayarları</h1>
             <button 
                 onClick={handleSave}
                 disabled={isSaving}
                 className="bg-[#3b5998] border border-[#29447e] text-white px-4 py-1.5 text-[11px] font-bold shadow-sm hover:bg-[#2d4373] disabled:opacity-50 flex items-center gap-2"
             >
                 {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                Değişiklikleri Kaydet
+                <span className="hidden md:inline">Değişiklikleri Kaydet</span>
+                <span className="md:hidden">Kaydet</span>
             </button>
         </div>
 
         {/* TABS CONTAINER */}
-        <div className="flex items-end px-2 h-[31px]">
+        <div className="flex items-end px-2 h-[31px] overflow-x-auto no-scrollbar">
             {[
                 { id: 'BRAND', label: 'Marka & Profil' },
                 { id: 'CHANNELS', label: 'Kanal Yönetimi' },
@@ -242,7 +243,7 @@ export const OrganizationSettings: React.FC = () => {
                 <button 
                     key={tab.id}
                     onClick={() => { setActiveTab(tab.id as any); if(tab.id === 'DANGER') loadSuccessors(); }}
-                    className={`px-4 py-1.5 text-[11px] font-bold border-t border-l border-r rounded-t-[3px] mr-1 cursor-pointer focus:outline-none ${
+                    className={`px-4 py-1.5 text-[11px] font-bold border-t border-l border-r rounded-t-[3px] mr-1 cursor-pointer focus:outline-none whitespace-nowrap ${
                         activeTab === tab.id 
                         ? 'bg-white border-[#899bc1] text-[#333] mb-[-1px] z-10 pb-2.5' 
                         : 'bg-[#d8dfea] border-[#d8dfea] text-[#3b5998] hover:bg-[#eff0f5]'
@@ -254,13 +255,13 @@ export const OrganizationSettings: React.FC = () => {
         </div>
 
         {/* MAIN CONTENT BOX */}
-        <div className="bg-white border border-[#899bc1] min-h-[400px] p-6">
+        <div className="bg-white border border-[#899bc1] min-h-[400px] p-6 relative z-0">
             
             {/* 1. BRAND TAB */}
             {activeTab === 'BRAND' && (
                 <div className="space-y-6 max-w-2xl">
                     <div className="bg-[#fff9d7] border border-[#e2c822] p-3 text-[11px] text-[#333]">
-                        <span className="font-bold">İpucu:</span> Organizasyonunuzun logosu ve kapak fotoğrafı, çalışanların sayfayı ilk açtığında göreceği yüzdür.
+                        <span className="font-bold">İpucu:</span> Kurumunuzun logosu ve kapak fotoğrafı, çalışanların sayfayı ilk açtığında göreceği yüzdür.
                     </div>
 
                     <div className="flex flex-col gap-6">
@@ -308,7 +309,7 @@ export const OrganizationSettings: React.FC = () => {
                             {/* TEXT FIELDS */}
                             <div className="md:col-span-2 space-y-4">
                                 <div>
-                                    <label className="block text-[11px] font-bold text-gray-500 mb-1">Organizasyon Adı</label>
+                                    <label className="block text-[11px] font-bold text-gray-500 mb-1">Kurum Adı</label>
                                     <input 
                                         value={name} 
                                         onChange={e => setName(e.target.value)} 
@@ -339,7 +340,7 @@ export const OrganizationSettings: React.FC = () => {
                 </div>
             )}
 
-            {/* 2. CHANNELS TAB (NEW) */}
+            {/* 2. CHANNELS TAB */}
             {activeTab === 'CHANNELS' && (
                 <div className="space-y-6">
                     <div className="bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
@@ -359,7 +360,7 @@ export const OrganizationSettings: React.FC = () => {
                                 </div>
 
                                 {/* Controls */}
-                                <div className="flex items-center gap-6">
+                                <div className="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 w-full md:w-auto">
                                     {/* Mandatory Toggle */}
                                     <div className="flex items-center gap-2">
                                         <label className="relative inline-flex items-center cursor-pointer">
@@ -375,7 +376,7 @@ export const OrganizationSettings: React.FC = () => {
                                     </div>
 
                                     {/* Manager Selector */}
-                                    <div className="relative group">
+                                    <div className="relative group w-full md:w-auto">
                                         <div className="text-xs font-bold text-gray-600 mb-1">Yöneticiler:</div>
                                         <div className="flex -space-x-2">
                                             {(channel.managerIds || []).map(mid => {
@@ -391,7 +392,6 @@ export const OrganizationSettings: React.FC = () => {
                                             </button>
                                         </div>
                                         
-                                        {/* Dropdown (Simplified) */}
                                         <select 
                                             className="absolute inset-0 opacity-0 cursor-pointer"
                                             onChange={(e) => {
@@ -477,9 +477,9 @@ export const OrganizationSettings: React.FC = () => {
                         <p className="text-[11px] text-gray-600 mb-3">
                             İşletme sahipliğini başka bir yöneticiye aktarır. Siz yönetici rolüne geçersiniz.
                         </p>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col sm:flex-row gap-2">
                             <select 
-                                className="border border-[#bdc7d8] p-1 text-xs w-64"
+                                className="border border-[#bdc7d8] p-1 text-xs w-full sm:w-64"
                                 value={selectedSuccessor}
                                 onChange={e => setSelectedSuccessor(e.target.value)}
                             >
@@ -501,10 +501,10 @@ export const OrganizationSettings: React.FC = () => {
                     <div className="bg-[#ffebe8] border border-[#dd3c10] p-4">
                         <div className="flex items-center gap-2 mb-3 border-b border-[#dd3c10] pb-2">
                             <AlertTriangle className="w-4 h-4 text-[#dd3c10]" />
-                            <h3 className="font-bold text-[#dd3c10] text-sm">Organizasyonu Sil</h3>
+                            <h3 className="font-bold text-[#dd3c10] text-sm">Kurumu Sil</h3>
                         </div>
                         <p className="text-[11px] text-gray-600 mb-3">
-                            Bu işlem geri alınamaz. Organizasyon silindiğinde tüm veriler yok olur. Talep Süper Admin onayına gider.
+                            Bu işlem geri alınamaz. Kurum silindiğinde tüm veriler yok olur. Talep Süper Admin onayına gider.
                         </p>
                         
                         {currentOrganization.status === 'PENDING_DELETION' ? (
@@ -559,7 +559,7 @@ export const OrganizationSettings: React.FC = () => {
                                 <Building2 className="w-8 h-8 text-[#3b5998]" />
                             </div>
                             <h2 className="text-lg font-bold text-[#333] mb-2">Hoş Geldin Patron! 👋</h2>
-                            <p className="text-xs text-gray-600 mb-6">Organizasyonun hazır. Şimdi detayları tamamlayıp ekibini davet etmeye başlayabilirsin.</p>
+                            <p className="text-xs text-gray-600 mb-6">Kurumun hazır. Şimdi detayları tamamlayıp ekibini davet etmeye başlayabilirsin.</p>
                             <button 
                                 onClick={() => setShowWelcome(false)}
                                 className="w-full bg-[#3b5998] text-white py-2 font-bold text-xs border border-[#29447e]"
