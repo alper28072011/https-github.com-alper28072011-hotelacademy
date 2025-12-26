@@ -11,9 +11,9 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { useContextStore } from '../../stores/useContextStore';
 import { ProfileHeader } from './components/ProfileHeader';
 import { Organization, FeedPost, Channel } from '../../types';
-import { getUserManagedPages, updateUserSubscriptions, kickMember } from '../../services/organizationService';
+import { updateUserSubscriptions, kickMember } from '../../services/organizationService';
 import { getFollowedPages } from '../../services/userService';
-import { getUserPosts, getSubscribedChannelsDetails } from '../../services/db';
+import { getUserPosts, getSubscribedChannelsDetails, getMyMemberships, getOrganizationDetails } from '../../services/db';
 import { toggleTagFollow, unfollowEntity } from '../../services/socialService';
 import { EditProfileModal } from './components/EditProfileModal';
 
@@ -29,7 +29,7 @@ export const ProfilePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   // Data State
-  const [managedPages, setManagedPages] = useState<Organization[]>([]);
+  const [memberPages, setMemberPages] = useState<Organization[]>([]);
   const [followedPages, setFollowedPages] = useState<Organization[]>([]);
   const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
   const [subscribedChannels, setSubscribedChannels] = useState<{ channel: Channel, organization: { id: string, name: string, logoUrl: string } }[]>([]);
@@ -44,14 +44,20 @@ export const ProfilePage: React.FC = () => {
       setLoading(true);
       
       try {
-          const [managed, followed, posts, channels] = await Promise.all([
-              getUserManagedPages(currentUser.id), 
+          const [memberships, followed, posts, channels] = await Promise.all([
+              getMyMemberships(currentUser.id),
               getFollowedPages(currentUser.id),
               getUserPosts(currentUser.id),
               getSubscribedChannelsDetails(currentUser)
           ]);
           
-          setManagedPages(managed); 
+          // Hydrate Organizations from Memberships reliably
+          const orgIds = Array.from(new Set(memberships.map(m => m.organizationId)));
+          const orgPromises = orgIds.map(id => getOrganizationDetails(id));
+          const orgs = await Promise.all(orgPromises);
+          const validOrgs = orgs.filter(o => o !== null) as Organization[];
+
+          setMemberPages(validOrgs); 
           setFollowedPages(followed);
           setMyPosts(posts);
           setSubscribedChannels(channels);
@@ -91,7 +97,7 @@ export const ProfilePage: React.FC = () => {
           await kickMember(orgId, currentUser.id);
           const newJoined = currentUser.joinedPageIds.filter(id => id !== orgId);
           updateCurrentUser({ joinedPageIds: newJoined, currentOrganizationId: null });
-          setManagedPages(prev => prev.filter(p => p.id !== orgId));
+          setMemberPages(prev => prev.filter(p => p.id !== orgId));
           window.location.reload();
       }
   };
@@ -172,7 +178,7 @@ export const ProfilePage: React.FC = () => {
                                         <Building2 className="w-3 h-3" /> Üyesi Olduğum Kurumlar
                                     </div>
                                     <div className="space-y-1">
-                                        {managedPages.length > 0 ? managedPages.map(org => (
+                                        {memberPages.length > 0 ? memberPages.map(org => (
                                             <div key={org.id} className="flex items-center justify-between p-2 hover:bg-[#eff0f5] border border-transparent hover:border-[#d8dfea] rounded-sm transition-colors group">
                                                 <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate(`/org/${org.id}`)}>
                                                     <div className="w-8 h-8 bg-white border border-[#ccc] flex items-center justify-center overflow-hidden rounded-sm">
