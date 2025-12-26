@@ -55,7 +55,7 @@ export const OrganizationSettings: React.FC = () => {
 
   // Form State - Onboarding
   const [joinConfig, setJoinConfig] = useState<JoinConfig>({
-      rules: "Kurum kurallarına ve gizlilik politikalarına uymayı kabul ediyorum.",
+      rules: "Organizasyon kurallarına ve gizlilik politikalarına uymayı kabul ediyorum.",
       requireApproval: true,
       availableRoles: ["Personel", "Stajyer", "Öğrenci"]
   });
@@ -220,7 +220,7 @@ export const OrganizationSettings: React.FC = () => {
         
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6 px-2">
-            <h1 className="text-xl font-bold text-[#3b5998]">Kurum Ayarları</h1>
+            <h1 className="text-xl font-bold text-[#3b5998]">Organizasyon Ayarları</h1>
             <button 
                 onClick={handleSave}
                 disabled={isSaving}
@@ -260,7 +260,7 @@ export const OrganizationSettings: React.FC = () => {
             {activeTab === 'BRAND' && (
                 <div className="space-y-6 max-w-2xl">
                     <div className="bg-[#fff9d7] border border-[#e2c822] p-3 text-[11px] text-[#333]">
-                        <span className="font-bold">İpucu:</span> Kurumunuzun logosu ve kapak fotoğrafı, çalışanların sayfayı ilk açtığında göreceği yüzdür.
+                        <span className="font-bold">İpucu:</span> Organizasyonunuzun logosu ve kapak fotoğrafı, çalışanların sayfayı ilk açtığında göreceği yüzdür.
                     </div>
 
                     <div className="flex flex-col gap-6">
@@ -308,7 +308,7 @@ export const OrganizationSettings: React.FC = () => {
                             {/* TEXT FIELDS */}
                             <div className="md:col-span-2 space-y-4">
                                 <div>
-                                    <label className="block text-[11px] font-bold text-gray-500 mb-1">Kurum Adı</label>
+                                    <label className="block text-[11px] font-bold text-gray-500 mb-1">Organizasyon Adı</label>
                                     <input 
                                         value={name} 
                                         onChange={e => setName(e.target.value)} 
@@ -321,7 +321,7 @@ export const OrganizationSettings: React.FC = () => {
                                         value={website} 
                                         onChange={e => setWebsite(e.target.value)} 
                                         className="w-full border border-[#bdc7d8] p-1.5 text-sm focus:border-[#3b5998] outline-none"
-                                        placeholder="http://www.ornekotel.com"
+                                        placeholder="http://www.orneksite.com"
                                     />
                                 </div>
                                 <div>
@@ -501,10 +501,10 @@ export const OrganizationSettings: React.FC = () => {
                     <div className="bg-[#ffebe8] border border-[#dd3c10] p-4">
                         <div className="flex items-center gap-2 mb-3 border-b border-[#dd3c10] pb-2">
                             <AlertTriangle className="w-4 h-4 text-[#dd3c10]" />
-                            <h3 className="font-bold text-[#dd3c10] text-sm">Kurumu Sil</h3>
+                            <h3 className="font-bold text-[#dd3c10] text-sm">Organizasyonu Sil</h3>
                         </div>
                         <p className="text-[11px] text-gray-600 mb-3">
-                            Bu işlem geri alınamaz. Kurum silindiğinde tüm veriler yok olur. Talep Süper Admin onayına gider.
+                            Bu işlem geri alınamaz. Organizasyon silindiğinde tüm veriler yok olur. Talep Süper Admin onayına gider.
                         </p>
                         
                         {currentOrganization.status === 'PENDING_DELETION' ? (
@@ -541,6 +541,36 @@ export const OrganizationSettings: React.FC = () => {
                 </div>
             )}
         </div>
+
+        {/* ONBOARDING MODAL (Welcome) */}
+        <AnimatePresence>
+            {showWelcome && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[1px]">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white border-[4px] border-[#555] p-0 w-[400px] shadow-2xl"
+                    >
+                        <div className="bg-[#3b5998] text-white px-3 py-2 text-[13px] font-bold flex justify-between items-center">
+                            <span>Kurulum Sihirbazı</span>
+                            <button onClick={() => setShowWelcome(false)}><X className="w-4 h-4" /></button>
+                        </div>
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-[#eff0f5] rounded-full mx-auto mb-4 flex items-center justify-center border-2 border-[#d8dfea]">
+                                <Building2 className="w-8 h-8 text-[#3b5998]" />
+                            </div>
+                            <h2 className="text-lg font-bold text-[#333] mb-2">Hoş Geldin Patron! 👋</h2>
+                            <p className="text-xs text-gray-600 mb-6">Organizasyonun hazır. Şimdi detayları tamamlayıp ekibini davet etmeye başlayabilirsin.</p>
+                            <button 
+                                onClick={() => setShowWelcome(false)}
+                                className="w-full bg-[#3b5998] text-white py-2 font-bold text-xs border border-[#29447e]"
+                            >
+                                Ayarlara Başla
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
     </div>
   );
 };

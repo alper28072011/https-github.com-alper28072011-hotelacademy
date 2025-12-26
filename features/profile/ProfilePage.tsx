@@ -77,7 +77,7 @@ export const ProfilePage: React.FC = () => {
 
   const handleUnfollowPage = async (orgId: string) => {
       if(!currentUser) return;
-      if(confirm("Bu sayfayı takipten çıkarmak istiyor musun?")) {
+      if(confirm("Bu organizasyonu takipten çıkarmak istiyor musun?")) {
           await unfollowEntity(currentUser.id, orgId, 'ORGANIZATION');
           setFollowedPages(prev => prev.filter(p => p.id !== orgId));
       }
@@ -93,7 +93,7 @@ export const ProfilePage: React.FC = () => {
 
   const handleLeaveOrganization = async (orgId: string) => {
       if(!currentUser) return;
-      if(confirm("Bu işletmeden ayrılmak istediğinize emin misiniz? Tüm yetkileriniz gidecek.")) {
+      if(confirm("Bu organizasyondan ayrılmak istediğinize emin misiniz? Tüm yetkileriniz gidecek.")) {
           await kickMember(orgId, currentUser.id);
           const newJoined = currentUser.joinedPageIds.filter(id => id !== orgId);
           updateCurrentUser({ joinedPageIds: newJoined, currentOrganizationId: null });
@@ -175,7 +175,7 @@ export const ProfilePage: React.FC = () => {
                                 {/* 1. MEMBERSHIPS */}
                                 <div>
                                     <div className="bg-[#f7f7f7] border-b border-[#e9e9e9] p-2 text-[11px] font-bold text-[#3b5998] flex items-center gap-2 mb-1">
-                                        <Building2 className="w-3 h-3" /> Üyesi Olduğum Kurumlar
+                                        <Building2 className="w-3 h-3" /> Organizasyon Üyelikleri
                                     </div>
                                     <div className="space-y-1">
                                         {memberPages.length > 0 ? memberPages.map(org => (
@@ -197,7 +197,7 @@ export const ProfilePage: React.FC = () => {
                                             </div>
                                         )) : (
                                             <div className="text-center py-4 text-[11px] text-gray-400 bg-[#f9f9f9] border border-[#eee]">
-                                                Henüz bir işletmeye üye değilsiniz. <span onClick={() => navigate('/lobby')} className="text-[#3b5998] cursor-pointer hover:underline">Grup Bul.</span>
+                                                Henüz bir organizasyona üye değilsiniz. <span onClick={() => navigate('/lobby')} className="text-[#3b5998] cursor-pointer hover:underline">Grup Bul.</span>
                                             </div>
                                         )}
                                     </div>
@@ -233,7 +233,7 @@ export const ProfilePage: React.FC = () => {
                                 {/* 3. FOLLOWED PAGES */}
                                 <div>
                                     <div className="bg-[#f7f7f7] border-b border-[#e9e9e9] p-2 text-[11px] font-bold text-[#3b5998] flex items-center gap-2 mb-1">
-                                        <ExternalLink className="w-3 h-3" /> Takip Edilen Sayfalar
+                                        <ExternalLink className="w-3 h-3" /> Takip Edilen Organizasyonlar
                                     </div>
                                     <div className="space-y-1">
                                         {followedPages.length > 0 ? followedPages.map(page => (
@@ -249,7 +249,7 @@ export const ProfilePage: React.FC = () => {
                                                 </button>
                                             </div>
                                         )) : (
-                                            <div className="text-center py-4 text-[11px] text-gray-400 bg-[#f9f9f9] border border-[#eee]">Takip edilen sayfa yok.</div>
+                                            <div className="text-center py-4 text-[11px] text-gray-400 bg-[#f9f9f9] border border-[#eee]">Takip edilen organizasyon yok.</div>
                                         )}
                                     </div>
                                 </div>
